@@ -1,0 +1,64 @@
+{% extends 'base.html' %}
+
+{% block title %}KitYourBrand — главная{% endblock %}
+
+{% block content %}
+<div class="landing-shell">
+    {% include 'partials/header.html' %}
+
+    <main>
+        <section class="hero-section">
+            <div class="ambient ambient-left"></div>
+            <div class="ambient ambient-right"></div>
+
+            <div class="container hero-content">
+                <h1 class="hero-title">{{ hero_title }}</h1>
+                <p class="hero-subtitle">{{ hero_subtitle }}</p>
+                <a href="#" class="btn btn-primary btn-hero">Посмотреть демо</a>
+            </div>
+        </section>
+
+        <section class="features-section section-block">
+            <div class="container section-head section-head-center">
+                <h2>Возможности платформы</h2>
+                <p>Всё, что нужно для создания целостного визуального стиля</p>
+            </div>
+
+            <div class="container feature-grid">
+                {% for item in features %}
+                <article class="feature-card">
+                    <div class="feature-icon">{{ item.icon }}</div>
+                    <h3>{{ item.title }}</h3>
+                    <p>{{ item.description }}</p>
+                </article>
+                {% endfor %}
+            </div>
+        </section>
+
+        <section class="gallery-section section-block">
+            <div class="container section-head section-head-center">
+                <h2>Примеры ассетов</h2>
+                <p>Качественные результаты, созданные с помощью ИИ</p>
+            </div>
+
+            <div class="container gallery-grid">
+                {% for item in gallery %}
+                <div class="gallery-card">
+                    <img src="{{ item.image_url }}" alt="{{ item.title }}" loading="lazy" />
+                </div>
+                {% endfor %}
+            </div>
+        </section>
+    </main>
+
+    <footer class="site-footer">
+        <div class="container footer-inner">
+            <div class="brand-mark brand-mark--footer">
+                <span class="brand-mark__dot"></span>
+                <span class="brand-mark__text">KITYOURBRAND</span>
+            </div>
+            <p>© 2026 KITYOURBRAND. Генерация бренд-комплектов с помощью ИИ.</p>
+        </div>
+    </footer>
+</div>
+{% endblock %}

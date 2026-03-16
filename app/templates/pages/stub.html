@@ -1,0 +1,17 @@
+{% extends 'base.html' %}
+
+{% block title %}{{ title }} — KitYourBrand{% endblock %}
+
+{% block content %}
+<div class="stub-page">
+    {% include 'partials/header.html' %}
+
+    <section class="stub-section">
+        <div class="container stub-card">
+            <h1>{{ title }}</h1>
+            <p>{{ message }}</p>
+            <a href="/" class="btn btn-primary">Вернуться на главную</a>
+        </div>
+    </section>
+</div>
+{% endblock %}
