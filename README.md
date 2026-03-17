@@ -1,6 +1,6 @@
 # KitYourBrand Web
 
-FastAPI-интерфейс для проекта KitYourBrand.
+Новый FastAPI-интерфейс для KitYourBrand.
 
 ## Запуск
 
@@ -29,6 +29,9 @@ uvicorn app.main:app --reload
 - `app/static/` — стили и JS
 - `app/core/settings.py` — настройки и пути к соседним проектам KitYourBrand
 
-## Текущий статус
+## Что уже реализовано
 
-Реализована главная страница и заглушки для `/login` и `/register`.
+- Главная страница `/`
+- Рабочая страница регистрации `/register`
+- Сохранение пользователей в локальную SQLite базу `app/data/app.db`
+- Хеширование паролей через `passlib` + `bcrypt`

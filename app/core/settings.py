@@ -20,6 +20,7 @@ class Settings(BaseSettings):
     flux_dir: Path = BASE_DIR.parent / 'brandkit_flux2'
     figma_plugin_dir: Path = BASE_DIR.parent / 'brandkit_figma_plugin_provider'
     legacy_flask_dir: Path = BASE_DIR.parent / 'brandkit_tokens_ui_three_providers'
+    data_dir: Path = BASE_DIR / 'data'
 
     model_config = SettingsConfigDict(env_file='.env', env_file_encoding='utf-8', extra='ignore')
 

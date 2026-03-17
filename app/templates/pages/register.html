@@ -1,0 +1,64 @@
+{% extends 'base.html' %}
+
+{% block title %}KitYourBrand — регистрация{% endblock %}
+
+{% block content %}
+<div class="landing-shell register-shell">
+    {% include 'partials/header.html' %}
+
+    <div class="page-blur-layer" aria-hidden="true">
+        {% include 'pages/landing_content.html' %}
+    </div>
+
+    <main class="register-page">
+        <section class="register-modal" role="dialog" aria-modal="true" aria-labelledby="register-title">
+            <a href="/" class="register-close" aria-label="Закрыть окно регистрации">✕</a>
+
+            <a href="/" class="register-brand" aria-label="На главную">
+                <span class="brand-mark__dot brand-mark__dot--small"></span>
+                <span class="register-brand__text">KITYOURBRAND</span>
+            </a>
+
+            <h1 class="register-title" id="register-title">Регистрация</h1>
+
+            {% if form_error %}
+            <div class="form-alert form-alert--error">{{ form_error }}</div>
+            {% endif %}
+
+            {% if form_success %}
+            <div class="form-alert form-alert--success">Регистрация прошла успешно. Теперь можно вернуться на главную или перейти к входу.</div>
+            <div class="register-success-actions">
+                <a href="/" class="btn btn-light btn-half">На главную</a>
+                <a href="/login" class="btn btn-primary btn-half">Войти</a>
+            </div>
+            {% endif %}
+
+            <form class="register-form" method="post" action="/register">
+                <label class="field-wrap">
+                    <span class="field-icon">◌</span>
+                    <input type="text" name="name" placeholder="Имя" value="{{ form_values.name }}" autocomplete="name" required />
+                </label>
+
+                <label class="field-wrap">
+                    <span class="field-icon">✉</span>
+                    <input type="email" name="email" placeholder="Почта" value="{{ form_values.email }}" autocomplete="email" required />
+                </label>
+
+                <label class="field-wrap">
+                    <span class="field-icon">⌂</span>
+                    <input type="password" name="password" placeholder="Пароль" autocomplete="new-password" required />
+                </label>
+
+                <label class="field-wrap">
+                    <span class="field-icon">⌂</span>
+                    <input type="password" name="password_confirm" placeholder="Подтверждение пароля" autocomplete="new-password" required />
+                </label>
+
+                <button type="submit" class="btn btn-primary btn-full">Зарегистрироваться</button>
+            </form>
+
+            <p class="register-switch">Уже есть аккаунт? <a href="/login">Войти</a></p>
+        </section>
+    </main>
+</div>
+{% endblock %}

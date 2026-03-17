@@ -377,3 +377,200 @@ img {
         min-width: 100%;
     }
 }
+
+
+.page-blur-layer {
+    filter: blur(12px);
+    opacity: 0.44;
+    pointer-events: none;
+    user-select: none;
+}
+
+.register-shell {
+    position: relative;
+    min-height: 100vh;
+    overflow: hidden;
+}
+
+.register-page {
+    position: fixed;
+    inset: 0;
+    z-index: 25;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    padding: 120px 24px 40px;
+}
+
+.register-modal {
+    position: relative;
+    width: min(100%, 432px);
+    padding: 28px 36px 32px;
+    border-radius: 24px;
+    background: rgba(244, 244, 246, 0.98);
+    color: #1a1433;
+    box-shadow: 0 30px 90px rgba(0, 0, 0, 0.42);
+}
+
+.register-close {
+    position: absolute;
+    top: 14px;
+    right: 14px;
+    width: 34px;
+    height: 34px;
+    display: inline-flex;
+    align-items: center;
+    justify-content: center;
+    border-radius: 999px;
+    color: #6d7282;
+    background: rgba(26, 20, 51, 0.06);
+    font-size: 1rem;
+    transition: background 0.18s ease, color 0.18s ease;
+}
+
+.register-close:hover {
+    background: rgba(26, 20, 51, 0.1);
+    color: #1a1433;
+}
+
+.register-brand {
+    display: inline-flex;
+    align-items: center;
+    gap: 10px;
+    font-weight: 800;
+    color: #1a1433;
+}
+
+.brand-mark__dot--small {
+    width: 18px;
+    height: 18px;
+    border-radius: 6px;
+}
+
+.register-brand__text {
+    font-size: 0.9rem;
+}
+
+.register-title {
+    margin: 24px 0 20px;
+    text-align: center;
+    font-size: clamp(1.85rem, 3vw, 2.3rem);
+    line-height: 1.08;
+    letter-spacing: -0.04em;
+    color: #1a1433;
+}
+
+.register-form {
+    display: grid;
+    gap: 12px;
+}
+
+.field-wrap {
+    display: flex;
+    align-items: center;
+    gap: 12px;
+    min-height: 52px;
+    padding: 0 14px;
+    border-radius: 14px;
+    border: 1px solid #d5d5da;
+    background: #ececef;
+}
+
+.field-icon {
+    width: 18px;
+    color: #8d94a4;
+    font-size: 0.95rem;
+    flex: 0 0 auto;
+}
+
+.field-wrap input {
+    width: 100%;
+    border: 0;
+    outline: 0;
+    background: transparent;
+    color: #1a1433;
+    font-size: 1rem;
+    font-family: inherit;
+}
+
+.field-wrap input::placeholder {
+    color: #9aa1b2;
+}
+
+.btn-full {
+    width: 100%;
+    min-height: 48px;
+    margin-top: 6px;
+    border: 0;
+    font-size: 0.96rem;
+}
+
+.btn-light {
+    background: #ececef;
+    color: #1a1433;
+    border: 1px solid #d5d5da;
+}
+
+.btn-half {
+    min-width: 0;
+    flex: 1;
+}
+
+.register-switch {
+    margin: 18px 0 0;
+    text-align: center;
+    color: #1a1433;
+    font-size: 0.95rem;
+}
+
+.register-switch a {
+    color: var(--primary);
+    font-weight: 600;
+}
+
+.form-alert {
+    margin-bottom: 14px;
+    padding: 12px 14px;
+    border-radius: 14px;
+    font-size: 0.9rem;
+    line-height: 1.45;
+}
+
+.register-success-actions {
+    display: flex;
+    gap: 10px;
+    margin-bottom: 14px;
+}
+
+.form-alert--error {
+    background: rgba(210, 47, 88, 0.12);
+    color: #9a1037;
+    border: 1px solid rgba(210, 47, 88, 0.2);
+}
+
+.form-alert--success {
+    background: rgba(35, 154, 90, 0.12);
+    color: #15693d;
+    border: 1px solid rgba(35, 154, 90, 0.2);
+}
+
+@media (max-width: 760px) {
+    .register-page {
+        padding-top: 96px;
+        align-items: flex-start;
+    }
+
+    .register-modal {
+        width: min(100%, 380px);
+        padding: 24px 18px 24px;
+        border-radius: 20px;
+    }
+
+    .register-success-actions {
+        flex-direction: column;
+    }
+
+    .field-wrap {
+        min-height: 48px;
+    }
+}
