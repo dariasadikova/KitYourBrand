@@ -19,6 +19,15 @@ class RegistrationResult:
     error: Optional[str] = None
 
 
+@dataclass(slots=True)
+class AuthResult:
+    ok: bool
+    user_id: Optional[int] = None
+    user_name: Optional[str] = None
+    user_email: Optional[str] = None
+    error: Optional[str] = None
+
+
 class AuthService:
     def __init__(self, db_path: Path) -> None:
         self.db_path = db_path
@@ -53,6 +62,13 @@ class AuthService:
                 (email.strip(),),
             ).fetchone()
             return row is not None
+
+    def get_user_by_email(self, email: str) -> Optional[sqlite3.Row]:
+        with self._connect() as conn:
+            return conn.execute(
+                "SELECT id, name, email, password_hash, is_active FROM users WHERE lower(email) = lower(?) LIMIT 1",
+                (email.strip(),),
+            ).fetchone()
 
     def hash_password(self, password: str) -> str:
         salt = secrets.token_bytes(16)
@@ -106,3 +122,26 @@ class AuthService:
             conn.commit()
 
         return RegistrationResult(ok=True)
+
+    def authenticate_user(self, email: str, password: str) -> AuthResult:
+        normalized_email = email.strip().lower()
+
+        if '@' not in normalized_email or len(password) < 1:
+            return AuthResult(ok=False, error='Введите email и пароль.')
+
+        row = self.get_user_by_email(normalized_email)
+        if row is None:
+            return AuthResult(ok=False, error='Пользователь с таким email не найден.')
+
+        if not row['is_active']:
+            return AuthResult(ok=False, error='Аккаунт деактивирован.')
+
+        if not self.verify_password(password, row['password_hash']):
+            return AuthResult(ok=False, error='Неверный пароль.')
+
+        return AuthResult(
+            ok=True,
+            user_id=int(row['id']),
+            user_name=str(row['name']),
+            user_email=str(row['email']),
+        )

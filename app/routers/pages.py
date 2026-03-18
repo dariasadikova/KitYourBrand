@@ -63,18 +63,107 @@ def landing_context() -> dict:
     }
 
 
+def auth_session_payload(request: Request) -> dict:
+    return {
+        'user_id': request.session.get('user_id'),
+        'user_name': request.session.get('user_name'),
+        'user_email': request.session.get('user_email'),
+    }
+
+
+def require_auth(request: Request):
+    if not request.session.get('user_id'):
+        return RedirectResponse(url='/login', status_code=status.HTTP_303_SEE_OTHER)
+    return None
+
+
+PROJECTS = [
+    {'name': 'Polygames', 'created_at': '06.01.2026'},
+    {'name': 'Ostwind wear', 'created_at': '13.01.2026'},
+    {'name': 'Sakura Fest', 'created_at': '18.01.2026'},
+    {'name': 'NIKE', 'created_at': '02.02.2026'},
+    {'name': 'Pioneer', 'created_at': '10.01.2026'},
+]
+
+
 @router.get('/', response_class=HTMLResponse)
 async def landing_page(request: Request) -> HTMLResponse:
-    return templates.TemplateResponse(request, 'pages/landing.html', landing_context())
+    context = landing_context()
+    context.update(auth_session_payload(request))
+    return templates.TemplateResponse(request, 'pages/landing.html', context)
+
+
+
+
+@router.get('/dashboard', response_class=HTMLResponse)
+async def dashboard_page(request: Request) -> HTMLResponse:
+    auth_redirect = require_auth(request)
+    if auth_redirect:
+        return auth_redirect
+
+    user_name = request.session.get('user_name') or ''
+    context = {
+        'projects': PROJECTS,
+        'user_name': user_name,
+        'user_email': request.session.get('user_email') or '',
+        'user_initial': (user_name[:1] or '?').upper(),
+    }
+    return templates.TemplateResponse(request, 'pages/dashboard.html', context)
 
 
 @router.get('/login', response_class=HTMLResponse)
-async def login_stub(request: Request) -> HTMLResponse:
-    return templates.TemplateResponse(request, 'pages/stub.html', {'title': 'Войти', 'message': 'Экран входа сделаем следующим шагом.'})
+async def login_page(request: Request) -> HTMLResponse:
+    if request.session.get('user_id'):
+        return RedirectResponse(url='/dashboard', status_code=status.HTTP_303_SEE_OTHER)
+
+    context = landing_context()
+    context.update(
+        {
+            'form_error': None,
+            'form_success': request.query_params.get('registered') == '1',
+            'form_values': {'email': ''},
+        }
+    )
+    return templates.TemplateResponse(request, 'pages/login.html', context)
+
+
+@router.post('/login', response_class=HTMLResponse)
+async def login_submit(
+    request: Request,
+    email: str = Form(...),
+    password: str = Form(...),
+) -> HTMLResponse:
+    context = landing_context()
+    context.update(
+        {
+            'form_error': None,
+            'form_success': False,
+            'form_values': {'email': email.strip()},
+        }
+    )
+
+    result = auth_service.authenticate_user(email=email, password=password)
+    if not result.ok:
+        context['form_error'] = result.error
+        return templates.TemplateResponse(request, 'pages/login.html', context, status_code=status.HTTP_400_BAD_REQUEST)
+
+    request.session['user_id'] = result.user_id
+    request.session['user_name'] = result.user_name
+    request.session['user_email'] = result.user_email
+    return RedirectResponse(url='/dashboard', status_code=status.HTTP_303_SEE_OTHER)
+
+
+@router.get('/logout')
+async def logout(request: Request) -> RedirectResponse:
+    request.session.clear()
+    return RedirectResponse(url='/dashboard', status_code=status.HTTP_303_SEE_OTHER)
 
 
 @router.get('/register', response_class=HTMLResponse)
 async def register_page(request: Request) -> HTMLResponse:
+    if request.session.get('user_id'):
+        return RedirectResponse(url='/', status_code=status.HTTP_303_SEE_OTHER)
+
     context = landing_context()
     context.update(
         {
@@ -112,4 +201,4 @@ async def register_submit(
         context['form_error'] = result.error
         return templates.TemplateResponse(request, 'pages/register.html', context, status_code=status.HTTP_400_BAD_REQUEST)
 
-    return RedirectResponse(url='/register?success=1', status_code=status.HTTP_303_SEE_OTHER)
+    return RedirectResponse(url='/login?registered=1', status_code=status.HTTP_303_SEE_OTHER)

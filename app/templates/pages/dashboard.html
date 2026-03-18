@@ -1,0 +1,73 @@
+{% extends 'base.html' %}
+
+{% block title %}KitYourBrand — мои проекты{% endblock %}
+
+{% block content %}
+<div class="dashboard-shell">
+    <aside class="dashboard-sidebar">
+        <a href="/dashboard" class="dashboard-brand" aria-label="KitYourBrand dashboard">
+            <span class="brand-mark__dot"></span>
+            <span class="brand-mark__text">KITYOURBRAND</span>
+        </a>
+
+        <nav class="dashboard-nav" aria-label="Основная навигация">
+            <a href="/dashboard" class="dashboard-nav__item dashboard-nav__item--active">
+                <span class="dashboard-nav__icon">▣</span>
+                <span>Мои проекты</span>
+            </a>
+            <a href="#" class="dashboard-nav__item">
+                <span class="dashboard-nav__icon">◌</span>
+                <span>Профиль</span>
+            </a>
+            <a href="#" class="dashboard-nav__item">
+                <span class="dashboard-nav__icon">⚙</span>
+                <span>Настройки</span>
+            </a>
+            <a href="/logout" class="dashboard-nav__item">
+                <span class="dashboard-nav__icon">⇥</span>
+                <span>Выход</span>
+            </a>
+        </nav>
+    </aside>
+
+    <main class="dashboard-main">
+        <div class="dashboard-topbar">
+            <div class="dashboard-topbar__spacer"></div>
+            <div class="dashboard-userbar">
+                <button type="button" class="dashboard-icon-btn" aria-label="Уведомления">
+                    <span>◔</span>
+                    <span class="dashboard-badge"></span>
+                </button>
+                <div class="dashboard-userpill">
+                    <span class="dashboard-userpill__email">{{ user_email }}</span>
+                    <span class="dashboard-userpill__avatar">{{ user_initial }}</span>
+                </div>
+            </div>
+        </div>
+
+        <section class="dashboard-content">
+            <div class="dashboard-head">
+                <h1>Мои проекты</h1>
+                <a href="#" class="btn btn-primary dashboard-create-btn">Создать проект</a>
+            </div>
+
+            <div class="project-grid">
+                {% for project in projects %}
+                <a href="#" class="project-card">
+                    <div class="project-card__icon">
+                        <span>✦</span>
+                        <span>✦</span>
+                    </div>
+                    <div class="project-card__body">
+                        <h2>{{ project.name }}</h2>
+                        <p>Дата создания:</p>
+                        <span>{{ project.created_at }}</span>
+                    </div>
+                    <div class="project-card__action" aria-hidden="true">✎</div>
+                </a>
+                {% endfor %}
+            </div>
+        </section>
+    </main>
+</div>
+{% endblock %}

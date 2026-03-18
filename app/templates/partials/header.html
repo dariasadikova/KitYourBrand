@@ -6,8 +6,13 @@
         </a>
 
         <nav class="header-actions">
+            {% if request.session.get('user_id') %}
+            <div class="header-user-pill">{{ request.session.get('user_name') }}</div>
+            <a href="/logout" class="btn btn-outline">Выйти</a>
+            {% else %}
             <a href="/login" class="btn btn-outline">Войти</a>
             <a href="/register" class="btn btn-primary">Регистрация</a>
+            {% endif %}
         </nav>
     </div>
 </header>
