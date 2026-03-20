@@ -48,12 +48,16 @@
         <section class="dashboard-content">
             <div class="dashboard-head">
                 <h1>Мои проекты</h1>
-                <a href="#" class="btn btn-primary dashboard-create-btn">Создать проект</a>
+                <form action="/projects/create" method="post">
+                    <input type="hidden" name="name" value="Новый проект" />
+                    <button type="submit" class="btn btn-primary dashboard-create-btn">Создать проект</button>
+                </form>
             </div>
 
+            {% if projects %}
             <div class="project-grid">
                 {% for project in projects %}
-                <a href="#" class="project-card">
+                <a href="/projects/{{ project.slug }}" class="project-card">
                     <div class="project-card__icon">
                         <span>✦</span>
                         <span>✦</span>
@@ -61,12 +65,22 @@
                     <div class="project-card__body">
                         <h2>{{ project.name }}</h2>
                         <p>Дата создания:</p>
-                        <span>{{ project.created_at }}</span>
+                        <span>{{ project.created_at[:10] }}</span>
                     </div>
                     <div class="project-card__action" aria-hidden="true">✎</div>
                 </a>
                 {% endfor %}
             </div>
+            {% else %}
+            <div class="dashboard-empty">
+                <h2>У вас пока нет проектов</h2>
+                <p>Создайте первый проект и сразу перейдите к редактированию tokens.json.</p>
+                <form action="/projects/create" method="post">
+                    <input type="hidden" name="name" value="Demo Brand" />
+                    <button type="submit" class="btn btn-primary">Создать первый проект</button>
+                </form>
+            </div>
+            {% endif %}
         </section>
     </main>
 </div>

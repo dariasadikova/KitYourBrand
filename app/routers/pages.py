@@ -7,11 +7,14 @@ from fastapi.templating import Jinja2Templates
 from app.core.paths import TEMPLATES_DIR
 from app.core.settings import settings
 from app.services.auth_service import AuthService
+from app.services.project_service import ProjectService
 
 router = APIRouter()
 templates = Jinja2Templates(directory=str(TEMPLATES_DIR))
 auth_service = AuthService(settings.data_dir / 'app.db')
 auth_service.init_db()
+project_service = ProjectService(settings.data_dir / 'app.db', settings.data_dir / 'projects')
+project_service.init_db()
 
 
 FEATURES = [
@@ -77,22 +80,11 @@ def require_auth(request: Request):
     return None
 
 
-PROJECTS = [
-    {'name': 'Polygames', 'created_at': '06.01.2026'},
-    {'name': 'Ostwind wear', 'created_at': '13.01.2026'},
-    {'name': 'Sakura Fest', 'created_at': '18.01.2026'},
-    {'name': 'NIKE', 'created_at': '02.02.2026'},
-    {'name': 'Pioneer', 'created_at': '10.01.2026'},
-]
-
-
 @router.get('/', response_class=HTMLResponse)
 async def landing_page(request: Request) -> HTMLResponse:
     context = landing_context()
     context.update(auth_session_payload(request))
     return templates.TemplateResponse(request, 'pages/landing.html', context)
-
-
 
 
 @router.get('/dashboard', response_class=HTMLResponse)
@@ -101,9 +93,12 @@ async def dashboard_page(request: Request) -> HTMLResponse:
     if auth_redirect:
         return auth_redirect
 
+    user_id = int(request.session['user_id'])
+    projects = project_service.list_projects(user_id)
     user_name = request.session.get('user_name') or ''
     context = {
-        'projects': PROJECTS,
+        'request': request,
+        'projects': projects,
         'user_name': user_name,
         'user_email': request.session.get('user_email') or '',
         'user_initial': (user_name[:1] or '?').upper(),
@@ -156,7 +151,7 @@ async def login_submit(
 @router.get('/logout')
 async def logout(request: Request) -> RedirectResponse:
     request.session.clear()
-    return RedirectResponse(url='/dashboard', status_code=status.HTTP_303_SEE_OTHER)
+    return RedirectResponse(url='/', status_code=status.HTTP_303_SEE_OTHER)
 
 
 @router.get('/register', response_class=HTMLResponse)
@@ -200,5 +195,12 @@ async def register_submit(
     if not result.ok:
         context['form_error'] = result.error
         return templates.TemplateResponse(request, 'pages/register.html', context, status_code=status.HTTP_400_BAD_REQUEST)
+
+    # seed a first real project for the new account
+    new_user = auth_service.get_user_by_email(email.strip().lower())
+    if new_user is not None:
+        existing = project_service.list_projects(int(new_user['id']))
+        if not existing:
+            project_service.create_project(int(new_user['id']), 'Demo Brand')
 
     return RedirectResponse(url='/login?registered=1', status_code=status.HTTP_303_SEE_OTHER)

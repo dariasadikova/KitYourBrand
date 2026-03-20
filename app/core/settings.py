@@ -13,11 +13,12 @@ class Settings(BaseSettings):
     app_port: int = 8000
     secret_key: str = 'change-me'
 
-    project_root: Path = BASE_DIR.parent
-    output_dir: Path = BASE_DIR.parent / 'out'
-    recraft_dir: Path = BASE_DIR.parent / 'brandkit_recraft'
-    seedream_dir: Path = BASE_DIR.parent / 'brandkit_seedream'
-    flux_dir: Path = BASE_DIR.parent / 'brandkit_flux2'
+    project_root: Path = BASE_DIR
+    providers_dir: Path = BASE_DIR / 'providers'
+    output_dir: Path = BASE_DIR / 'out'
+    recraft_dir: Path = BASE_DIR / 'providers' / 'brandkit_recraft'
+    seedream_dir: Path = BASE_DIR / 'providers' / 'brandkit_seedream'
+    flux_dir: Path = BASE_DIR / 'providers' / 'brandkit_flux2'
     figma_plugin_dir: Path = BASE_DIR.parent / 'brandkit_figma_plugin_provider'
     legacy_flask_dir: Path = BASE_DIR.parent / 'brandkit_tokens_ui_three_providers'
     data_dir: Path = BASE_DIR / 'data'
