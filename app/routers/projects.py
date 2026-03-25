@@ -1,6 +1,7 @@
 from __future__ import annotations
 
 import json
+import zipfile
 from pathlib import Path
 
 from fastapi import APIRouter, File, Form, HTTPException, Request, Response, UploadFile, status
@@ -39,6 +40,91 @@ def project_or_404(user_id: int, project_slug: str):
         raise HTTPException(status_code=404, detail='Проект не найден.')
     return project
 
+def _palette_items_from_tokens(tokens: dict) -> list[dict]:
+    generation_cfg = tokens.get('generation') if isinstance(tokens.get('generation'), dict) else {}
+    active_keys = generation_cfg.get('active_palette_keys') if isinstance(generation_cfg.get('active_palette_keys'), list) else []
+    active_keys = [k for k in active_keys if isinstance(k, str)]
+
+    palette_slots = tokens.get('palette_slots') if isinstance(tokens.get('palette_slots'), dict) else {}
+    palette = tokens.get('palette') if isinstance(tokens.get('palette'), dict) else {}
+    source = palette_slots or palette
+
+    if not active_keys:
+        active_keys = list(source.keys())[:6]
+
+    labels = {
+        'primary': 'Primary',
+        'secondary': 'Secondary',
+        'accent': 'Accent',
+        'tertiary': 'Tertiary',
+        'neutral': 'Neutral',
+        'extra': 'Extra',
+    }
+
+    items = []
+    for key in active_keys:
+        value = source.get(key) or palette.get(key)
+        if not value:
+            continue
+        items.append({'key': key, 'label': labels.get(key, key.title()), 'value': str(value).upper()})
+    return items
+
+
+def _scan_asset_group(brand_id: str, section: str, suffixes: tuple[str, ...]) -> list[dict]:
+    provider_roots = [
+        ('recraft', OUT_DIR / 'recraft' / brand_id / section),
+        ('seedream', OUT_DIR / 'seedream' / brand_id / section),
+        ('flux', OUT_DIR / 'flux' / brand_id / section),
+    ]
+    assets = []
+    for provider, root in provider_roots:
+        if not root.exists():
+            continue
+        for file_path in sorted(root.iterdir()):
+            if file_path.is_file() and file_path.suffix.lower() in suffixes:
+                assets.append({
+                    'provider': provider,
+                    'name': file_path.stem,
+                    'filename': file_path.name,
+                    'url': f'/assets/{brand_id}/{provider}/{section}/{file_path.name}',
+                })
+    return assets
+
+def _build_download_zip(user_id: int, project_slug: str, brand_id: str, kind: str) -> Path:
+    exports_dir = project_service.exports_dir(user_id, project_slug)
+    exports_dir.mkdir(parents=True, exist_ok=True)
+    zip_path = exports_dir / f'{project_slug}_{kind}.zip'
+
+    section_map = {
+        'icons': ['icons'],
+        'patterns': ['patterns'],
+        'illustrations': ['illustrations'],
+        'all': ['icons', 'patterns', 'illustrations'],
+    }
+    if kind not in section_map:
+        raise HTTPException(status_code=404, detail='Неизвестный тип экспорта.')
+
+    with zipfile.ZipFile(zip_path, 'w', compression=zipfile.ZIP_DEFLATED) as zf:
+        for provider in ('recraft', 'seedream', 'flux'):
+            for section in section_map[kind]:
+                section_dir = OUT_DIR / provider / brand_id / section
+                if not section_dir.exists():
+                    continue
+                for file_path in sorted(section_dir.iterdir()):
+                    if file_path.is_file():
+                        zf.write(file_path, arcname=f'{provider}/{section}/{file_path.name}')
+
+        if kind == 'all':
+            meta_dir = OUT_DIR / '_meta' / brand_id
+            if meta_dir.exists():
+                for file_path in sorted(meta_dir.iterdir()):
+                    if file_path.is_file():
+                        zf.write(file_path, arcname=f'_meta/{file_path.name}')
+            tokens_path = project_service.tokens_path(user_id, project_slug)
+            if tokens_path.exists():
+                zf.write(tokens_path, arcname='tokens.json')
+
+    return zip_path
 
 @router.post('/projects/create')
 async def create_project(request: Request, name: str = Form('Новый проект')):
@@ -227,3 +313,41 @@ async def serve_assets(brand_id: str, relpath: str):
     if not file_path.exists() or not file_path.is_file():
         raise HTTPException(status_code=404, detail='Файл не найден.')
     return FileResponse(file_path, headers=headers)
+
+@router.get('/projects/{project_slug}/results', response_class=HTMLResponse)
+async def project_results_page(request: Request, project_slug: str) -> HTMLResponse:
+    auth_redirect = redirect_auth(request)
+    if auth_redirect:
+        return auth_redirect
+
+    user_id = int(request.session['user_id'])
+    project = project_or_404(user_id, project_slug)
+    tokens = project_service.load_tokens(user_id, project_slug)
+    brand_id = (tokens.get('brand_id') or project.brand_id or '').strip()
+    if not brand_id:
+        raise HTTPException(status_code=400, detail='У проекта не указан brand_id.')
+
+    context = {
+        'request': request,
+        'project': project,
+        'user_email': request.session.get('user_email') or '',
+        'user_initial': ((request.session.get('user_name') or '?')[:1]).upper(),
+        'palette_items': _palette_items_from_tokens(tokens),
+        'icons': _scan_asset_group(brand_id, 'icons', ('.png', '.svg', '.jpg', '.jpeg')),
+        'patterns': _scan_asset_group(brand_id, 'patterns', ('.png', '.svg', '.jpg', '.jpeg')),
+        'illustrations': _scan_asset_group(brand_id, 'illustrations', ('.png', '.svg', '.jpg', '.jpeg')),
+    }
+    return templates.TemplateResponse(request, 'pages/generation_results.html', context)
+
+
+@router.get('/projects/{project_slug}/downloads/{kind}')
+async def download_generated_assets(request: Request, project_slug: str, kind: str):
+    user_id = require_auth(request)
+    project = project_or_404(user_id, project_slug)
+    tokens = project_service.load_tokens(user_id, project_slug)
+    brand_id = (tokens.get('brand_id') or project.brand_id or '').strip()
+    if not brand_id:
+        raise HTTPException(status_code=400, detail='У проекта не указан brand_id.')
+
+    zip_path = _build_download_zip(user_id, project_slug, brand_id, kind)
+    return FileResponse(zip_path, filename=zip_path.name, media_type='application/zip')

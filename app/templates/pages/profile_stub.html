@@ -1,0 +1,19 @@
+{% extends 'base.html' %}
+
+{% block title %}KitYourBrand — профиль{% endblock %}
+
+{% block content %}
+<div class="stub-page">
+    {% include 'partials/header.html' %}
+    <section class="stub-section">
+        <div class="container">
+            <div class="stub-card">
+                <h1>{{ page_title }}</h1>
+                <p>{{ page_description }}</p>
+                <p>Для пользователя <strong>{{ user_name }}</strong> этот раздел появится позже.</p>
+                <a href="/dashboard" class="btn btn-primary">Перейти к проектам</a>
+            </div>
+        </div>
+    </section>
+</div>
+{% endblock %}

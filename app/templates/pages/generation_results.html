@@ -1,0 +1,154 @@
+{% extends 'base.html' %}
+
+{% block title %}KitYourBrand — результаты генерации{% endblock %}
+
+{% block content %}
+<div class="dashboard-shell results-shell">
+    <aside class="dashboard-sidebar">
+        <a href="/dashboard" class="dashboard-brand" aria-label="KitYourBrand dashboard">
+            <span class="brand-mark__dot"></span>
+            <span class="brand-mark__text">KITYOURBRAND</span>
+        </a>
+
+        <nav class="dashboard-nav" aria-label="Основная навигация">
+            <a href="/dashboard" class="dashboard-nav__item dashboard-nav__item--active">
+                <span class="dashboard-nav__icon">▣</span>
+                <span>Мои проекты</span>
+            </a>
+            <a href="/profile" class="dashboard-nav__item">
+                <span class="dashboard-nav__icon">◌</span>
+                <span>Профиль</span>
+            </a>
+            <a href="#" class="dashboard-nav__item">
+                <span class="dashboard-nav__icon">⚙</span>
+                <span>Настройки</span>
+            </a>
+            <a href="/logout" class="dashboard-nav__item">
+                <span class="dashboard-nav__icon">⇥</span>
+                <span>Выход</span>
+            </a>
+        </nav>
+
+        <div class="dashboard-sidebar__footer">
+            <span class="brand-mark__dot"></span>
+            <span class="brand-mark__text">KITYOURBRAND</span>
+        </div>
+    </aside>
+
+    <main class="dashboard-main results-main">
+        <div class="dashboard-topbar">
+            <div class="dashboard-topbar__spacer"></div>
+            <div class="dashboard-userbar">
+                <button type="button" class="dashboard-icon-btn" aria-label="Уведомления">
+                    <span>◔</span>
+                    <span class="dashboard-badge"></span>
+                </button>
+                <div class="dashboard-userpill">
+                    <span class="dashboard-userpill__email">{{ user_email }}</span>
+                    <span class="dashboard-userpill__avatar">{{ user_initial }}</span>
+                </div>
+            </div>
+        </div>
+
+        <section class="results-page">
+            <div class="results-page__head">
+                <div>
+                    <h1>Результаты генерации бренд-комплекта</h1>
+                    <p>Ваш бренд-комплект готов к использованию</p>
+                </div>
+            </div>
+
+            <div class="results-stack">
+                <section class="results-card">
+                    <div class="results-card__head">
+                        <div class="results-card__title">
+                            <span class="results-card__icon">◉</span>
+                            <h2>Цветовая палитра</h2>
+                        </div>
+                    </div>
+                    {% if palette_items %}
+                    <div class="palette-results-grid">
+                        {% for item in palette_items %}
+                        <div class="palette-results-item">
+                            <div class="palette-results-item__swatch" style="background: {{ item.value }}"></div>
+                            <div class="palette-results-item__label">{{ item.label }}</div>
+                            <div class="palette-results-item__value">{{ item.value }}</div>
+                        </div>
+                        {% endfor %}
+                    </div>
+                    {% else %}
+                    <div class="results-empty">Палитра пока недоступна.</div>
+                    {% endif %}
+                </section>
+
+                <section class="results-card">
+                    <div class="results-card__head">
+                        <div class="results-card__title">
+                            <span class="results-card__icon">◌</span>
+                            <h2>Иконки</h2>
+                        </div>
+                        <a href="/projects/{{ project.slug }}/downloads/icons" class="btn btn-primary btn-inline">Скачать</a>
+                    </div>
+                    {% if icons %}
+                    <div class="results-icons-grid">
+                        {% for asset in icons %}
+                        <a href="{{ asset.url }}" target="_blank" rel="noopener" class="results-icon-card" title="{{ asset.provider }} / {{ asset.name }}">
+                            <img src="{{ asset.url }}" alt="{{ asset.name }}">
+                        </a>
+                        {% endfor %}
+                    </div>
+                    {% else %}
+                    <div class="results-empty">Иконки пока не найдены.</div>
+                    {% endif %}
+                </section>
+
+                <section class="results-card">
+                    <div class="results-card__head">
+                        <div class="results-card__title">
+                            <span class="results-card__icon">▦</span>
+                            <h2>Паттерны</h2>
+                        </div>
+                        <a href="/projects/{{ project.slug }}/downloads/patterns" class="btn btn-primary btn-inline">Скачать</a>
+                    </div>
+                    {% if patterns %}
+                    <div class="results-media-grid results-media-grid--patterns">
+                        {% for asset in patterns %}
+                        <a href="{{ asset.url }}" target="_blank" rel="noopener" class="results-media-card" title="{{ asset.provider }} / {{ asset.name }}">
+                            <img src="{{ asset.url }}" alt="{{ asset.name }}">
+                        </a>
+                        {% endfor %}
+                    </div>
+                    {% else %}
+                    <div class="results-empty">Паттерны пока не найдены.</div>
+                    {% endif %}
+                </section>
+
+                <section class="results-card">
+                    <div class="results-card__head">
+                        <div class="results-card__title">
+                            <span class="results-card__icon">◫</span>
+                            <h2>Иллюстрации</h2>
+                        </div>
+                        <a href="/projects/{{ project.slug }}/downloads/illustrations" class="btn btn-primary btn-inline">Скачать</a>
+                    </div>
+                    {% if illustrations %}
+                    <div class="results-media-grid">
+                        {% for asset in illustrations %}
+                        <a href="{{ asset.url }}" target="_blank" rel="noopener" class="results-media-card" title="{{ asset.provider }} / {{ asset.name }}">
+                            <img src="{{ asset.url }}" alt="{{ asset.name }}">
+                        </a>
+                        {% endfor %}
+                    </div>
+                    {% else %}
+                    <div class="results-empty">Иллюстрации пока не найдены.</div>
+                    {% endif %}
+                </section>
+
+                <div class="results-actions">
+                    <a href="/projects/{{ project.slug }}/downloads/all" class="btn btn-primary">Экспорт бренд-кита</a>
+                </div>
+            </div>
+        </section>
+    </main>
+</div>
+{% endblock %}

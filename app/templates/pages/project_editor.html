@@ -4,6 +4,7 @@
 
 {% block content %}
 <div class="dashboard-shell project-shell" data-project-slug="{{ project.slug }}">
+    <span id="project-slug" hidden>{{ project.slug }}</span>
     <aside class="dashboard-sidebar">
         <a href="/dashboard" class="dashboard-brand" aria-label="KitYourBrand dashboard">
             <span class="brand-mark__dot"></span>
@@ -15,7 +16,7 @@
                 <span class="dashboard-nav__icon">▣</span>
                 <span>Мои проекты</span>
             </a>
-            <a href="#" class="dashboard-nav__item">
+            <a href="/profile" class="dashboard-nav__item">
                 <span class="dashboard-nav__icon">◌</span>
                 <span>Профиль</span>
             </a>
@@ -95,23 +96,40 @@
                     </div>
 
                     <h3 class="editor-subtitle">Палитра</h3>
-                    <div class="palette-grid">
+                    <div class="palette-hint">Выберите от 2 до 6 цветов, которые будут использоваться в текущей генерации.</div>
+                    <div class="palette-grid palette-grid--six">
                         <div class="palette-item">
-                            <label>Primary</label>
+                            <label class="palette-item__label"><input type="checkbox" id="palette.primary_enabled" checked /> <span>Primary</span></label>
                             <input type="color" id="palette.primary" class="palette-swatch" />
                             <input type="text" id="palette.primary_text" class="editor-field__compact" />
                         </div>
                         <div class="palette-item">
-                            <label>Secondary</label>
+                            <label class="palette-item__label"><input type="checkbox" id="palette.secondary_enabled" checked /> <span>Secondary</span></label>
                             <input type="color" id="palette.secondary" class="palette-swatch" />
                             <input type="text" id="palette.secondary_text" class="editor-field__compact" />
                         </div>
                         <div class="palette-item">
-                            <label>Accent</label>
+                            <label class="palette-item__label"><input type="checkbox" id="palette.accent_enabled" checked /> <span>Accent</span></label>
                             <input type="color" id="palette.accent" class="palette-swatch" />
                             <input type="text" id="palette.accent_text" class="editor-field__compact" />
                         </div>
+                        <div class="palette-item">
+                            <label class="palette-item__label"><input type="checkbox" id="palette.tertiary_enabled" /> <span>Tertiary</span></label>
+                            <input type="color" id="palette.tertiary" class="palette-swatch" />
+                            <input type="text" id="palette.tertiary_text" class="editor-field__compact" />
+                        </div>
+                        <div class="palette-item">
+                            <label class="palette-item__label"><input type="checkbox" id="palette.neutral_enabled" /> <span>Neutral</span></label>
+                            <input type="color" id="palette.neutral" class="palette-swatch" />
+                            <input type="text" id="palette.neutral_text" class="editor-field__compact" />
+                        </div>
+                        <div class="palette-item">
+                            <label class="palette-item__label"><input type="checkbox" id="palette.extra_enabled" /> <span>Extra</span></label>
+                            <input type="color" id="palette.extra" class="palette-swatch" />
+                            <input type="text" id="palette.extra_text" class="editor-field__compact" />
+                        </div>
                     </div>
+                    <div id="palette-validation" class="editor-note editor-note--compact" hidden>Выберите минимум 2 цвета палитры.</div>
 
                     <div class="editor-divider"></div>
                     <h3 class="editor-subtitle">Параметры иконок</h3>
@@ -165,15 +183,15 @@
                     <div class="editor-grid editor-grid--narrow">
                         <label class="editor-field">
                             <span>Количество иконок</span>
-                            <input type="number" id="gen.icons_count" min="0" max="64" value="8" />
+                            <input type="number" id="gen.icons_count" min="1" max="20" value="8">
                         </label>
                         <label class="editor-field">
                             <span>Количество паттернов</span>
-                            <input type="number" id="gen.patterns_count" min="0" max="32" value="4" />
+                            <input type="number" id="gen.patterns_count" min="1" max="20" value="4" />
                         </label>
                         <label class="editor-field">
                             <span>Количество иллюстраций</span>
-                            <input type="number" id="gen.illustrations_count" min="0" max="32" value="4" />
+                            <input type="number" id="gen.illustrations_count" min="1" max="20" value="4" />
                         </label>
                     </div>
                 </section>
@@ -188,7 +206,7 @@
                     </div>
                     <div class="refs-toolbar">
                         <label class="btn btn-primary btn-upload">
-                            <input id="ref-files" type="file" multiple accept=".png,.jpg,.jpeg,.webp,.gif,.bmp" hidden />
+                            <input id="upload-refs" type="file" multiple accept=".png,.jpg,.jpeg,.webp,.gif,.bmp" hidden />
                             Загрузить изображения
                         </label>
                     </div>
@@ -253,9 +271,9 @@
                     <p>Все параметры настроены. Нажмите кнопку ниже, чтобы запустить генерацию бренд-комплекта.</p>
                     <button type="button" id="btn-generate" class="btn btn-primary editor-generate-btn">Собрать бренд-комплект</button>
                     <div class="cta-stats">
-                        <span>8 иконок</span>
-                        <span>4 паттерна</span>
-                        <span>4 иллюстрации</span>
+                      <span><strong id="summary-icons">24</strong> иконок</span>
+                      <span><strong id="summary-patterns">12</strong> паттернов</span>
+                      <span><strong id="summary-illustrations">12</strong> иллюстраций</span>
                     </div>
                     <div id="generate-status" class="editor-status"></div>
                 </section>
@@ -291,13 +309,14 @@
         <label class="generation-log-label">Лог операций</label>
         <pre id="generation-log" class="generation-log"></pre>
         <div class="generation-modal__actions">
+            <button type="button" id="generation-cancel-btn" class="btn btn-outline btn-inline">Отменить</button>
             <button type="button" id="generation-modal-close-btn" class="btn btn-outline btn-inline">Закрыть</button>
-            <a id="generation-result-link" class="btn btn-primary btn-inline" href="#" hidden>Посмотреть результат</a>
+            <a id="generation-result-link" class="btn btn-primary btn-inline" href="/projects/{{ project.slug }}/results" hidden>Посмотреть результат</a>
         </div>
     </div>
 </div>
 
-<script id="project-tokens" type="application/json">{{ tokens_json|safe }}</script>
+<script id="tokens-data" type="application/json">{{ tokens_json|safe }}</script>
 <script id="project-refs" type="application/json">{{ project_refs|tojson }}</script>
-<script src="{{ url_for('static', path='js/project-editor.js') }}?v=20260320-statusfix"></script>
+<script src="{{ url_for('static', path='js/project-editor.js') }}"></script>
 {% endblock %}

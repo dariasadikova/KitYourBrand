@@ -1,5 +1,6 @@
 from __future__ import annotations
 
+import logging
 import json
 import os
 import re
@@ -13,6 +14,8 @@ from PIL import Image
 
 from app.core.paths import FLUX_DIR, OUT_DIR, RECRAFT_DIR, SEEDREAM_DIR
 from app.services.project_service import ProjectService
+
+logger = logging.getLogger("kityourbrand.generation")
 
 
 class GenerationService:
@@ -79,12 +82,20 @@ class GenerationService:
                 items.append((Path(fn).stem, fn))
         return items
 
-    def build_and_save_figma_manifest(self, user_id: int, project_slug: str, brand_id: str, base_host: str) -> tuple[dict[str, Any], dict[str, int], Path]:
+    def build_and_save_figma_manifest(
+        self,
+        user_id: int,
+        project_slug: str,
+        brand_id: str,
+        base_host: str,
+        progress_callback: Callable[[int, str, str | None, str | None], None] | None = None,
+    ) -> tuple[dict[str, Any], dict[str, int], Path]:
         def report(progress: int, message: str, provider: str | None = None, provider_status: str | None = None) -> None:
             if progress_callback:
                 progress_callback(progress, message, provider, provider_status)
 
-        report(5, 'Загрузка конфигурации проекта')
+        report(95, 'Сборка Figma manifest')
+
         tokens = self.project_service.load_tokens(user_id, project_slug)
         brand = {
             'name': tokens.get('name', 'Brand'),
@@ -103,14 +114,30 @@ class GenerationService:
         icons: list[dict[str, Any]] = []
         patterns: list[dict[str, Any]] = []
         illustrations: list[dict[str, Any]] = []
+
         for provider, root_dir, url_prefix in provider_roots:
             prefix = f'{url_prefix}/' if url_prefix else ''
             for n, fn in self.scan_dir(root_dir / 'icons', ('.png', '.svg', '.jpg', '.jpeg')):
-                icons.append({'name': f'{provider}-{n}', 'provider': provider, 'url': f'{base_url}/{prefix}icons/{fn}', 'sizes': [16, 24, 32]})
+                icons.append({
+                    'name': f'{provider}-{n}',
+                    'provider': provider,
+                    'url': f'{base_url}/{prefix}icons/{fn}',
+                    'sizes': [16, 24, 32],
+                })
             for n, fn in self.scan_dir(root_dir / 'patterns', ('.png', '.jpg', '.jpeg')):
-                patterns.append({'name': f'{provider}-{n}', 'provider': provider, 'url': f'{base_url}/{prefix}patterns/{fn}', 'tile': 'seamless'})
+                patterns.append({
+                    'name': f'{provider}-{n}',
+                    'provider': provider,
+                    'url': f'{base_url}/{prefix}patterns/{fn}',
+                    'tile': 'seamless',
+                })
             for n, fn in self.scan_dir(root_dir / 'illustrations', ('.png', '.jpg', '.jpeg')):
-                illustrations.append({'name': f'{provider}-{n}', 'provider': provider, 'url': f'{base_url}/{prefix}illustrations/{fn}'})
+                illustrations.append({
+                    'name': f'{provider}-{n}',
+                    'provider': provider,
+                    'url': f'{base_url}/{prefix}illustrations/{fn}',
+                })
+
         style_images_urls = []
         for p in refs:
             if isinstance(p, str) and p.startswith('http'):
@@ -118,6 +145,7 @@ class GenerationService:
             else:
                 filename = Path(str(p)).name
                 style_images_urls.append(f'{base_host}/projects/{project_slug}/refs/{filename}')
+
         manifest = {
             'brand': brand,
             'palette': palette,
@@ -131,10 +159,12 @@ class GenerationService:
                 'note': 'Ассеты доступны по /assets/<brand_id>/recraft|seedream|flux/...; референсы — по /projects/<project_slug>/refs/*',
             },
         }
+
         meta_dir = self.meta_out_root / brand_id
         meta_dir.mkdir(parents=True, exist_ok=True)
         manifest_path = meta_dir / 'figma_plugin_manifest.json'
         manifest_path.write_text(json.dumps(manifest, ensure_ascii=False, indent=2), encoding='utf-8')
+
         for provider_name in ('recraft', 'seedream', 'flux'):
             m2 = dict(manifest)
             m2['brand'] = dict(brand)
@@ -142,10 +172,15 @@ class GenerationService:
             m2['icons'] = [x for x in icons if x.get('provider') == provider_name]
             m2['patterns'] = [x for x in patterns if x.get('provider') == provider_name]
             m2['illustrations'] = [x for x in illustrations if x.get('provider') == provider_name]
-            (meta_dir / f'figma_plugin_manifest_{provider_name}.json').write_text(json.dumps(m2, ensure_ascii=False, indent=2), encoding='utf-8')
+            (meta_dir / f'figma_plugin_manifest_{provider_name}.json').write_text(
+                json.dumps(m2, ensure_ascii=False, indent=2),
+                encoding='utf-8',
+            )
+
         export_dir = self.project_service.exports_dir(user_id, project_slug)
         export_path = export_dir / 'figma_plugin_manifest.json'
         export_path.write_text(json.dumps(manifest, ensure_ascii=False, indent=2), encoding='utf-8')
+
         counts = {
             'icons': len(icons),
             'patterns': len(patterns),
@@ -160,21 +195,42 @@ class GenerationService:
             if src.exists() and src.is_file():
                 ref_src_paths.append(src)
         ref_src_paths = ref_src_paths[:5]
+
         self.recraft_refs.mkdir(parents=True, exist_ok=True)
         for name in self.recraft_refs.iterdir():
             if name.is_file():
                 name.unlink()
+
         for src in ref_src_paths:
             shutil.copy(src, self.recraft_refs / src.name)
+
         return ref_src_paths
 
     def _run_checked(self, cmd: list[str], cwd: Path) -> tuple[str, str]:
-        proc = subprocess.run(cmd, cwd=str(cwd), check=True, capture_output=True, text=True)
+        proc = subprocess.run(
+            cmd,
+            cwd=str(cwd),
+            check=True,
+            capture_output=True,
+            text=True,
+        )
         return (proc.stdout or '').strip(), (proc.stderr or '').strip()
 
-    def _run_optional_provider(self, *, main_path: Path, project_dir: Path, provider_out_root: Path, tokens_path: Path, brand_id: str, icons_count: int, patterns_count: int, illustrations_count: int) -> dict[str, Any]:
+    def _run_optional_provider(
+        self,
+        *,
+        main_path: Path,
+        project_dir: Path,
+        provider_out_root: Path,
+        tokens_path: Path,
+        brand_id: str,
+        icons_count: int,
+        patterns_count: int,
+        illustrations_count: int,
+    ) -> dict[str, Any]:
         if not main_path.exists():
             return {'ok': False, 'error': f'CLI не найден: {main_path}', 'stdout': '', 'stderr': ''}
+
         cmd = [
             sys.executable,
             str(main_path),
@@ -189,25 +245,47 @@ class GenerationService:
             stdout, stderr = self._run_checked(cmd, project_dir)
             return {'ok': True, 'error': '', 'stdout': stdout, 'stderr': stderr}
         except subprocess.CalledProcessError as exc:
-            return {'ok': False, 'error': (exc.stderr or exc.stdout or str(exc)).strip(), 'stdout': (exc.stdout or '').strip(), 'stderr': (exc.stderr or '').strip()}
+            return {
+                'ok': False,
+                'error': (exc.stderr or exc.stdout or str(exc)).strip(),
+                'stdout': (exc.stdout or '').strip(),
+                'stderr': (exc.stderr or '').strip(),
+            }
         except Exception as exc:
             return {'ok': False, 'error': str(exc), 'stdout': '', 'stderr': ''}
 
-    def generate_assets(self, user_id: int, project_slug: str, payload: dict[str, Any], base_host: str, progress_callback: Callable[[int, str, str | None, str | None], None] | None = None) -> dict[str, Any]:
+    def generate_assets(
+        self,
+        user_id: int,
+        project_slug: str,
+        payload: dict[str, Any],
+        base_host: str,
+        progress_callback: Callable[[int, str, str | None, str | None], None] | None = None,
+    ) -> dict[str, Any]:
         def report(progress: int, message: str, provider: str | None = None, provider_status: str | None = None) -> None:
             if progress_callback:
                 progress_callback(progress, message, provider, provider_status)
 
-        report(5, 'Загрузка конфигурации проекта')
+        logger.info("generate_project(project_slug=%s)", project_slug)
+
         tokens = self.project_service.load_tokens(user_id, project_slug)
         brand_id = (payload.get('brand_id') or tokens.get('brand_id') or '').strip()
         if not brand_id:
             raise ValueError('Не указан brand_id.')
+
+        report(5, 'Загрузка конфигурации проекта')
+
         style_id = (payload.get('style_id') or tokens.get('style_id') or '').strip()
         icons_count = int(payload.get('icons_count') or 0)
         patterns_count = int(payload.get('patterns_count') or 0)
         illustrations_count = int(payload.get('illustrations_count') or 0)
         build_style = bool(payload.get('build_style'))
+
+        generation_cfg = tokens.get('generation', {}) if isinstance(tokens.get('generation'), dict) else {}
+        active_palette_keys = generation_cfg.get('active_palette_keys') if isinstance(generation_cfg.get('active_palette_keys'), list) else []
+        active_palette_keys = [key for key in active_palette_keys if isinstance(key, str)]
+        if active_palette_keys and len(active_palette_keys) < 2:
+            raise ValueError('Нужно выбрать минимум 2 цвета палитры для генерации.')
 
         token_path = self.project_service.tokens_path(user_id, project_slug)
         if not token_path.exists():
@@ -217,7 +295,7 @@ class GenerationService:
 
         self.recraft_tokens.parent.mkdir(parents=True, exist_ok=True)
         shutil.copyfile(token_path, self.recraft_tokens)
-        report(12, 'tokens.json сохранён и подготовлен для генерации')
+        report(12, 'Проект сохранён и подготовлен для генерации')
 
         recraft_out_abs = self.recraft_out_root / brand_id
         recraft_out_abs.mkdir(parents=True, exist_ok=True)
@@ -282,7 +360,13 @@ class GenerationService:
             patterns_count=patterns_count,
             illustrations_count=illustrations_count,
         )
-        report(68, 'Seedream завершён успешно' if seedream.get('ok') else 'Seedream завершён с ошибкой', 'seedream', 'success' if seedream.get('ok') else 'error')
+        report(
+            68,
+            'Seedream завершён успешно' if seedream.get('ok') else 'Seedream завершён с ошибкой',
+            'seedream',
+            'success' if seedream.get('ok') else 'error',
+        )
+
         report(72, 'Запуск провайдера Flux', 'flux', 'running')
         flux = self._run_optional_provider(
             main_path=self.flux_main,
@@ -294,12 +378,24 @@ class GenerationService:
             patterns_count=patterns_count,
             illustrations_count=illustrations_count,
         )
+        report(
+            85,
+            'Flux завершён успешно' if flux.get('ok') else 'Flux завершён с ошибкой',
+            'flux',
+            'success' if flux.get('ok') else 'error',
+        )
 
-        report(85, 'Flux завершён успешно' if flux.get('ok') else 'Flux завершён с ошибкой', 'flux', 'success' if flux.get('ok') else 'error')
         report(90, 'Постобработка изображений WEBP → PNG')
         webp_converted = self.convert_webp_to_png_for_brand(brand_id)
-        report(95, 'Сборка Figma manifest')
-        _, counts, _ = self.build_and_save_figma_manifest(user_id, project_slug, brand_id, base_host)
+
+        _, counts, _ = self.build_and_save_figma_manifest(
+            user_id,
+            project_slug,
+            brand_id,
+            base_host,
+            progress_callback=progress_callback,
+        )
+
         report(100, 'Генерация завершена')
 
         return {
@@ -323,4 +419,5 @@ class GenerationService:
                 },
                 'counts': counts,
             },
+            'active_palette_keys': active_palette_keys or list((tokens.get('palette') or {}).keys()),
         }

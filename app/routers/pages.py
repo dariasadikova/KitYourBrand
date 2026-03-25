@@ -106,6 +106,21 @@ async def dashboard_page(request: Request) -> HTMLResponse:
     return templates.TemplateResponse(request, 'pages/dashboard.html', context)
 
 
+@router.get('/profile', response_class=HTMLResponse)
+async def profile_page(request: Request) -> HTMLResponse:
+    auth_redirect = require_auth(request)
+    if auth_redirect:
+        return auth_redirect
+
+    context = {
+        'request': request,
+        'page_title': 'Профиль',
+        'page_description': 'Страница профиля пока находится в разработке.',
+        'user_name': request.session.get('user_name') or 'Пользователь',
+    }
+    return templates.TemplateResponse(request, 'pages/profile_stub.html', context)
+
+
 @router.get('/login', response_class=HTMLResponse)
 async def login_page(request: Request) -> HTMLResponse:
     if request.session.get('user_id'):
@@ -196,7 +211,6 @@ async def register_submit(
         context['form_error'] = result.error
         return templates.TemplateResponse(request, 'pages/register.html', context, status_code=status.HTTP_400_BAD_REQUEST)
 
-    # seed a first real project for the new account
     new_user = auth_service.get_user_by_email(email.strip().lower())
     if new_user is not None:
         existing = project_service.list_projects(int(new_user['id']))

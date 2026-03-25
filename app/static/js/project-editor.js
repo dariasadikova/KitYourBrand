@@ -1,14 +1,10 @@
-
-console.log("project-editor.js loaded (generation modal v3 provider status fix)");
-
 function byId(id) { return document.getElementById(id); }
 function parseJsonScript(id, fallback) {
   try {
     const el = byId(id);
     if (!el) return fallback;
     return JSON.parse(el.textContent || 'null') ?? fallback;
-  } catch (error) {
-    console.error('parseJsonScript failed for', id, error);
+  } catch (_) {
     return fallback;
   }
 }
@@ -24,22 +20,10 @@ function deepSet(obj, path, value) {
   });
   current[keys[keys.length - 1]] = value;
 }
-function showToast(message, isError = false) {
-  let toast = document.querySelector('.floating-toast');
-  if (!toast) {
-    toast = document.createElement('div');
-    toast.className = 'floating-toast';
-    document.body.appendChild(toast);
-  }
-  toast.textContent = message;
-  toast.classList.toggle('floating-toast--error', isError);
-  toast.classList.add('floating-toast--show');
-  clearTimeout(window.__kytbToastTimer);
-  window.__kytbToastTimer = setTimeout(() => toast.classList.remove('floating-toast--show'), 3200);
-}
 function sleep(ms) {
   return new Promise((resolve) => setTimeout(resolve, ms));
 }
+
 function escapeHtml(value) {
   return String(value)
     .replace(/&/g, '&amp;')
@@ -49,83 +33,226 @@ function escapeHtml(value) {
     .replace(/'/g, '&#039;');
 }
 
+function clampAssetCount(value, fallback = 1) {
+  const num = parseInt(value, 10);
+  if (Number.isNaN(num)) return fallback;
+  return Math.max(1, Math.min(20, num));
+}
+
+function showToast(message, isError = false) {
+  const root = byId('toast-root');
+  if (!root) return;
+  const item = document.createElement('div');
+  item.className = `toast ${isError ? 'toast--error' : ''}`;
+  item.textContent = message;
+  root.appendChild(item);
+  setTimeout(() => {
+    item.classList.add('toast--hide');
+    setTimeout(() => item.remove(), 250);
+  }, 2500);
+}
+
 document.addEventListener('DOMContentLoaded', () => {
-  const shell = document.querySelector('.project-shell');
-  if (!shell) return;
+  const tokens = parseJsonScript('tokens-data', {});
+  const projectSlug = byId('project-slug')?.textContent?.trim() || '';
+  const refList = byId('refs-list');
+  const statusLabel = byId('generate-status');
 
-  const projectSlug = shell.dataset.projectSlug;
-  let tokens = parseJsonScript('project-tokens', {});
-  let refs = parseJsonScript('project-refs', []);
+  const PROVIDER_NAMES = ['recraft', 'seedream', 'flux'];
 
-  const fieldIds = ['name', 'style_id', 'brand_id', 'icon.strokeWidth', 'icon.corner', 'icon.fill'];
-  fieldIds.forEach((id) => {
+  function syncCountInput(id, fallback) {
     const input = byId(id);
-    if (input) input.value = deepGet(tokens, id, '');
-  });
-
-  ['primary', 'secondary', 'accent'].forEach((key) => {
-    const color = deepGet(tokens, `palette.${key}`, '#000000');
-    const input = byId(`palette.${key}`);
-    const text = byId(`palette.${key}_text`);
-    if (input) input.value = color;
-    if (text) text.value = color;
-    input?.addEventListener('input', () => { if (text) text.value = input.value.toUpperCase(); });
-    text?.addEventListener('input', () => {
-      const value = text.value.trim();
-      if (/^#[0-9A-Fa-f]{6}$/.test(value) && input) input.value = value;
-    });
-  });
-
-  function renderChips(path) {
-    const holder = byId(path);
-    if (!holder) return;
-    holder.innerHTML = '';
-    const values = deepGet(tokens, path, []);
-    values.forEach((value, index) => {
-      const chip = document.createElement('button');
-      chip.type = 'button';
-      chip.className = 'chip';
-      chip.innerHTML = `<span>${escapeHtml(value)}</span><span class="chip__remove">×</span>`;
-      chip.addEventListener('click', () => {
-        const next = [...values];
-        next.splice(index, 1);
-        deepSet(tokens, path, next);
-        renderChips(path);
-      });
-      holder.appendChild(chip);
-    });
+    if (!input) return fallback;
+    const normalized = clampAssetCount(input.value, fallback);
+    input.value = String(normalized);
+    return normalized;
   }
-  ['prompts.icons'].forEach(renderChips);
 
-  document.querySelectorAll('[data-add]').forEach((button) => {
-    button.addEventListener('click', () => {
-      const path = button.dataset.add;
-      const input = byId('icons-input');
-      if (!input || !path) return;
-      const parts = input.value.split(',').map((item) => item.trim()).filter(Boolean);
-      if (!parts.length) return;
-      const current = deepGet(tokens, path, []);
-      deepSet(tokens, path, [...current, ...parts]);
-      input.value = '';
-      renderChips(path);
+  function getRequestedCounts() {
+    return {
+      icons: syncCountInput('gen.icons_count', 8),
+      patterns: syncCountInput('gen.patterns_count', 4),
+      illustrations: syncCountInput('gen.illustrations_count', 4),
+    };
+  }
+
+  function updateGenerationSummary() {
+    const providerCount = PROVIDER_NAMES.length;
+    const counts = getRequestedCounts();
+    const totals = {
+      icons: counts.icons * providerCount,
+      patterns: counts.patterns * providerCount,
+      illustrations: counts.illustrations * providerCount,
+    };
+
+    const iconsLabel = byId('summary-icons');
+    const patternsLabel = byId('summary-patterns');
+    const illustrationsLabel = byId('summary-illustrations');
+
+    if (iconsLabel) iconsLabel.textContent = String(totals.icons);
+    if (patternsLabel) patternsLabel.textContent = String(totals.patterns);
+    if (illustrationsLabel) illustrationsLabel.textContent = String(totals.illustrations);
+  }
+
+  const PALETTE_KEYS = ['primary', 'secondary', 'accent', 'tertiary', 'neutral', 'extra'];
+  const MIN_ACTIVE_PALETTE = 2;
+  const MAX_ACTIVE_PALETTE = 6;
+  const DEFAULT_PALETTE = {
+    primary: '#E5A50A',
+    secondary: '#C64600',
+    accent: '#613583',
+    tertiary: '#5E81AC',
+    neutral: '#D8DEE9',
+    extra: '#2E3440',
+  };
+
+  function getStoredPaletteSlots(sourceTokens) {
+    const rawSlots = sourceTokens.palette_slots && typeof sourceTokens.palette_slots === 'object'
+      ? sourceTokens.palette_slots
+      : (sourceTokens.palette && typeof sourceTokens.palette === 'object' ? sourceTokens.palette : {});
+    const slots = {};
+    PALETTE_KEYS.forEach((key) => {
+      slots[key] = rawSlots[key] || DEFAULT_PALETTE[key];
     });
-  });
+    return slots;
+  }
+
+  function getActivePaletteKeysFromTokens(sourceTokens) {
+    const raw = sourceTokens.generation?.active_palette_keys;
+    const normalized = Array.isArray(raw) ? raw.filter((key) => PALETTE_KEYS.includes(key)) : [];
+    return normalized.length >= MIN_ACTIVE_PALETTE ? normalized.slice(0, MAX_ACTIVE_PALETTE) : ['primary', 'secondary', 'accent'];
+  }
+
+  function updatePaletteControlsState() {
+    const activeKeys = PALETTE_KEYS.filter((key) => byId(`palette.${key}_enabled`)?.checked);
+    PALETTE_KEYS.forEach((key) => {
+      const enabled = byId(`palette.${key}_enabled`)?.checked;
+      byId(`palette.${key}`)?.toggleAttribute('disabled', !enabled);
+      byId(`palette.${key}_text`)?.toggleAttribute('disabled', !enabled);
+      byId(`palette.${key}`)?.closest('.palette-item')?.classList.toggle('palette-item--disabled', !enabled);
+    });
+    const hint = byId('palette-validation');
+    if (hint) {
+      hint.hidden = activeKeys.length >= MIN_ACTIVE_PALETTE;
+    }
+    return activeKeys;
+  }
+
+  function enforcePaletteMinimum(changedKey) {
+    const activeKeys = PALETTE_KEYS.filter((key) => byId(`palette.${key}_enabled`)?.checked);
+    if (activeKeys.length >= MIN_ACTIVE_PALETTE) return activeKeys;
+    const checkbox = byId(`palette.${changedKey}_enabled`);
+    if (checkbox) checkbox.checked = true;
+    showToast('Нужно оставить минимум 2 цвета палитры', true);
+    return PALETTE_KEYS.filter((key) => byId(`palette.${key}_enabled`)?.checked);
+  }
+
+  function hydrateForm() {
+    byId('name') && (byId('name').value = deepGet(tokens, 'name', ''));
+    byId('brand_id') && (byId('brand_id').value = deepGet(tokens, 'brand_id', ''));
+    byId('style_id') && (byId('style_id').value = deepGet(tokens, 'style_id', ''));
+    byId('icon.style') && (byId('icon.style').value = deepGet(tokens, 'icon.style', ''));
+    byId('icon.background') && (byId('icon.background').value = deepGet(tokens, 'icon.background', ''));
+    byId('icon.stroke') && (byId('icon.stroke').value = deepGet(tokens, 'icon.stroke', ''));
+    byId('icon.corner_radius') && (byId('icon.corner_radius').value = deepGet(tokens, 'icon.corner_radius', ''));
+    byId('texture.enabled') && (byId('texture.enabled').checked = !!deepGet(tokens, 'texture.enabled', false));
+    byId('texture.mode') && (byId('texture.mode').value = deepGet(tokens, 'texture.mode', ''));
+    byId('texture.scale') && (byId('texture.scale').value = deepGet(tokens, 'texture.scale', ''));
+    byId('illustration.style') && (byId('illustration.style').value = deepGet(tokens, 'illustration.style', ''));
+    byId('illustration.background') && (byId('illustration.background').value = deepGet(tokens, 'illustration.background', ''));
+    byId('prompts.icons') && (byId('prompts.icons').value = deepGet(tokens, 'prompts.icons', ''));
+    byId('prompts.patterns') && (byId('prompts.patterns').value = deepGet(tokens, 'prompts.patterns', ''));
+    byId('prompts.illustrations') && (byId('prompts.illustrations').value = deepGet(tokens, 'prompts.illustrations', ''));
+
+    const paletteSlots = getStoredPaletteSlots(tokens);
+    const activePaletteKeys = getActivePaletteKeysFromTokens(tokens);
+
+    PALETTE_KEYS.forEach((key) => {
+      const color = paletteSlots[key] || DEFAULT_PALETTE[key];
+      const input = byId(`palette.${key}`);
+      const text = byId(`palette.${key}_text`);
+      const checkbox = byId(`palette.${key}_enabled`);
+      if (input) input.value = color;
+      if (text) text.value = color.toUpperCase();
+      if (checkbox) checkbox.checked = activePaletteKeys.includes(key);
+
+      input?.addEventListener('input', () => {
+        if (text) text.value = input.value.toUpperCase();
+      });
+      text?.addEventListener('input', () => {
+        const normalized = text.value.trim().toUpperCase();
+        if (/^#[0-9A-F]{6}$/.test(normalized) && input) input.value = normalized;
+      });
+      checkbox?.addEventListener('change', () => {
+        enforcePaletteMinimum(key);
+        updatePaletteControlsState();
+      });
+    });
+    updatePaletteControlsState();
+
+    const gen = tokens.generation || {};
+    if (byId('gen.icons_count')) byId('gen.icons_count').value = gen.icons_count ?? 8;
+    if (byId('gen.patterns_count')) byId('gen.patterns_count').value = gen.patterns_count ?? 4;
+    if (byId('gen.illustrations_count')) byId('gen.illustrations_count').value = gen.illustrations_count ?? 4;
+    if (byId('build_style')) byId('build_style').checked = !!gen.build_style;
+
+    updateGenerationSummary();
+  }
 
   function buildPayload() {
     const clone = structuredClone(tokens);
+
     clone.name = byId('name')?.value.trim() || clone.name;
     clone.style_id = byId('style_id')?.value.trim() || '';
     clone.brand_id = byId('brand_id')?.value.trim() || clone.brand_id;
     clone.palette = clone.palette || {};
-    ['primary', 'secondary', 'accent'].forEach((key) => {
-      clone.palette[key] = byId(`palette.${key}_text`)?.value.trim() || byId(`palette.${key}`)?.value || clone.palette[key];
-    });
+    clone.palette_slots = clone.palette_slots || {};
+    clone.generation = clone.generation || {};
     clone.icon = clone.icon || {};
-    clone.icon.strokeWidth = Number(byId('icon.strokeWidth')?.value || clone.icon.strokeWidth || 0);
-    clone.icon.corner = byId('icon.corner')?.value || clone.icon.corner;
-    clone.icon.fill = byId('icon.fill')?.value || clone.icon.fill;
+    clone.texture = clone.texture || {};
+    clone.illustration = clone.illustration || {};
+    clone.prompts = clone.prompts || {};
     clone.references = clone.references || {};
-    clone.references.style_images = refs;
+    clone.references.style_images = clone.references.style_images || [];
+
+    const selectedPaletteKeys = updatePaletteControlsState();
+    if (selectedPaletteKeys.length < MIN_ACTIVE_PALETTE) {
+      throw new Error('Выберите минимум 2 цвета палитры для генерации.');
+    }
+
+    PALETTE_KEYS.forEach((key) => {
+      const nextColor = byId(`palette.${key}_text`)?.value.trim().toUpperCase()
+        || byId(`palette.${key}`)?.value
+        || clone.palette_slots[key]
+        || DEFAULT_PALETTE[key];
+      clone.palette_slots[key] = nextColor;
+    });
+
+    clone.generation.active_palette_keys = selectedPaletteKeys;
+    clone.palette = {};
+    selectedPaletteKeys.forEach((key) => {
+      clone.palette[key] = clone.palette_slots[key];
+    });
+
+    clone.icon.style = byId('icon.style')?.value || '';
+    clone.icon.background = byId('icon.background')?.value || '';
+    clone.icon.stroke = byId('icon.stroke')?.value || '';
+    clone.icon.corner_radius = byId('icon.corner_radius')?.value || '';
+    clone.texture.enabled = !!byId('texture.enabled')?.checked;
+    clone.texture.mode = byId('texture.mode')?.value || '';
+    clone.texture.scale = byId('texture.scale')?.value || '';
+    clone.illustration.style = byId('illustration.style')?.value || '';
+    clone.illustration.background = byId('illustration.background')?.value || '';
+
+    clone.prompts.icons = byId('prompts.icons')?.value || '';
+    clone.prompts.patterns = byId('prompts.patterns')?.value || '';
+    clone.prompts.illustrations = byId('prompts.illustrations')?.value || '';
+
+    clone.generation.icons_count = syncCountInput('gen.icons_count', 8);
+    clone.generation.patterns_count = syncCountInput('gen.patterns_count', 4);
+    clone.generation.illustrations_count = syncCountInput('gen.illustrations_count', 4);
+    clone.generation.build_style = !!byId('build_style')?.checked;
+
     return clone;
   }
 
@@ -137,119 +264,61 @@ document.addEventListener('DOMContentLoaded', () => {
       body: JSON.stringify(payload),
     });
     const data = await response.json();
-    if (!response.ok || !data.ok) throw new Error(data.error || 'Ошибка сохранения');
-    tokens = data.tokens;
-    refs = tokens.references?.style_images || [];
-    renderRefs();
-    renderChips('prompts.icons');
+    if (!response.ok || !data.ok) {
+      throw new Error(data.error || 'Не удалось сохранить проект');
+    }
+    Object.assign(tokens, payload);
     return data;
   }
 
-  byId('save')?.addEventListener('click', async () => {
-    try {
-      await saveProject();
-      showToast('Проект сохранён');
-    } catch (error) {
-      showToast(error.message, true);
-    }
-  });
+  async function refreshRefs() {
+    if (!refList) return;
+    refList.innerHTML = '<div class="refs-empty">Загрузка...</div>';
 
-  byId('reset')?.addEventListener('click', async () => {
-    if (!window.confirm('Сбросить конфигурацию проекта к исходному состоянию?')) return;
-    try {
-      const response = await fetch(`/projects/${projectSlug}/reset`, { method: 'POST' });
-      const data = await response.json();
-      if (!response.ok || !data.ok) throw new Error(data.error || 'Ошибка сброса');
-      tokens = data.tokens;
-      refs = tokens.references?.style_images || [];
-      window.location.reload();
-    } catch (error) {
-      showToast(error.message, true);
-    }
-  });
+    const response = await fetch(`/projects/${projectSlug}/list-refs`);
+    const data = await response.json();
 
-  function refUrl(relPath) {
-    const filename = relPath.split('/').pop();
-    return `/projects/${projectSlug}/refs/${filename}`;
-  }
-  function renderRefs() {
-    const holder = byId('refs-list');
-    if (!holder) return;
-    holder.innerHTML = '';
-    if (!refs.length) {
-      const empty = document.createElement('div');
-      empty.className = 'ref-empty';
-      empty.textContent = 'Пока нет загруженных референсов';
-      holder.appendChild(empty);
+    if (!response.ok || !data.ok) {
+      refList.innerHTML = '<div class="refs-empty">Не удалось загрузить референсы</div>';
       return;
     }
-    refs.forEach((relPath) => {
-      const card = document.createElement('div');
-      card.className = 'ref-card';
-      card.innerHTML = `<img src="${refUrl(relPath)}" alt="ref"><button type="button" class="ref-remove">✕</button>`;
-      card.querySelector('.ref-remove')?.addEventListener('click', async () => {
+
+    const refs = data.refs || [];
+    if (!refs.length) {
+      refList.innerHTML = '<div class="refs-empty">Референсы пока не загружены</div>';
+      return;
+    }
+
+    refList.innerHTML = refs.map((ref) => `
+      <div class="ref-item">
+        <a href="${ref.url}" target="_blank" rel="noopener">${ref.name}</a>
+        <button type="button" class="ref-delete" data-ref-name="${ref.name}">Удалить</button>
+      </div>
+    `).join('');
+
+    refList.querySelectorAll('.ref-delete').forEach((btn) => {
+      btn.addEventListener('click', async () => {
+        const name = btn.getAttribute('data-ref-name');
+        if (!name) return;
         try {
           const response = await fetch(`/projects/${projectSlug}/delete-ref`, {
             method: 'POST',
             headers: { 'Content-Type': 'application/json' },
-            body: JSON.stringify({ path: relPath }),
+            body: JSON.stringify({ name }),
           });
           const data = await response.json();
-          if (!response.ok || !data.ok) throw new Error(data.error || 'Ошибка удаления');
-          refs = data.images || [];
-          tokens.references = tokens.references || {};
-          tokens.references.style_images = refs;
-          renderRefs();
+          if (!response.ok || !data.ok) throw new Error(data.error || 'Не удалось удалить референс');
+          showToast('Референс удалён');
+          await refreshRefs();
         } catch (error) {
           showToast(error.message, true);
         }
       });
-      holder.appendChild(card);
     });
   }
-  renderRefs();
 
-  byId('ref-files')?.addEventListener('change', async (event) => {
-    const files = Array.from(event.target.files || []);
-    if (!files.length) return;
-    const formData = new FormData();
-    files.forEach((file) => formData.append('files', file));
-    try {
-      const response = await fetch(`/projects/${projectSlug}/upload-refs`, { method: 'POST', body: formData });
-      const data = await response.json();
-      if (!response.ok || !data.ok) throw new Error(data.error || 'Ошибка загрузки');
-      refs = data.images || [];
-      tokens.references = tokens.references || {};
-      tokens.references.style_images = refs;
-      renderRefs();
-      showToast('Референсы загружены');
-    } catch (error) {
-      showToast(error.message, true);
-    } finally {
-      event.target.value = '';
-    }
-  });
-
-  byId('gen-figma')?.addEventListener('click', async () => {
-    try {
-      await saveProject();
-      const response = await fetch(`/projects/${projectSlug}/generate-figma`, {
-        method: 'POST',
-        headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({ brand_id: byId('brand_id')?.value.trim() || '' }),
-      });
-      const data = await response.json();
-      if (!response.ok || !data.ok) throw new Error(data.error || 'Ошибка генерации manifest');
-      const link = byId('figma-link');
-      if (link) {
-        link.hidden = false;
-        link.href = data.download;
-      }
-      showToast('Figma manifest готов');
-    } catch (error) {
-      showToast(error.message, true);
-    }
-  });
+  hydrateForm();
+  refreshRefs();
 
   const generationModal = byId('generation-modal');
   const generationLog = byId('generation-log');
@@ -257,7 +326,17 @@ document.addEventListener('DOMContentLoaded', () => {
   const generationProgressText = byId('generation-progress-text');
   const generationProgressBar = byId('generation-progress-bar');
   const generationResultLink = byId('generation-result-link');
+  const generationCancelBtn = byId('generation-cancel-btn');
   const generateBtn = byId('btn-generate');
+
+  document
+   .querySelectorAll('[data-close-generation]')
+   .forEach((el) => el.addEventListener('click', closeGenerationModal));
+
+  byId('generation-modal-close-btn')?.addEventListener('click', closeGenerationModal);
+
+  generationCancelBtn?.addEventListener('click', closeGenerationModal);
+
   const providerPills = {
     recraft: byId('provider-status-recraft'),
     seedream: byId('provider-status-seedream'),
@@ -269,48 +348,125 @@ document.addEventListener('DOMContentLoaded', () => {
   function setTopStatus(label, tone = 'neutral') {
     if (!generationStatusText) return;
     generationStatusText.textContent = label;
-    generationStatusText.style.color = tone === 'error' ? '#dc2626' : tone === 'success' ? '#16a34a' : tone === 'warning' ? '#d97706' : '#64748b';
+    generationStatusText.style.color =
+      tone === 'error' ? '#dc2626'
+      : tone === 'success' ? '#16a34a'
+      : tone === 'warning' ? '#d97706'
+      : '#64748b';
     generationStatusText.style.fontWeight = '700';
   }
 
   function setProviderStatus(name, status, text) {
     const el = providerPills[name];
     if (!el) return;
-    const normalized = ['running','success','error','pending'].includes(status)
+
+    const normalized = ['running', 'success', 'error', 'pending'].includes(status)
       ? status
-      : (status === 'done' || status === 'completed' ? 'success' : status === 'failed' ? 'error' : 'pending');
-    el.textContent = text || ({pending: 'ожидание', running: 'выполняется', success: 'успех', error: 'ошибка'})[normalized] || 'ожидание';
+      : (status === 'done' || status === 'completed'
+          ? 'success'
+          : status === 'failed'
+            ? 'error'
+            : 'pending');
+
+    el.textContent =
+      text ||
+      ({
+        pending: 'ожидание',
+        running: 'выполняется',
+        success: 'успех',
+        error: 'ошибка',
+      })[normalized] ||
+      'ожидание';
+
     el.className = 'provider-pill';
     el.classList.add(`provider-pill--${normalized}`);
   }
 
   function setResultLinkEnabled(enabled, href = '#') {
-    if (!generationResultLink) return;
+    console.log('[result-link] setResultLinkEnabled called', { enabled, href });
+
+    if (!generationResultLink) {
+      console.warn('[result-link] generationResultLink not found');
+      return;
+    }
+
+    console.log('[result-link] BEFORE', {
+      hidden: generationResultLink.hidden,
+      hrefCurrent: generationResultLink.getAttribute('href'),
+      ariaDisabled: generationResultLink.getAttribute('aria-disabled'),
+      pointerEvents: generationResultLink.style.pointerEvents,
+      opacity: generationResultLink.style.opacity,
+      className: generationResultLink.className,
+      text: generationResultLink.textContent,
+    });
+
+    generationResultLink.hidden = false;
+
     if (!enabled) {
-      generationResultLink.hidden = false;
       generationResultLink.href = '#';
       generationResultLink.setAttribute('aria-disabled', 'true');
       generationResultLink.style.pointerEvents = 'none';
       generationResultLink.style.opacity = '0.55';
       generationResultLink.style.cursor = 'default';
+
+      console.log('[result-link] AFTER DISABLE', {
+        hidden: generationResultLink.hidden,
+        hrefCurrent: generationResultLink.getAttribute('href'),
+        ariaDisabled: generationResultLink.getAttribute('aria-disabled'),
+        pointerEvents: generationResultLink.style.pointerEvents,
+        opacity: generationResultLink.style.opacity,
+      });
       return;
     }
-    generationResultLink.hidden = false;
+
     generationResultLink.href = href || '#';
     generationResultLink.removeAttribute('aria-disabled');
     generationResultLink.style.pointerEvents = 'auto';
     generationResultLink.style.opacity = '1';
     generationResultLink.style.cursor = 'pointer';
+
+    console.log('[result-link] AFTER ENABLE', {
+      hidden: generationResultLink.hidden,
+      hrefCurrent: generationResultLink.getAttribute('href'),
+      ariaDisabled: generationResultLink.getAttribute('aria-disabled'),
+      pointerEvents: generationResultLink.style.pointerEvents,
+      opacity: generationResultLink.style.opacity,
+    });
   }
 
   function formatLogLine(line) {
     const text = String(line || '');
     const escaped = escapeHtml(text);
     const lower = text.toLowerCase();
+
     let color = '#e2e8f0';
-    if (lower.includes('успешно') || lower.includes('завершено успешно') || lower.includes('получен новый style_id')) color = '#22c55e';
-    if (lower.includes('с ошибкой') || lower.startsWith('ошибка') || lower.includes('error:') || lower.includes('traceback')) color = '#ef4444';
-    if (lower.includes('запуск провайдера') || lower.includes('подготовка') || lower.includes('сборка') || lower.includes('постобработка')) color = '#cbd5e1';
+
+    if (
+      lower.includes('успешно') ||
+      lower.includes('завершено успешно') ||
+      lower.includes('получен новый style_id')
+    ) {
+      color = '#22c55e';
+    }
+
+    if (
+      lower.includes('с ошибкой') ||
+      lower.startsWith('ошибка') ||
+      lower.includes('error:') ||
+      lower.includes('traceback')
+    ) {
+      color = '#ef4444';
+    }
+
+    if (
+      lower.includes('запуск провайдера') ||
+      lower.includes('подготовка') ||
+      lower.includes('сборка') ||
+      lower.includes('постобработка')
+    ) {
+      color = '#cbd5e1';
+    }
+
     return `<div class="generation-log__line" style="color:${color}">${escaped}</div>`;
   }
 
@@ -325,6 +481,7 @@ document.addEventListener('DOMContentLoaded', () => {
     renderGenerationLog([]);
     if (generationProgressText) generationProgressText.textContent = '0%';
     if (generationProgressBar) generationProgressBar.style.width = '0%';
+
     setTopStatus('Ожидание');
     setProviderStatus('recraft', 'pending', 'ожидание');
     setProviderStatus('seedream', 'pending', 'ожидание');
@@ -338,15 +495,18 @@ document.addEventListener('DOMContentLoaded', () => {
     generationModal.hidden = false;
     document.body.classList.add('modal-open');
   }
+
   function closeGenerationModal() {
     if (!generationModal) return;
     generationModal.hidden = true;
     document.body.classList.remove('modal-open');
   }
 
-  document.querySelectorAll('[data-close-generation]').forEach((el) => el.addEventListener('click', closeGenerationModal));
-  byId('generation-modal-close-btn')?.addEventListener('click', closeGenerationModal);
+  document
+    .querySelectorAll('[data-close-generation]')
+    .forEach((el) => el.addEventListener('click', closeGenerationModal));
 
+  byId('generation-modal-close-btn')?.addEventListener('click', closeGenerationModal);
 
   function inferProviderStatuses(job) {
     const base = {
@@ -358,14 +518,24 @@ document.addEventListener('DOMContentLoaded', () => {
     const providers = job.providers || {};
     Object.entries(providers).forEach(([name, info]) => {
       if (!base[name]) return;
+
       const rawStatus = String(info?.status || '').toLowerCase();
       let normalized = 'pending';
+
       if (['running', 'in_progress'].includes(rawStatus)) normalized = 'running';
       else if (['success', 'done', 'completed', 'ok'].includes(rawStatus)) normalized = 'success';
       else if (['error', 'failed', 'fail'].includes(rawStatus)) normalized = 'error';
+
       base[name] = {
         status: normalized,
-        text: info?.text || ({ pending: 'ожидание', running: 'выполняется', success: 'успех', error: 'ошибка' })[normalized],
+        text:
+          info?.text ||
+          ({
+            pending: 'ожидание',
+            running: 'выполняется',
+            success: 'успех',
+            error: 'ошибка',
+          })[normalized],
       };
     });
 
@@ -378,8 +548,10 @@ document.addEventListener('DOMContentLoaded', () => {
 
     for (const line of logs) {
       const lower = String(line || '').toLowerCase();
+
       for (const [name, rx] of Object.entries(patterns)) {
         if (!rx.test(lower)) continue;
+
         if (lower.includes('запуск провайдера')) {
           base[name] = { status: 'running', text: 'выполняется' };
         }
@@ -395,8 +567,11 @@ document.addEventListener('DOMContentLoaded', () => {
     return base;
   }
 
-  function updateGenerationUi(job) {
+    function updateGenerationUi(job) {
+    console.log('[generation-ui] updateGenerationUi called', job);
+
     const progress = Number(job.progress || 0);
+
     if (generationProgressBar) generationProgressBar.style.width = `${progress}%`;
     if (generationProgressText) generationProgressText.textContent = `${progress}%`;
 
@@ -410,18 +585,45 @@ document.addEventListener('DOMContentLoaded', () => {
     renderGenerationLog(generationLogLines);
 
     const finalState = job.status;
+    const fallbackResultUrl = `/projects/${projectSlug}/results`;
+    const resolvedResultUrl = job.result_url || fallbackResultUrl;
+
+    console.log('[generation-ui] state', {
+      finalState,
+      projectSlug,
+      jobResultUrl: job.result_url,
+      fallbackResultUrl,
+      resolvedResultUrl,
+      generationResultLinkExists: !!generationResultLink,
+    });
+
     if (finalState === 'failed') {
+      console.log('[generation-ui] branch = failed');
       setTopStatus('Ошибка генерации', 'error');
       setResultLinkEnabled(false);
     } else if (finalState === 'completed_with_errors') {
+      console.log('[generation-ui] branch = completed_with_errors');
       setTopStatus('Завершено с ошибками', 'warning');
-      setResultLinkEnabled(Boolean(job.result_url), job.result_url || '#');
+      setResultLinkEnabled(true, resolvedResultUrl);
     } else if (finalState === 'completed') {
+      console.log('[generation-ui] branch = completed');
       setTopStatus('Завершено', 'success');
-      setResultLinkEnabled(Boolean(job.result_url), job.result_url || '#');
+      setResultLinkEnabled(true, resolvedResultUrl);
     } else {
+      console.log('[generation-ui] branch = running/other');
       setTopStatus(job.status_text || 'Выполняется');
       setResultLinkEnabled(false);
+    }
+
+    if (generationResultLink) {
+      console.log('[generation-ui] FINAL LINK STATE', {
+        hidden: generationResultLink.hidden,
+        hrefCurrent: generationResultLink.getAttribute('href'),
+        ariaDisabled: generationResultLink.getAttribute('aria-disabled'),
+        pointerEvents: generationResultLink.style.pointerEvents,
+        opacity: generationResultLink.style.opacity,
+        outerHTML: generationResultLink.outerHTML,
+      });
     }
   }
 
@@ -429,49 +631,121 @@ document.addEventListener('DOMContentLoaded', () => {
     for (let attempt = 0; attempt < 600; attempt += 1) {
       const response = await fetch(`/generation-jobs/${jobId}`);
       const payload = await response.json();
+
       if (!response.ok || !payload.ok) {
         throw new Error(payload.error || 'Не удалось получить статус задачи');
       }
+
       const job = payload.job;
       updateGenerationUi(job);
+
       const state = job.status;
       if (statusEl) {
-        statusEl.textContent = state === 'completed'
-          ? 'Бренд-комплект успешно сгенерирован ✅'
-          : state === 'completed_with_errors'
-            ? 'Генерация завершена с ошибками'
-            : state === 'failed'
-              ? 'Ошибка генерации'
-              : 'Идёт генерация...';
+        statusEl.textContent =
+          state === 'completed'
+            ? 'Бренд-комплект успешно сгенерирован ✅'
+            : state === 'completed_with_errors'
+              ? 'Генерация завершена с ошибками'
+              : state === 'failed'
+                ? 'Ошибка генерации'
+                : 'Идёт генерация...';
       }
+
       if (state === 'completed' || state === 'completed_with_errors' || state === 'failed') {
         return job;
       }
+
       await sleep(1000);
     }
+
     throw new Error('Превышено время ожидания статуса генерации');
   }
+
+  byId('save')?.addEventListener('click', async () => {
+    try {
+      await saveProject();
+      showToast('Проект сохранён');
+    } catch (error) {
+      showToast(error.message, true);
+    }
+  });
+
+  [
+    byId('gen.icons_count'),
+    byId('gen.patterns_count'),
+    byId('gen.illustrations_count'),
+  ].forEach((el) => {
+    el?.addEventListener('input', updateGenerationSummary);
+    el?.addEventListener('change', updateGenerationSummary);
+  });
+  updateGenerationSummary();
+
+  byId('reset')?.addEventListener('click', async () => {
+    try {
+      const response = await fetch(`/projects/${projectSlug}/reset`, {
+        method: 'POST',
+      });
+      const data = await response.json();
+      if (!response.ok || !data.ok) throw new Error(data.error || 'Не удалось сбросить проект');
+      window.location.reload();
+    } catch (error) {
+      showToast(error.message, true);
+    }
+  });
+
+  byId('download')?.addEventListener('click', () => {
+    window.location.href = `/projects/${projectSlug}/download`;
+  });
+
+  byId('upload-refs')?.addEventListener('change', async (event) => {
+    const files = Array.from(event.target.files || []);
+    if (!files.length) return;
+
+    const form = new FormData();
+    files.forEach((file) => form.append('files', file));
+
+    try {
+      const response = await fetch(`/projects/${projectSlug}/upload-refs`, {
+        method: 'POST',
+        body: form,
+      });
+      const data = await response.json();
+      if (!response.ok || !data.ok) throw new Error(data.error || 'Не удалось загрузить референсы');
+      showToast('Референсы загружены');
+      event.target.value = '';
+      await refreshRefs();
+    } catch (error) {
+      showToast(error.message, true);
+    }
+  });
 
   generateBtn?.addEventListener('click', async (event) => {
     event.preventDefault();
     const status = byId('generate-status');
+
     try {
       openGenerationModal();
       setTopStatus('Автосохранение проекта');
+
       generationLogLines = ['Инициализация генерации...'];
       renderGenerationLog(generationLogLines);
 
       await saveProject();
-      generationLogLines = ['Инициализация генерации...', 'tokens.json сохранён и подготовлен для генерации'];
+
+      generationLogLines = [
+        'Инициализация генерации...',
+        'tokens.json сохранён и подготовлен для генерации',
+      ];
       renderGenerationLog(generationLogLines);
+
       if (status) status.textContent = 'Идёт генерация...';
 
       const payload = {
         style_id: byId('style_id')?.value.trim() || '',
         brand_id: byId('brand_id')?.value.trim() || '',
-        icons_count: Number(byId('gen.icons_count')?.value || 0),
-        patterns_count: Number(byId('gen.patterns_count')?.value || 0),
-        illustrations_count: Number(byId('gen.illustrations_count')?.value || 0),
+        icons_count: syncCountInput('gen.icons_count', 8),
+        patterns_count: syncCountInput('gen.patterns_count', 4),
+        illustrations_count: syncCountInput('gen.illustrations_count', 4),
         build_style: !!byId('build_style')?.checked,
       };
 
@@ -480,26 +754,54 @@ document.addEventListener('DOMContentLoaded', () => {
         headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify(payload),
       });
+
       const data = await response.json();
-      if (!response.ok || !data.ok) throw new Error(data.error || 'Ошибка запуска генерации');
-      if (!data.job_id) throw new Error('Сервер не вернул job_id');
+      if (!response.ok || !data.ok) {
+        throw new Error(data.error || 'Ошибка запуска генерации');
+      }
+      if (!data.job_id) {
+        throw new Error('Сервер не вернул job_id');
+      }
 
       generationLogLines.push(`Задача создана: ${data.job_id}`);
       renderGenerationLog(generationLogLines);
+
       const job = await pollGenerationJob(data.job_id, status);
-      if (job.style_id && byId('style_id')) byId('style_id').value = job.style_id;
-      showToast(job.status === 'completed' ? 'Генерация завершена' : job.status === 'failed' ? 'Ошибка генерации' : 'Генерация завершена с замечаниями', job.status === 'failed');
+
+      if (job.style_id && byId('style_id')) {
+        byId('style_id').value = job.style_id;
+      }
+
+      showToast(
+        job.status === 'completed'
+          ? 'Генерация завершена'
+          : job.status === 'failed'
+            ? 'Ошибка генерации'
+            : 'Генерация завершена с замечаниями',
+        job.status === 'failed'
+      );
     } catch (error) {
       setTopStatus('Ошибка генерации', 'error');
       generationLogLines.push(`Ошибка: ${error.message}`);
       renderGenerationLog(generationLogLines);
-      setProviderStatus('recraft', 'pending', byId('provider-status-recraft')?.textContent || 'ожидание');
-      setProviderStatus('seedream', 'pending', byId('provider-status-seedream')?.textContent || 'ожидание');
-      setProviderStatus('flux', 'pending', byId('provider-status-flux')?.textContent || 'ожидание');
       setResultLinkEnabled(false);
+
       if (status) status.textContent = 'Ошибка генерации';
       showToast(error.message, true);
       console.error('generation failed', error);
+    }
+  });
+
+  byId('gen-figma')?.addEventListener('click', async () => {
+    try {
+      const response = await fetch(`/projects/${projectSlug}/generate-figma`, {
+        method: 'POST',
+      });
+      const data = await response.json();
+      if (!response.ok || !data.ok) throw new Error(data.error || 'Не удалось собрать Figma manifest');
+      showToast('Figma manifest собран');
+    } catch (error) {
+      showToast(error.message, true);
     }
   });
 });
