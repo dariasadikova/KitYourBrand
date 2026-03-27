@@ -54,9 +54,14 @@ function showToast(message, isError = false) {
 
 document.addEventListener('DOMContentLoaded', () => {
   const tokens = parseJsonScript('tokens-data', {});
-  const projectSlug = byId('project-slug')?.textContent?.trim() || '';
+  const projectSlug = byId('project-slug')?.textContent?.trim() || document.querySelector('.project-shell')?.dataset?.projectSlug || '';
+  console.log('[refs] projectSlug =', projectSlug);
   const refList = byId('refs-list');
   const statusLabel = byId('generate-status');
+  const figmaGenerateBtn = byId('gen-figma');
+  const figmaDownloadLink = byId('figma-link');
+  const figmaProductionUrlInput = byId('figma-production-url');
+  const figmaLocalUrlInput = byId('figma-local-url');
 
   const PROVIDER_NAMES = ['recraft', 'seedream', 'flux'];
 
@@ -271,53 +276,196 @@ document.addEventListener('DOMContentLoaded', () => {
     return data;
   }
 
+
+  function getCurrentBrandId() {
+    return byId('brand_id')?.value.trim() || deepGet(tokens, 'brand_id', '') || '';
+  }
+
+  function buildFigmaUrls(brandId) {
+    const safeBrandId = brandId || '<brand_id>';
+    const origin = window.location.origin.replace('127.0.0.1', 'localhost');
+
+    return {
+      production_url: `https://brand.kit/assets/${safeBrandId}/icons|patterns|illustrations`,
+      local_url: `${origin}/assets/${safeBrandId}/...`,
+    };
+  }
+
+  function setFigmaDownloadEnabled(enabled, href = '#') {
+    if (!figmaDownloadLink) return;
+
+    figmaDownloadLink.hidden = false;
+
+    if (!enabled) {
+      figmaDownloadLink.href = '#';
+      figmaDownloadLink.setAttribute('aria-disabled', 'true');
+      figmaDownloadLink.style.pointerEvents = 'none';
+      figmaDownloadLink.style.opacity = '0.55';
+      figmaDownloadLink.style.cursor = 'default';
+      return;
+    }
+
+    figmaDownloadLink.href = href;
+    figmaDownloadLink.removeAttribute('aria-disabled');
+    figmaDownloadLink.style.pointerEvents = 'auto';
+    figmaDownloadLink.style.opacity = '1';
+    figmaDownloadLink.style.cursor = 'pointer';
+  }
+
+  function updateFigmaExportUi(payload = {}) {
+    const brandId = payload.brand_id || getCurrentBrandId();
+    const fallbackUrls = buildFigmaUrls(brandId);
+
+    const productionUrl = payload.production_url || fallbackUrls.production_url;
+    const localUrl = payload.local_url || fallbackUrls.local_url;
+    const manifestUrl = payload.download_url || payload.manifest_url || `/projects/${projectSlug}/exports/figma_plugin_manifest.json`;
+
+    if (figmaProductionUrlInput) figmaProductionUrlInput.value = productionUrl;
+    if (figmaLocalUrlInput) figmaLocalUrlInput.value = localUrl;
+
+    if (brandId) {
+      setFigmaDownloadEnabled(true, manifestUrl);
+    } else {
+      setFigmaDownloadEnabled(false);
+    }
+  }
+
+  function setFigmaButtonBusy(isBusy, label) {
+    if (!figmaGenerateBtn) return;
+
+    if (!figmaGenerateBtn.dataset.defaultLabel) {
+      figmaGenerateBtn.dataset.defaultLabel = figmaGenerateBtn.textContent.trim() || 'Сгенерировать Figma Plugin JSON';
+    }
+
+    figmaGenerateBtn.disabled = !!isBusy;
+    figmaGenerateBtn.textContent = label || (isBusy ? 'Генерируем Figma JSON…' : figmaGenerateBtn.dataset.defaultLabel);
+    figmaGenerateBtn.style.opacity = isBusy ? '0.8' : '1';
+    figmaGenerateBtn.style.cursor = isBusy ? 'progress' : 'pointer';
+  }
+
+  function normalizeRefsPayload(data) {
+    const raw =
+      data?.refs ??
+      data?.images ??
+      data?.items ??
+      data?.files ??
+      data?.references ??
+      data;
+
+    if (!Array.isArray(raw)) return [];
+
+    return raw.map((item) => {
+      if (typeof item === 'string') {
+        const name = item.split('/').pop();
+        return {
+          name,
+          url: `/projects/${projectSlug}/refs/${name}`,
+        };
+      }
+
+      if (item && typeof item === 'object') {
+        const name =
+          item.name ||
+          item.filename ||
+          item.file ||
+          item.path?.split('/')?.pop() ||
+          'ref';
+
+        const url =
+          item.url ||
+          item.path ||
+          `/projects/${projectSlug}/refs/${name}`;
+
+        return { name, url };
+      }
+
+      return null;
+    }).filter(Boolean);
+  }
+
   async function refreshRefs() {
     if (!refList) return;
+
+    if (!projectSlug) {
+      console.error('[refs] refreshRefs: empty projectSlug');
+      refList.innerHTML = '<div class="refs-empty">Не найден projectSlug</div>';
+      return;
+    }
+
     refList.innerHTML = '<div class="refs-empty">Загрузка...</div>';
 
-    const response = await fetch(`/projects/${projectSlug}/list-refs`);
-    const data = await response.json();
+    try {
+      console.log('[refs] list url =', `/projects/${projectSlug}/list-refs`);
 
-    if (!response.ok || !data.ok) {
-      refList.innerHTML = '<div class="refs-empty">Не удалось загрузить референсы</div>';
-      return;
-    }
+      const response = await fetch(`/projects/${projectSlug}/list-refs`);
 
-    const refs = data.refs || [];
-    if (!refs.length) {
-      refList.innerHTML = '<div class="refs-empty">Референсы пока не загружены</div>';
-      return;
-    }
+      let data = null;
+      try {
+        data = await response.json();
+      } catch (e) {
+        console.error('[refs] list response is not JSON', e);
+        refList.innerHTML = '<div class="refs-empty">Некорректный ответ сервера</div>';
+        return;
+      }
 
-    refList.innerHTML = refs.map((ref) => `
-      <div class="ref-item">
-        <a href="${ref.url}" target="_blank" rel="noopener">${ref.name}</a>
-        <button type="button" class="ref-delete" data-ref-name="${ref.name}">Удалить</button>
-      </div>
-    `).join('');
+      console.log('[refs] list response =', response.status, data);
 
-    refList.querySelectorAll('.ref-delete').forEach((btn) => {
-      btn.addEventListener('click', async () => {
-        const name = btn.getAttribute('data-ref-name');
-        if (!name) return;
-        try {
-          const response = await fetch(`/projects/${projectSlug}/delete-ref`, {
-            method: 'POST',
-            headers: { 'Content-Type': 'application/json' },
-            body: JSON.stringify({ name }),
-          });
-          const data = await response.json();
-          if (!response.ok || !data.ok) throw new Error(data.error || 'Не удалось удалить референс');
-          showToast('Референс удалён');
-          await refreshRefs();
-        } catch (error) {
-          showToast(error.message, true);
-        }
+      if (!response.ok || (data.ok === false)) {
+        refList.innerHTML = '<div class="refs-empty">Не удалось загрузить референсы</div>';
+        return;
+      }
+
+      const refs = normalizeRefsPayload(data);
+
+      console.log('[refs] normalized refs =', refs);
+
+      if (!refs.length) {
+        refList.innerHTML = '<div class="refs-empty">Референсы пока не загружены</div>';
+        return;
+      }
+
+      refList.innerHTML = refs.map((ref) => `
+        <div class="ref-card">
+          <a href="${ref.url}" target="_blank" rel="noopener" class="ref-card__preview">
+            <img src="${ref.url}" alt="${ref.name}" class="ref-card__image" />
+          </a>
+          <button type="button" class="ref-delete" data-ref-name="${ref.name}">Удалить</button>
+        </div>
+      `).join('');
+
+      refList.querySelectorAll('.ref-delete').forEach((btn) => {
+        btn.addEventListener('click', async () => {
+          const name = btn.getAttribute('data-ref-name');
+          if (!name) return;
+
+          try {
+            const response = await fetch(`/projects/${projectSlug}/delete-ref`, {
+              method: 'POST',
+              headers: { 'Content-Type': 'application/json' },
+              body: JSON.stringify({ name }),
+            });
+
+            const data = await response.json();
+            if (!response.ok || (data.ok === false)) {
+              throw new Error(data?.error || 'Не удалось удалить референс');
+            }
+
+            showToast('Референс удалён');
+            await refreshRefs();
+          } catch (error) {
+            console.error('[refs] delete failed', error);
+            showToast(error.message, true);
+          }
+        });
       });
-    });
+    } catch (error) {
+      console.error('[refs] refresh failed', error);
+      refList.innerHTML = '<div class="refs-empty">Не удалось загрузить референсы</div>';
+    }
   }
 
   hydrateForm();
+  updateFigmaExportUi({ brand_id: getCurrentBrandId() });
   refreshRefs();
 
   const generationModal = byId('generation-modal');
@@ -699,22 +847,46 @@ document.addEventListener('DOMContentLoaded', () => {
 
   byId('upload-refs')?.addEventListener('change', async (event) => {
     const files = Array.from(event.target.files || []);
+    console.log('[refs] selected files =', files);
+
     if (!files.length) return;
+
+    if (!projectSlug) {
+      console.error('[refs] empty projectSlug');
+      showToast('Не найден projectSlug для загрузки референсов', true);
+      return;
+    }
 
     const form = new FormData();
     files.forEach((file) => form.append('files', file));
 
     try {
+      console.log('[refs] upload url =', `/projects/${projectSlug}/upload-refs`);
+
       const response = await fetch(`/projects/${projectSlug}/upload-refs`, {
         method: 'POST',
         body: form,
       });
-      const data = await response.json();
-      if (!response.ok || !data.ok) throw new Error(data.error || 'Не удалось загрузить референсы');
+
+      let data = null;
+      try {
+        data = await response.json();
+      } catch (e) {
+        console.error('[refs] upload response is not JSON', e);
+        throw new Error('Сервер вернул некорректный ответ при загрузке референсов');
+      }
+
+      console.log('[refs] upload response =', response.status, data);
+
+      if (!response.ok || (data.ok === false)) {
+        throw new Error(data?.error || 'Не удалось загрузить референсы');
+      }
+
       showToast('Референсы загружены');
       event.target.value = '';
       await refreshRefs();
     } catch (error) {
+      console.error('[refs] upload failed', error);
       showToast(error.message, true);
     }
   });
@@ -792,16 +964,53 @@ document.addEventListener('DOMContentLoaded', () => {
     }
   });
 
-  byId('gen-figma')?.addEventListener('click', async () => {
+  figmaGenerateBtn?.addEventListener('click', async () => {
     try {
+      setFigmaButtonBusy(true, 'Сохраняем проект…');
+      setFigmaDownloadEnabled(false);
+
+      const brandId = getCurrentBrandId();
+      if (!brandId) {
+        throw new Error('Укажите Brand ID перед генерацией Figma manifest');
+      }
+
+      if (figmaLocalUrlInput) figmaLocalUrlInput.value = 'Подготовка manifest…';
+      await saveProject();
+
+      setFigmaButtonBusy(true, 'Генерируем Figma JSON…');
       const response = await fetch(`/projects/${projectSlug}/generate-figma`, {
         method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ brand_id: brandId }),
       });
+
       const data = await response.json();
-      if (!response.ok || !data.ok) throw new Error(data.error || 'Не удалось собрать Figma manifest');
+
+      if (!response.ok || !data.ok) {
+        throw new Error(data.error || 'Не удалось собрать Figma manifest');
+      }
+
+      updateFigmaExportUi({
+        brand_id: data.brand_id || brandId,
+        production_url: data.production_url,
+        local_url: data.local_url,
+        manifest_url: data.manifest_url,
+        download_url: data.download_url,
+      });
+
+      setFigmaButtonBusy(true, 'Manifest готов ✓');
       showToast('Figma manifest собран');
+      setTimeout(() => setFigmaButtonBusy(false), 900);
     } catch (error) {
+      updateFigmaExportUi({ brand_id: getCurrentBrandId() });
+      setFigmaDownloadEnabled(false);
+      setFigmaButtonBusy(false);
       showToast(error.message, true);
+      return;
+    } finally {
+      if (figmaGenerateBtn?.disabled) {
+        setTimeout(() => setFigmaButtonBusy(false), 900);
+      }
     }
   });
 });

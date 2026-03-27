@@ -97,19 +97,23 @@ class GenerationService:
         report(95, 'Сборка Figma manifest')
 
         tokens = self.project_service.load_tokens(user_id, project_slug)
+        effective_brand_id = (brand_id or tokens.get('brand_id') or '').strip()
+        if not effective_brand_id:
+            raise ValueError('Не указан brand_id для сборки Figma manifest.')
+
         brand = {
             'name': tokens.get('name', 'Brand'),
             'style_id': tokens.get('style_id', ''),
-            'brand_id': tokens.get('brand_id', ''),
+            'brand_id': effective_brand_id,
         }
         palette = tokens.get('palette', {})
         refs = tokens.get('references', {}).get('style_images', [])
-        base_host = (base_host or '').rstrip('/')
-        base_url = f'{base_host}/assets/{brand_id}'
+        base_host = (base_host or '').rstrip('/').replace('127.0.0.1', 'localhost')
+        base_url = f'{base_host}/assets/{effective_brand_id}'
         provider_roots = [
-            ('recraft', self.recraft_out_root / brand_id, 'recraft'),
-            ('seedream', self.seedream_out_root / brand_id, 'seedream'),
-            ('flux', self.flux_out_root / brand_id, 'flux'),
+            ('recraft', self.recraft_out_root / effective_brand_id, 'recraft'),
+            ('seedream', self.seedream_out_root / effective_brand_id, 'seedream'),
+            ('flux', self.flux_out_root / effective_brand_id, 'flux'),
         ]
         icons: list[dict[str, Any]] = []
         patterns: list[dict[str, Any]] = []
@@ -160,7 +164,7 @@ class GenerationService:
             },
         }
 
-        meta_dir = self.meta_out_root / brand_id
+        meta_dir = self.meta_out_root / effective_brand_id
         meta_dir.mkdir(parents=True, exist_ok=True)
         manifest_path = meta_dir / 'figma_plugin_manifest.json'
         manifest_path.write_text(json.dumps(manifest, ensure_ascii=False, indent=2), encoding='utf-8')

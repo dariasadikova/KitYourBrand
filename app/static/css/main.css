@@ -1270,3 +1270,44 @@ img {
         align-items: stretch;
     }
 }
+
+.ref-card {
+  display: flex;
+  flex-direction: column;
+  gap: 10px;
+  min-width: 0;
+}
+
+.ref-card__preview {
+  display: block;
+  width: 100%;
+  aspect-ratio: 1 / 1;
+  overflow: hidden;
+  border-radius: 14px;
+  background: rgba(8, 5, 22, 0.75);
+  border: 1px solid rgba(255, 255, 255, 0.08);
+}
+
+.ref-card__image {
+  width: 100%;
+  height: 100%;
+  object-fit: cover;
+  display: block;
+}
+
+.ref-card__footer {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 10px;
+}
+
+.ref-card__name {
+  min-width: 0;
+  flex: 1;
+  font-size: 0.86rem;
+  color: rgba(255, 255, 255, 0.82);
+  white-space: nowrap;
+  overflow: hidden;
+  text-overflow: ellipsis;
+}

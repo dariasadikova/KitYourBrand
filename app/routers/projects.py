@@ -237,16 +237,40 @@ async def serve_ref(request: Request, project_slug: str, filename: str):
 @router.post('/projects/{project_slug}/generate-figma')
 async def generate_figma(request: Request, project_slug: str) -> JSONResponse:
     user_id = require_auth(request)
-    project = project_or_404(user_id, project_slug)
-    data = await request.json()
-    brand_id = (data.get('brand_id') or project.brand_id or '').strip()
+    project_or_404(user_id, project_slug)
+
+    try:
+        data = await request.json()
+        if not isinstance(data, dict):
+            data = {}
+    except Exception:
+        data = {}
+
+    tokens = project_service.load_tokens(user_id, project_slug)
+    brand_id = (data.get('brand_id') or tokens.get('brand_id') or '').strip()
     if not brand_id:
         return JSONResponse({'ok': False, 'error': 'Укажите brand_id.'}, status_code=400)
+
+    base_host = str(request.base_url).rstrip('/').replace('127.0.0.1', 'localhost')
     try:
-        _, counts, export_path = generation_service.build_and_save_figma_manifest(user_id, project_slug, brand_id, str(request.base_url).rstrip('/'))
+        _, counts, export_path = generation_service.build_and_save_figma_manifest(
+            user_id,
+            project_slug,
+            brand_id,
+            base_host,
+        )
     except Exception as exc:
         return JSONResponse({'ok': False, 'error': str(exc)}, status_code=400)
-    return JSONResponse({'ok': True, 'counts': counts, 'download': f'/projects/{project_slug}/exports/{export_path.name}'})
+
+    return JSONResponse({
+        'ok': True,
+        'brand_id': brand_id,
+        'counts': counts,
+        'manifest_url': f'/assets/{brand_id}/figma_plugin_manifest.json',
+        'download_url': f'/projects/{project_slug}/exports/{export_path.name}',
+        'production_url': f'https://brand.kit/assets/{brand_id}/icons|patterns|illustrations',
+        'local_url': f'{base_host}/assets/{brand_id}/...',
+    })
 
 
 @router.get('/projects/{project_slug}/exports/{filename}')

@@ -1,9 +1,13 @@
 import argparse, os, json
+from pathlib import Path
 from dotenv import load_dotenv
 from utils.file_utils import ensure_dir, slugify, hex_to_rgb_triplet
 from utils.svg_tools import normalize_svg_palette_and_stroke
 from utils.raster_tools import quantize_to_palette
 from providers.recraft_official import RecraftClient
+
+ROOT_ENV = Path(__file__).resolve().parents[3] / ".env"
+load_dotenv(ROOT_ENV)
 
 def load_tokens(path): 
     with open(path,'r',encoding='utf-8') as f: 

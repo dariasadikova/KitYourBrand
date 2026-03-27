@@ -6,6 +6,8 @@ import re
 import sys
 from datetime import datetime
 from typing import Dict, List, Tuple
+from pathlib import Path
+from dotenv import load_dotenv
 
 from providers.openrouter_seedream import (
     OpenRouterSeedreamClient,
@@ -21,6 +23,8 @@ try:
 except Exception:
     PIL_OK = False
 
+ROOT_ENV = Path(__file__).resolve().parents[3] / ".env"
+load_dotenv(ROOT_ENV)
 
 def load_json(path: str) -> Dict:
     with open(path, "r", encoding="utf-8") as f:
