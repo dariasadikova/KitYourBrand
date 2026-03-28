@@ -2,6 +2,9 @@ import os, requests
 from typing import Optional, List, Tuple
 import json as _json
 
+from cli_log import info, warn, error, debug
+
+
 class RecraftClient:
     """Официальный клиент Recraft API (минимальный).
 
@@ -17,13 +20,17 @@ class RecraftClient:
         self.base = base_url or os.getenv('RECRAFT_BASE_URL','https://external.api.recraft.ai/v1')
         self.key = api_key or os.getenv('RECRAFT_API_KEY')
         if not self.key:
+            error('RECRAFT_API_KEY не задан — задайте ключ в .env или переменной окружения')
             raise RuntimeError('RECRAFT_API_KEY не задан')
+        info('RecraftClient: base_url=%s, API key: %s', self.base, '***' if self.key else '(empty)')
         self.headers = {'Authorization': f'Bearer {self.key}'}
 
     def create_style(self, style: str, files: List[str]) -> str:
         url = f"{self.base}/styles"
+        file_paths = list(files[:5])
+        info('create_style: POST %s, style=%s, files=%s', url, style, [os.path.basename(p) for p in file_paths])
         mfiles = {}
-        for i, path in enumerate(files[:5], 1):
+        for i, path in enumerate(file_paths, 1):
             mfiles[f'file{i}'] = open(path, 'rb')
         data = {'style': style}
         try:
@@ -33,7 +40,9 @@ class RecraftClient:
             except Exception:
                 self._debug_http_error(r, label="create_style", data=data, files=file_paths)
                 raise
-            return r.json()['id']
+            style_id = r.json()['id']
+            info('create_style: OK, style_id=%s', style_id)
+            return style_id
         finally:
             for f in mfiles.values():
                 try: f.close()
@@ -50,19 +59,25 @@ class RecraftClient:
         if substyle and not style_id: body['substyle'] = substyle
         if controls: body['controls'] = controls
 
+        prompt_preview = (prompt[:200] + '…') if len(prompt) > 200 else prompt
+        info(
+            'generate: POST %s model=%s style_id=%s style=%s substyle=%s',
+            url, model, style_id or '-', style or '-', substyle or '-',
+        )
+        debug('generate: prompt (preview): %s', prompt_preview)
+
         r = requests.post(url, headers={**self.headers,'Content-Type':'application/json'}, json=body, timeout=120)
         try:
             r.raise_for_status()
         except Exception:
+            warn('generate: HTTP error status=%s', r.status_code)
             self._debug_http_error(r, label="generate", payload=body)
-            try:
-                print('[recraft] server said:', r.status_code, r.text[:400])
-            except Exception:
-                pass
             raise
 
         js = r.json()
-        return js['data'][0]['url']
+        asset_url = js['data'][0]['url']
+        info('generate: OK, asset URL получен (длина=%s)', len(asset_url))
+        return asset_url
 
     @staticmethod
     def _detect_ext_and_mime(content_type: str, data: bytes) -> Tuple[str, str]:
@@ -100,50 +115,48 @@ class RecraftClient:
         files — список путей (create_style), чтобы не печатать бинарь
         """
         try:
-            print(f"\n[recraft][{label}] HTTP ERROR")
-            print("status:", r.status_code)
-            print("url   :", getattr(r.request, "url", r.url))
+            error('[%s] HTTP ERROR', label)
+            error('status: %s', r.status_code)
+            error('url   : %s', getattr(r.request, "url", r.url))
             rid = r.headers.get("x-request-id") or r.headers.get("x-trace-id") or r.headers.get("request-id")
             if rid:
-                print("request-id:", rid)
+                error('request-id: %s', rid)
 
             ct = r.headers.get("content-type", "")
-            print("resp content-type:", ct)
+            error('resp content-type: %s', ct)
 
             if payload is not None:
                 try:
-                    print("request json:", _json.dumps(payload, ensure_ascii=False)[:4000])
+                    error('request json: %s', _json.dumps(payload, ensure_ascii=False)[:4000])
                 except Exception:
-                    print("request json:", str(payload)[:4000])
+                    error('request json: %s', str(payload)[:4000])
 
             if data is not None:
                 try:
-                    print("request data:", _json.dumps(data, ensure_ascii=False)[:4000])
+                    error('request data: %s', _json.dumps(data, ensure_ascii=False)[:4000])
                 except Exception:
-                    print("request data:", str(data)[:4000])
+                    error('request data: %s', str(data)[:4000])
 
             if files is not None:
-                print("request files:", files)
+                error('request files: %s', files)
 
-            # response body
             txt = ""
             try:
                 txt = r.text or ""
             except Exception:
                 txt = ""
             if txt:
-                print("response text (head):", txt[:4000])
+                error('response text (head): %s', txt[:4000])
 
-            # если ответ JSON — распарсить
             try:
                 js = r.json()
-                print("response json:", _json.dumps(js, ensure_ascii=False)[:8000])
+                error('response json: %s', _json.dumps(js, ensure_ascii=False)[:8000])
             except Exception:
                 pass
 
-            print("[recraft] end debug\n")
-        except Exception:
-            pass
+            error('[%s] end HTTP error dump', label)
+        except Exception as ex:
+            error('_debug_http_error: не удалось вывести детали: %s', ex)
 
     def download_asset(self, url: str, out_path_base: str) -> Tuple[str, str]:
         """Скачивает ассет и сохраняет с правильным расширением.
@@ -151,10 +164,12 @@ class RecraftClient:
         out_path_base — путь БЕЗ расширения (например .../icons/bell)
         Возвращает (final_path, mime).
         """
+        info('download_asset: GET %s', url[:200] + ('…' if len(url) > 200 else ''))
         r = requests.get(url, timeout=120)
         try:
             r.raise_for_status()
         except Exception:
+            warn('download_asset: HTTP error status=%s', r.status_code)
             self._debug_http_error(r, label="download_asset", data={"url": url, "out": out_path_base})
             raise
         data = r.content
@@ -169,4 +184,5 @@ class RecraftClient:
         with open(out_path, 'wb') as f:
             f.write(data)
 
+        info('download_asset: сохранено %s (%s байт, mime=%s)', out_path, len(data), mime)
         return out_path, mime

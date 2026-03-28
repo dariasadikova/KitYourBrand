@@ -210,14 +210,32 @@ class GenerationService:
 
         return ref_src_paths
 
-    def _run_checked(self, cmd: list[str], cwd: Path) -> tuple[str, str]:
-        proc = subprocess.run(
-            cmd,
-            cwd=str(cwd),
-            check=True,
-            capture_output=True,
-            text=True,
-        )
+    def _emit_cli_output(self, label: str, stdout: str | None, stderr: str | None) -> None:
+        """Печатает захваченный вывод CLI в консоль процесса сервера (терминал uvicorn)."""
+        out = (stdout or '').strip()
+        err = (stderr or '').strip()
+        if not out and not err:
+            return
+        logger.warning('[KitYourBrand][%s] ошибка CLI — полный stdout/stderr ниже (консоль)', label)
+        print(f'[KitYourBrand][{label}] --- вывод CLI ---', flush=True)
+        if out:
+            print(out, flush=True)
+        if err:
+            print(err, file=sys.stderr, flush=True)
+        print(f'[KitYourBrand][{label}] --- конец вывода ---', flush=True)
+
+    def _run_checked(self, cmd: list[str], cwd: Path, *, label: str = 'cli') -> tuple[str, str]:
+        try:
+            proc = subprocess.run(
+                cmd,
+                cwd=str(cwd),
+                check=True,
+                capture_output=True,
+                text=True,
+            )
+        except subprocess.CalledProcessError as exc:
+            self._emit_cli_output(label, exc.stdout, exc.stderr)
+            raise
         return (proc.stdout or '').strip(), (proc.stderr or '').strip()
 
     def _run_optional_provider(
@@ -231,6 +249,7 @@ class GenerationService:
         icons_count: int,
         patterns_count: int,
         illustrations_count: int,
+        cli_label: str = 'cli',
     ) -> dict[str, Any]:
         if not main_path.exists():
             return {'ok': False, 'error': f'CLI не найден: {main_path}', 'stdout': '', 'stderr': ''}
@@ -246,7 +265,7 @@ class GenerationService:
             '--illustrations', str(illustrations_count),
         ]
         try:
-            stdout, stderr = self._run_checked(cmd, project_dir)
+            stdout, stderr = self._run_checked(cmd, project_dir, label=cli_label)
             return {'ok': True, 'error': '', 'stdout': stdout, 'stderr': stderr}
         except subprocess.CalledProcessError as exc:
             return {
@@ -327,10 +346,10 @@ class GenerationService:
 
         report(28, 'Запуск провайдера Recraft', 'recraft', 'running')
         try:
-            recraft_stdout, recraft_stderr = self._run_checked(recraft_cmd, self.recraft_dir)
+            recraft_stdout, recraft_stderr = self._run_checked(recraft_cmd, self.recraft_dir, label='recraft')
             report(48, 'Recraft завершён успешно', 'recraft', 'success')
         except subprocess.CalledProcessError as exc:
-            report(48, (exc.stderr or exc.stdout or 'Ошибка Recraft').strip()[:300], 'recraft', 'error')
+            report(48, 'Recraft завершился с ошибкой', 'recraft', 'error')
             raise
 
         new_style_id = ''
@@ -363,6 +382,7 @@ class GenerationService:
             icons_count=icons_count,
             patterns_count=patterns_count,
             illustrations_count=illustrations_count,
+            cli_label='seedream',
         )
         report(
             68,
@@ -381,6 +401,7 @@ class GenerationService:
             icons_count=icons_count,
             patterns_count=patterns_count,
             illustrations_count=illustrations_count,
+            cli_label='flux',
         )
         report(
             85,

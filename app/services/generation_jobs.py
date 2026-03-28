@@ -6,6 +6,8 @@ import uuid
 from datetime import datetime
 from typing import Any
 
+from app.services.generation_error_summary import summarize_generation_failure
+
 
 class GenerationJobStore:
     def __init__(self) -> None:
@@ -25,6 +27,7 @@ class GenerationJobStore:
             'progress': 0,
             'message': 'Ожидание запуска',
             'error': None,
+            'error_hint': None,
             'logs': [f'[{self._stamp()}] Задача создана'],
             'result': None,
             'providers': {
@@ -92,8 +95,17 @@ class GenerationJobStore:
                 self.append_log(job_id, 'Генерация завершена успешно!' if final_status == 'completed' else 'Генерация завершена с ошибками.')
             except Exception as exc:
                 tb = traceback.format_exc()
-                self.update(job_id, status='failed', progress=100, message='Ошибка генерации', error=str(exc), result={'traceback': tb})
-                self.append_log(job_id, f'Ошибка: {exc}')
+                user_msg, hint = summarize_generation_failure(exc)
+                self.update(
+                    job_id,
+                    status='failed',
+                    progress=100,
+                    message='Ошибка генерации',
+                    error=user_msg,
+                    error_hint=hint,
+                    result={'traceback': tb},
+                )
+                self.append_log(job_id, 'Ошибка генерации')
 
         thread = threading.Thread(target=runner, daemon=True)
         thread.start()

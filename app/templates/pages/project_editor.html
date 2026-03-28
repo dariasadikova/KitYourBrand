@@ -316,6 +316,19 @@
     </div>
 </div>
 
+<div id="generation-error-modal" class="generation-error-modal" hidden>
+    <div class="generation-error-modal__backdrop" data-close-generation-error></div>
+    <div class="generation-error-modal__dialog" role="alertdialog" aria-modal="true" aria-labelledby="generation-error-title" aria-describedby="generation-error-body">
+        <button type="button" class="generation-modal__close" id="generation-error-close" data-close-generation-error>×</button>
+        <h2 id="generation-error-title">Ошибка генерации</h2>
+        <p id="generation-error-body" class="generation-error-modal__message"></p>
+        <p id="generation-error-hint" class="generation-error-modal__hint" hidden></p>
+        <div class="generation-error-modal__actions">
+            <button type="button" id="generation-error-dismiss" class="btn btn-primary btn-inline">Понятно</button>
+        </div>
+    </div>
+</div>
+
 <script id="tokens-data" type="application/json">{{ tokens_json|safe }}</script>
 <script id="project-refs" type="application/json">{{ project_refs|tojson }}</script>
 <script src="{{ url_for('static', path='js/project-editor.js') }}"></script>

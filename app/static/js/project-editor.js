@@ -477,6 +477,11 @@ document.addEventListener('DOMContentLoaded', () => {
   const generationCancelBtn = byId('generation-cancel-btn');
   const generateBtn = byId('btn-generate');
 
+  const generationErrorModal = byId('generation-error-modal');
+  const generationErrorBody = byId('generation-error-body');
+  const generationErrorHint = byId('generation-error-hint');
+  let generationErrorShownJobId = null;
+
   document
    .querySelectorAll('[data-close-generation]')
    .forEach((el) => el.addEventListener('click', closeGenerationModal));
@@ -637,24 +642,49 @@ document.addEventListener('DOMContentLoaded', () => {
     setResultLinkEnabled(false);
   }
 
+  function openGenerationErrorModal(message, hint) {
+    if (!generationErrorModal || !generationErrorBody) return;
+    generationErrorBody.textContent = message && String(message).trim()
+      ? String(message).trim()
+      : 'Генерация не удалась.';
+    if (generationErrorHint) {
+      const h = hint && String(hint).trim();
+      if (h) {
+        generationErrorHint.textContent = h;
+        generationErrorHint.hidden = false;
+      } else {
+        generationErrorHint.textContent = '';
+        generationErrorHint.hidden = true;
+      }
+    }
+    generationErrorModal.hidden = false;
+  }
+
+  function closeGenerationErrorModal() {
+    if (!generationErrorModal) return;
+    generationErrorModal.hidden = true;
+  }
+
   function openGenerationModal() {
     if (!generationModal) return;
     resetGenerationModal();
+    generationErrorShownJobId = null;
     generationModal.hidden = false;
     document.body.classList.add('modal-open');
   }
 
   function closeGenerationModal() {
     if (!generationModal) return;
+    closeGenerationErrorModal();
     generationModal.hidden = true;
     document.body.classList.remove('modal-open');
   }
 
-  document
-    .querySelectorAll('[data-close-generation]')
-    .forEach((el) => el.addEventListener('click', closeGenerationModal));
-
-  byId('generation-modal-close-btn')?.addEventListener('click', closeGenerationModal);
+  document.querySelectorAll('[data-close-generation-error]').forEach((el) => {
+    el.addEventListener('click', closeGenerationErrorModal);
+  });
+  byId('generation-error-dismiss')?.addEventListener('click', closeGenerationErrorModal);
+  byId('generation-error-close')?.addEventListener('click', closeGenerationErrorModal);
 
   function inferProviderStatuses(job) {
     const base = {
@@ -729,10 +759,22 @@ document.addEventListener('DOMContentLoaded', () => {
       setProviderStatus(name, info.status, info.text);
     });
 
-    generationLogLines = Array.isArray(job.logs) ? job.logs : [];
-    renderGenerationLog(generationLogLines);
-
     const finalState = job.status;
+
+    if (finalState === 'failed') {
+      generationLogLines = ['Ошибка генерации'];
+      if (generationLog) {
+        generationLog.innerHTML = formatLogLine('Ошибка генерации');
+      }
+      if (job.id && generationErrorShownJobId !== job.id) {
+        generationErrorShownJobId = job.id;
+        openGenerationErrorModal(job.error, job.error_hint);
+      }
+    } else {
+      generationLogLines = Array.isArray(job.logs) ? job.logs : [];
+      renderGenerationLog(generationLogLines);
+    }
+
     const fallbackResultUrl = `/projects/${projectSlug}/results`;
     const resolvedResultUrl = job.result_url || fallbackResultUrl;
 

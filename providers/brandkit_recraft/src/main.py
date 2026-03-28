@@ -1,10 +1,11 @@
-import argparse, os, json
+import argparse, os, json, sys, traceback
 from pathlib import Path
 from dotenv import load_dotenv
 from utils.file_utils import ensure_dir, slugify, hex_to_rgb_triplet
 from utils.svg_tools import normalize_svg_palette_and_stroke
 from utils.raster_tools import quantize_to_palette
 from providers.recraft_official import RecraftClient
+from cli_log import info, warn, error
 
 ROOT_ENV = Path(__file__).resolve().parents[3] / ".env"
 load_dotenv(ROOT_ENV)
@@ -49,7 +50,7 @@ def postprocess_dirs(out_icons, out_patterns, out_ills, tokens):
                                                  target_palette=palette,
                                                  target_stroke_width=tokens.get('icon',{}).get('strokeWidth',2))
             except Exception as e:
-                print('[warn] svg normalize:', fn, e)
+                warn('postprocess: svg normalize %s: %s', fn, e)
     # Raster quantization
     for folder in (out_patterns, out_ills):
         for fn in os.listdir(folder):
@@ -58,7 +59,7 @@ def postprocess_dirs(out_icons, out_patterns, out_ills, tokens):
                     quantize_to_palette(os.path.join(folder, fn), palette_hex=palette,
                                         out_path=os.path.join(folder, fn))
                 except Exception as e:
-                    print('[warn] raster quantize:', fn, e)
+                    warn('postprocess: raster quantize %s: %s', fn, e)
 
 def main():
     parser = argparse.ArgumentParser(description='BrandKit (Recraft-only, fixed)')
@@ -74,8 +75,13 @@ def main():
     args = parser.parse_args()
 
     load_dotenv()
+    info('=== brandkit_recraft CLI ===')
+    info('tokens=%s out=%s build_style=%s style_id=%s model=%s', args.tokens, args.out, args.build_style, args.style_id, args.model)
+    info('counts: icons=%s patterns=%s illustrations=%s style_base=%s', args.icons, args.patterns, args.illustrations, args.style_base)
+
     client = RecraftClient()
     tokens = load_tokens(args.tokens)
+    info('tokens.json загружен, brand keys: %s', list(tokens.keys())[:20])
 
     ensure_dir(args.out)
     out_icons = os.path.join(args.out, 'icons'); ensure_dir(out_icons)
@@ -87,16 +93,25 @@ def main():
         refs = [os.path.join('references', f) for f in os.listdir('references') if f.lower().endswith(('.png','.jpg','.jpeg','.webp'))]
         refs = refs[:5]
         if not refs:
-            print('[warn] Нет референсов в ./references — пропускаю создание стиля')
+            warn('Нет референсов в ./references — пропускаю создание стиля')
         else:
+            info('Создание стиля из %s референсов (style_base=%s)', len(refs), args.style_base)
             style_id = client.create_style(style=args.style_base, files=refs)
-            print('[ok] created style_id:', style_id)
+            # Подстрока "created style_id:" нужна оркестратору (generation_service) для парсинга stdout
+            info('[ok] created style_id: %s', style_id)
 
     controls = colors_control(tokens)
+    if controls:
+        info('colors_control: передан в API (%s цветов)', len(controls.get('colors') or []))
+    else:
+        info('colors_control: не задан (палитра пустая по primary/secondary/accent)')
 
     # ICONS — Recraft V3 НЕ поддерживает стиль `icon` (см. Appendix), поэтому принудительно используем V2
     icon_prompts = tokens.get('prompts',{}).get('icons', [])
-    for subj in icon_prompts[:args.icons]:
+    n_icons = min(len(icon_prompts), args.icons)
+    info('--- Иконки: будет сгенерировано до %s (из %s промптов), модель recraftv2 ---', n_icons, len(icon_prompts))
+    for idx, subj in enumerate(icon_prompts[:args.icons], 1):
+        info('Иконка %s/%s: %s', idx, n_icons, subj)
         prompt = build_prompt(subj + ' icon', tokens, 'icon')
         icon_model = 'recraftv2'
         url = client.generate(prompt=prompt, model=icon_model,
@@ -109,7 +124,10 @@ def main():
     # PATTERNS (digital_illustration), можно оставить v3
     pat_prompts = tokens.get('prompts',{}).get('patterns', [])
     substyle = tokens.get('texture',{}).get('substyle')
+    n_pat = min(len(pat_prompts), args.patterns)
+    info('--- Паттерны: до %s (из %s промптов), model=%s substyle=%s ---', n_pat, len(pat_prompts), args.model, substyle)
     for i, base in enumerate(pat_prompts[:args.patterns], 1):
+        info('Паттерн %s/%s: %s', i, n_pat, base)
         prompt = build_prompt(base, tokens, 'pattern')
         url = client.generate(prompt=prompt, model=args.model,
                                     style_id=style_id if args.style_base=='digital_illustration' and style_id else None,
@@ -122,7 +140,10 @@ def main():
     ill_prompts = tokens.get('prompts',{}).get('illustrations', [])
     ill_vector = tokens.get('illustration',{}).get('vector', False)
     ill_style = 'vector_illustration' if ill_vector else 'digital_illustration'
+    n_ill = min(len(ill_prompts), args.illustrations)
+    info('--- Иллюстрации: до %s (из %s), vector=%s ill_style=%s ---', n_ill, len(ill_prompts), ill_vector, ill_style)
     for i, base in enumerate(ill_prompts[:args.illustrations], 1):
+        info('Иллюстрация %s/%s: %s', i, n_ill, base)
         prompt = build_prompt(base, tokens, 'illustration')
         url = client.generate(prompt=prompt, model=args.model,
                                     style_id=style_id if args.style_base==ill_style and style_id else None,
@@ -131,8 +152,17 @@ def main():
                                     n=1, size='1024x1024', controls=controls)
         client.download_asset(url, os.path.join(out_ills, f"illustration-{i:02d}"))
 
+    info('Постобработка (SVG / растр)...')
     postprocess_dirs(out_icons, out_patterns, out_ills, tokens)
-    print('[ok] Done. Assets saved to:', args.out)
+    info('[ok] Done. Assets saved to: %s', args.out)
 
 if __name__ == '__main__':
-    main()
+    try:
+        main()
+    except KeyboardInterrupt:
+        error('Прервано пользователем (Ctrl+C)')
+        sys.exit(130)
+    except Exception as exc:
+        error('Фатальная ошибка: %s', exc)
+        traceback.print_exc(file=sys.stderr)
+        sys.exit(1)

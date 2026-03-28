@@ -1017,6 +1017,36 @@ img {
 .generation-modal__actions { display: flex; justify-content: flex-end; gap: 14px; margin-top: 22px; }
 @media (max-width: 740px) { .generation-modal__dialog { padding: 24px 20px; } .generation-providers { grid-template-columns: 1fr; } }
 
+.generation-error-modal[hidden] { display: none; }
+.generation-error-modal {
+    position: fixed;
+    inset: 0;
+    z-index: 95;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    padding: 24px;
+}
+.generation-error-modal__backdrop {
+    position: absolute;
+    inset: 0;
+    background: rgba(4, 1, 14, .82);
+    backdrop-filter: blur(4px);
+}
+.generation-error-modal__dialog {
+    position: relative;
+    width: min(480px, 92vw);
+    background: #fff;
+    border-radius: 24px;
+    padding: 32px 36px 28px;
+    color: #15131f;
+    box-shadow: 0 24px 64px rgba(0,0,0,.4);
+    border: 1px solid rgba(220, 38, 38, 0.2);
+}
+.generation-error-modal__dialog h2 { margin: 0 0 16px; font-size: 1.55rem; color: #b91c1c; }
+.generation-error-modal__message { margin: 0 0 14px; font-size: 1.05rem; line-height: 1.5; color: #1e1b2e; }
+.generation-error-modal__hint { margin: 0 0 18px; font-size: .95rem; line-height: 1.5; color: #4b5563; padding: 12px 14px; background: #f8fafc; border-radius: 12px; border: 1px solid #e2e8f0; }
+.generation-error-modal__actions { display: flex; justify-content: flex-end; }
 
 .palette-grid--five {
     grid-template-columns: repeat(5, minmax(0, 1fr));
