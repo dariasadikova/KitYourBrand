@@ -19,50 +19,34 @@ project_service.init_db()
 
 FEATURES = [
     {
-        'icon': '✦',
+        'icon': 'sparkles',
         'title': 'Генерация иконок',
         'description': 'Создавайте уникальные иконки в едином стиле с настраиваемой цветовой палитрой и параметрами.',
     },
     {
-        'icon': '▦',
+        'icon': 'grid3x3',
         'title': 'Создание паттернов',
         'description': 'Бесшовные паттерны и фоны с заданными мотивами и плотностью для любых дизайн-задач.',
     },
     {
-        'icon': '◫',
+        'icon': 'image',
         'title': 'Иллюстрации',
         'description': 'Векторные иллюстрации, созданные ИИ в соответствии с вашим брендом и референсами.',
     },
     {
-        'icon': '⇩',
+        'icon': 'download',
         'title': 'Экспорт в Figma',
         'description': 'Прямая интеграция с Figma через плагин — все ассеты доступны сразу в вашем проекте.',
     },
 ]
 
 
-GALLERY = [
-    {
-        'title': '3D icon demo',
-        'image_url': 'https://images.unsplash.com/photo-1611162618071-b39a2ec055fb?auto=format&fit=crop&w=900&q=80',
-    },
-    {
-        'title': 'Water texture demo',
-        'image_url': 'https://images.unsplash.com/photo-1507525428034-b723cf961d3e?auto=format&fit=crop&w=900&q=80',
-    },
-    {
-        'title': 'Pattern demo',
-        'image_url': 'https://images.unsplash.com/photo-1557683316-973673baf926?auto=format&fit=crop&w=900&q=80',
-    },
-]
-
-
 def landing_context() -> dict:
     return {
-        'hero_title': 'Создайте бренд-стиль за минуты',
+        'hero_title_line1': 'Создайте бренд-стиль',
+        'hero_title_line2': 'за минуты',
         'hero_subtitle': 'Логотипы, иконки, паттерны, иллюстрации — всё в одном месте.',
         'features': FEATURES,
-        'gallery': GALLERY,
     }
 
 
