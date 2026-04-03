@@ -1,7 +1,7 @@
 from __future__ import annotations
 
-import logging
 import json
+import logging
 import os
 import re
 import shutil
@@ -13,6 +13,7 @@ from typing import Any, Callable
 from PIL import Image
 
 from app.core.paths import FLUX_DIR, OUT_DIR, RECRAFT_DIR, SEEDREAM_DIR
+from app.services.generation_error_summary import ProviderGenerationError, summarize_generation_failure
 from app.services.project_service import ProjectService
 
 logger = logging.getLogger("kityourbrand.generation")
@@ -88,11 +89,17 @@ class GenerationService:
         project_slug: str,
         brand_id: str,
         base_host: str,
-        progress_callback: Callable[[int, str, str | None, str | None], None] | None = None,
+        progress_callback: Callable[[int, str, str | None, str | None, dict[str, Any] | None], None] | None = None,
     ) -> tuple[dict[str, Any], dict[str, int], Path]:
-        def report(progress: int, message: str, provider: str | None = None, provider_status: str | None = None) -> None:
+        def report(
+            progress: int,
+            message: str,
+            provider: str | None = None,
+            provider_status: str | None = None,
+            provider_error: dict[str, Any] | None = None,
+        ) -> None:
             if progress_callback:
-                progress_callback(progress, message, provider, provider_status)
+                progress_callback(progress, message, provider, provider_status, provider_error)
 
         report(95, 'Сборка Figma manifest')
 
@@ -238,9 +245,47 @@ class GenerationService:
             raise
         return (proc.stdout or '').strip(), (proc.stderr or '').strip()
 
-    def _run_optional_provider(
+    def _raise_provider_error(
+        self,
+        provider: str,
+        exc: BaseException,
+        *,
+        stdout: str | None = None,
+        stderr: str | None = None,
+    ) -> None:
+        primary, hint = summarize_generation_failure(exc, provider=provider)
+        raise ProviderGenerationError(
+            provider=provider,
+            user_message=primary,
+            hint=hint,
+            stdout=stdout,
+            stderr=stderr,
+        ) from exc
+
+    def _run_provider_command(
         self,
         *,
+        provider: str,
+        cmd: list[str],
+        cwd: Path,
+        cli_label: str,
+    ) -> tuple[str, str]:
+        try:
+            return self._run_checked(cmd, cwd, label=cli_label)
+        except subprocess.CalledProcessError as exc:
+            self._raise_provider_error(
+                provider,
+                exc,
+                stdout=(exc.stdout or '').strip(),
+                stderr=(exc.stderr or '').strip(),
+            )
+        except Exception as exc:
+            self._raise_provider_error(provider, exc)
+
+    def _run_standard_provider(
+        self,
+        *,
+        provider: str,
         main_path: Path,
         project_dir: Path,
         provider_out_root: Path,
@@ -252,7 +297,11 @@ class GenerationService:
         cli_label: str = 'cli',
     ) -> dict[str, Any]:
         if not main_path.exists():
-            return {'ok': False, 'error': f'CLI не найден: {main_path}', 'stdout': '', 'stderr': ''}
+            raise ProviderGenerationError(
+                provider=provider,
+                user_message=f'CLI не найден: {main_path}',
+                hint='Проверьте наличие файлов провайдера и корректность путей.',
+            )
 
         cmd = [
             sys.executable,
@@ -264,18 +313,19 @@ class GenerationService:
             '--patterns', str(patterns_count),
             '--illustrations', str(illustrations_count),
         ]
-        try:
-            stdout, stderr = self._run_checked(cmd, project_dir, label=cli_label)
-            return {'ok': True, 'error': '', 'stdout': stdout, 'stderr': stderr}
-        except subprocess.CalledProcessError as exc:
-            return {
-                'ok': False,
-                'error': (exc.stderr or exc.stdout or str(exc)).strip(),
-                'stdout': (exc.stdout or '').strip(),
-                'stderr': (exc.stderr or '').strip(),
-            }
-        except Exception as exc:
-            return {'ok': False, 'error': str(exc), 'stdout': '', 'stderr': ''}
+        stdout, stderr = self._run_provider_command(
+            provider=provider,
+            cmd=cmd,
+            cwd=project_dir,
+            cli_label=cli_label,
+        )
+        return {
+            'ok': True,
+            'error': '',
+            'error_hint': None,
+            'stdout': stdout,
+            'stderr': stderr,
+        }
 
     def generate_assets(
         self,
@@ -283,11 +333,17 @@ class GenerationService:
         project_slug: str,
         payload: dict[str, Any],
         base_host: str,
-        progress_callback: Callable[[int, str, str | None, str | None], None] | None = None,
+        progress_callback: Callable[[int, str, str | None, str | None, dict[str, Any] | None], None] | None = None,
     ) -> dict[str, Any]:
-        def report(progress: int, message: str, provider: str | None = None, provider_status: str | None = None) -> None:
+        def report(
+            progress: int,
+            message: str,
+            provider: str | None = None,
+            provider_status: str | None = None,
+            provider_error: dict[str, Any] | None = None,
+        ) -> None:
             if progress_callback:
-                progress_callback(progress, message, provider, provider_status)
+                progress_callback(progress, message, provider, provider_status, provider_error)
 
         logger.info("generate_project(project_slug=%s)", project_slug)
 
@@ -346,10 +402,21 @@ class GenerationService:
 
         report(28, 'Запуск провайдера Recraft', 'recraft', 'running')
         try:
-            recraft_stdout, recraft_stderr = self._run_checked(recraft_cmd, self.recraft_dir, label='recraft')
+            recraft_stdout, recraft_stderr = self._run_provider_command(
+                provider='recraft',
+                cmd=recraft_cmd,
+                cwd=self.recraft_dir,
+                cli_label='recraft',
+            )
             report(48, 'Recraft завершён успешно', 'recraft', 'success')
-        except subprocess.CalledProcessError as exc:
-            report(48, 'Recraft завершился с ошибкой', 'recraft', 'error')
+        except ProviderGenerationError as exc:
+            report(
+                48,
+                exc.user_message or 'Recraft завершился с ошибкой',
+                'recraft',
+                'error',
+                {'message': exc.user_message, 'hint': exc.hint},
+            )
             raise
 
         new_style_id = ''
@@ -373,42 +440,54 @@ class GenerationService:
                 shutil.copy(src, refs_out_dir / src.name)
 
         report(55, 'Запуск провайдера Seedream', 'seedream', 'running')
-        seedream = self._run_optional_provider(
-            main_path=self.seedream_main,
-            project_dir=self.seedream_dir,
-            provider_out_root=self.seedream_out_root,
-            tokens_path=self.recraft_tokens,
-            brand_id=brand_id,
-            icons_count=icons_count,
-            patterns_count=patterns_count,
-            illustrations_count=illustrations_count,
-            cli_label='seedream',
-        )
-        report(
-            68,
-            'Seedream завершён успешно' if seedream.get('ok') else 'Seedream завершён с ошибкой',
-            'seedream',
-            'success' if seedream.get('ok') else 'error',
-        )
+        try:
+            seedream = self._run_standard_provider(
+                provider='seedream',
+                main_path=self.seedream_main,
+                project_dir=self.seedream_dir,
+                provider_out_root=self.seedream_out_root,
+                tokens_path=self.recraft_tokens,
+                brand_id=brand_id,
+                icons_count=icons_count,
+                patterns_count=patterns_count,
+                illustrations_count=illustrations_count,
+                cli_label='seedream',
+            )
+            report(68, 'Seedream завершён успешно', 'seedream', 'success')
+        except ProviderGenerationError as exc:
+            report(
+                68,
+                exc.user_message or 'Seedream завершился с ошибкой',
+                'seedream',
+                'error',
+                {'message': exc.user_message, 'hint': exc.hint},
+            )
+            raise
 
         report(72, 'Запуск провайдера Flux', 'flux', 'running')
-        flux = self._run_optional_provider(
-            main_path=self.flux_main,
-            project_dir=self.flux_dir,
-            provider_out_root=self.flux_out_root,
-            tokens_path=self.recraft_tokens,
-            brand_id=brand_id,
-            icons_count=icons_count,
-            patterns_count=patterns_count,
-            illustrations_count=illustrations_count,
-            cli_label='flux',
-        )
-        report(
-            85,
-            'Flux завершён успешно' if flux.get('ok') else 'Flux завершён с ошибкой',
-            'flux',
-            'success' if flux.get('ok') else 'error',
-        )
+        try:
+            flux = self._run_standard_provider(
+                provider='flux',
+                main_path=self.flux_main,
+                project_dir=self.flux_dir,
+                provider_out_root=self.flux_out_root,
+                tokens_path=self.recraft_tokens,
+                brand_id=brand_id,
+                icons_count=icons_count,
+                patterns_count=patterns_count,
+                illustrations_count=illustrations_count,
+                cli_label='flux',
+            )
+            report(85, 'Flux завершён успешно', 'flux', 'success')
+        except ProviderGenerationError as exc:
+            report(
+                85,
+                exc.user_message or 'Flux завершился с ошибкой',
+                'flux',
+                'error',
+                {'message': exc.user_message, 'hint': exc.hint},
+            )
+            raise
 
         report(90, 'Постобработка изображений WEBP → PNG')
         webp_converted = self.convert_webp_to_png_for_brand(brand_id)
@@ -430,7 +509,13 @@ class GenerationService:
             'providers_root': str(self.recraft_dir.parent),
             'output_root': str(self.out_root),
             'webp_converted': webp_converted,
-            'recraft': {'stdout': recraft_stdout, 'stderr': recraft_stderr},
+            'recraft': {
+                'ok': True,
+                'error': '',
+                'error_hint': None,
+                'stdout': recraft_stdout,
+                'stderr': recraft_stderr,
+            },
             'seedream': seedream,
             'flux': flux,
             'figma_manifest': {

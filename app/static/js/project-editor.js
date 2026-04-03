@@ -693,21 +693,34 @@ document.addEventListener('DOMContentLoaded', () => {
       flux: { status: 'pending', text: 'ожидание' },
     };
 
-    const providers = job.providers || {};
-    Object.entries(providers).forEach(([name, info]) => {
+    const source =
+      (job && typeof job.provider_statuses === 'object' && job.provider_statuses) ||
+      (job && typeof job.providers === 'object' && job.providers) ||
+      {};
+
+    Object.entries(source).forEach(([name, info]) => {
       if (!base[name]) return;
 
-      const rawStatus = String(info?.status || '').toLowerCase();
-      let normalized = 'pending';
+      let rawStatus = '';
+      let customText = '';
 
+      if (typeof info === 'string') {
+        rawStatus = info.toLowerCase();
+      } else if (info && typeof info === 'object') {
+        rawStatus = String(info.status || info.state || '').toLowerCase();
+        customText = String(info.text || '').trim();
+      }
+
+      let normalized = 'pending';
       if (['running', 'in_progress'].includes(rawStatus)) normalized = 'running';
       else if (['success', 'done', 'completed', 'ok'].includes(rawStatus)) normalized = 'success';
       else if (['error', 'failed', 'fail'].includes(rawStatus)) normalized = 'error';
+      else if (['pending', 'wait', 'waiting'].includes(rawStatus)) normalized = 'pending';
 
       base[name] = {
         status: normalized,
         text:
-          info?.text ||
+          customText ||
           ({
             pending: 'ожидание',
             running: 'выполняется',
@@ -717,35 +730,42 @@ document.addEventListener('DOMContentLoaded', () => {
       };
     });
 
-    const logs = Array.isArray(job.logs) ? job.logs : [];
-    const patterns = {
-      recraft: /recraft/i,
-      seedream: /seedream/i,
-      flux: /flux/i,
-    };
+    const providerErrors = job && typeof job.provider_errors === 'object' ? job.provider_errors : {};
+    Object.keys(providerErrors).forEach((name) => {
+      if (!base[name]) return;
+      if (providerErrors[name]) {
+        base[name] = { status: 'error', text: 'ошибка' };
+      }
+    });
 
-    for (const line of logs) {
-      const lower = String(line || '').toLowerCase();
+    const failedProvider = String(job?.failed_provider || '').trim().toLowerCase();
+    if (failedProvider && base[failedProvider] && base[failedProvider].status !== 'success') {
+      base[failedProvider] = { status: 'error', text: 'ошибка' };
+    }
 
-      for (const [name, rx] of Object.entries(patterns)) {
-        if (!rx.test(lower)) continue;
+    const currentProvider = String(job?.current_provider || '').trim().toLowerCase();
+    if (
+      currentProvider &&
+      base[currentProvider] &&
+      job?.status === 'running' &&
+      base[currentProvider].status === 'pending'
+    ) {
+      base[currentProvider] = { status: 'running', text: 'выполняется' };
+    }
 
-        if (lower.includes('запуск провайдера')) {
-          base[name] = { status: 'running', text: 'выполняется' };
-        }
-        if (lower.includes('завершён успешно') || lower.includes('завершено успешно')) {
-          base[name] = { status: 'success', text: 'успех' };
-        }
-        if (lower.includes('завершён с ошибкой') || lower.includes('ошибка')) {
+    const terminalFailed = job?.status === 'failed' || job?.status === 'completed_with_errors';
+    if (terminalFailed) {
+      Object.keys(base).forEach((name) => {
+        if (base[name].status === 'running') {
           base[name] = { status: 'error', text: 'ошибка' };
         }
-      }
+      });
     }
 
     return base;
   }
 
-    function updateGenerationUi(job) {
+  function updateGenerationUi(job) {
     console.log('[generation-ui] updateGenerationUi called', job);
 
     const progress = Number(job.progress || 0);
@@ -761,59 +781,58 @@ document.addEventListener('DOMContentLoaded', () => {
 
     const finalState = job.status;
 
-    if (finalState === 'failed') {
-      generationLogLines = ['Ошибка генерации'];
-      if (generationLog) {
-        generationLog.innerHTML = formatLogLine('Ошибка генерации');
+    const logs = Array.isArray(job.logs) ? [...job.logs] : [];
+    const providerErrorMessages = [];
+
+    const providerErrors = job && typeof job.provider_errors === 'object' ? job.provider_errors : {};
+    ['recraft', 'seedream', 'flux'].forEach((name) => {
+      const err = providerErrors[name];
+      if (err && typeof err === 'object' && err.message) {
+        providerErrorMessages.push(`${name[0].toUpperCase()}${name.slice(1)}: ${err.message}`);
+        if (err.hint) {
+          providerErrorMessages.push(`${name[0].toUpperCase()}${name.slice(1)}: ${err.hint}`);
+        }
       }
+    });
+
+    if (finalState === 'failed') {
+      if (job.error && !logs.includes(job.error)) {
+        logs.push(job.error);
+      }
+      if (job.error_hint && !logs.includes(job.error_hint)) {
+        logs.push(job.error_hint);
+      }
+      providerErrorMessages.forEach((line) => {
+        if (!logs.includes(line)) logs.push(line);
+      });
+
+      generationLogLines = logs.length ? logs : ['Ошибка генерации'];
+      renderGenerationLog(generationLogLines);
+
       if (job.id && generationErrorShownJobId !== job.id) {
         generationErrorShownJobId = job.id;
         openGenerationErrorModal(job.error, job.error_hint);
       }
     } else {
-      generationLogLines = Array.isArray(job.logs) ? job.logs : [];
+      generationLogLines = logs;
       renderGenerationLog(generationLogLines);
     }
 
     const fallbackResultUrl = `/projects/${projectSlug}/results`;
     const resolvedResultUrl = job.result_url || fallbackResultUrl;
 
-    console.log('[generation-ui] state', {
-      finalState,
-      projectSlug,
-      jobResultUrl: job.result_url,
-      fallbackResultUrl,
-      resolvedResultUrl,
-      generationResultLinkExists: !!generationResultLink,
-    });
-
     if (finalState === 'failed') {
-      console.log('[generation-ui] branch = failed');
       setTopStatus('Ошибка генерации', 'error');
       setResultLinkEnabled(false);
     } else if (finalState === 'completed_with_errors') {
-      console.log('[generation-ui] branch = completed_with_errors');
       setTopStatus('Завершено с ошибками', 'warning');
       setResultLinkEnabled(true, resolvedResultUrl);
     } else if (finalState === 'completed') {
-      console.log('[generation-ui] branch = completed');
       setTopStatus('Завершено', 'success');
       setResultLinkEnabled(true, resolvedResultUrl);
     } else {
-      console.log('[generation-ui] branch = running/other');
       setTopStatus(job.status_text || 'Выполняется');
       setResultLinkEnabled(false);
-    }
-
-    if (generationResultLink) {
-      console.log('[generation-ui] FINAL LINK STATE', {
-        hidden: generationResultLink.hidden,
-        hrefCurrent: generationResultLink.getAttribute('href'),
-        ariaDisabled: generationResultLink.getAttribute('aria-disabled'),
-        pointerEvents: generationResultLink.style.pointerEvents,
-        opacity: generationResultLink.style.opacity,
-        outerHTML: generationResultLink.outerHTML,
-      });
     }
   }
 

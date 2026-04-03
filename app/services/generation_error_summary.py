@@ -7,10 +7,35 @@ import subprocess
 from typing import Any
 
 
+class ProviderGenerationError(RuntimeError):
+    """Исключение с уже нормализованной ошибкой конкретного провайдера."""
+
+    def __init__(
+        self,
+        provider: str,
+        user_message: str,
+        hint: str | None = None,
+        *,
+        stdout: str | None = None,
+        stderr: str | None = None,
+    ) -> None:
+        super().__init__(user_message)
+        self.provider = provider
+        self.user_message = user_message
+        self.hint = hint
+        self.stdout = stdout or ''
+        self.stderr = stderr or ''
+
+
 def _collect_text(exc: BaseException) -> str:
+    if isinstance(exc, ProviderGenerationError):
+        parts = [exc.stderr or '', exc.stdout or '', exc.user_message or '', str(exc)]
+        return '\n'.join(p for p in parts if p and str(p).strip())
+
     if isinstance(exc, subprocess.CalledProcessError):
         parts = [exc.stderr or '', exc.stdout or '', str(exc)]
         return '\n'.join(p for p in parts if p and str(p).strip())
+
     return str(exc) or ''
 
 
@@ -21,14 +46,86 @@ def _norm_primary(msg: str) -> str:
     return msg
 
 
-def summarize_generation_failure(exc: BaseException) -> tuple[str, str | None]:
+def _extract_provider(exc: BaseException, provider: str | None) -> str | None:
+    explicit = (provider or '').strip().lower()
+    if explicit:
+        return explicit
+
+    exc_provider = getattr(exc, 'provider', None)
+    if isinstance(exc_provider, str) and exc_provider.strip():
+        return exc_provider.strip().lower()
+
+    blob = _collect_text(exc).lower()
+    if 'recraft' in blob:
+        return 'recraft'
+    if 'openrouter' in blob:
+        return 'openrouter'
+    return None
+
+
+def _extract_http_code(blob: str) -> int | None:
+    patterns = [
+        r'openrouter error \((\d{3})\)',
+        r'http\s*(\d{3})',
+        r'(\d{3})\s+client error',
+        r'"code"\s*:\s*(\d{3})',
+        r'"status"\s*:\s*(\d{3})',
+    ]
+    for pattern in patterns:
+        m = re.search(pattern, blob, re.IGNORECASE)
+        if m:
+            try:
+                return int(m.group(1))
+            except (TypeError, ValueError):
+                return None
+    return None
+
+
+def _provider_hint(provider: str | None, code: int | None, blob: str, primary: str) -> str | None:
+    provider = (provider or '').strip().lower()
+    low = primary.lower()
+    blob_low = blob.lower()
+
+    if provider in ('seedream', 'flux', 'openrouter'):
+        api_name = 'OpenRouter'
+        env_name = 'OPENROUTER_API_KEY'
+    else:
+        api_name = 'Recraft'
+        env_name = 'RECRAFT_API_KEY'
+
+    if code == 401 or 'unauthorized' in low or 'request unauthorized' in blob_low or 'missing authentication header' in low:
+        return (
+            f'Ключ {api_name} отклонён (401). Проверьте {env_name} в .env '
+            f'в корне проекта и что у аккаунта есть доступ к API.'
+        )
+
+    if code == 402:
+        return f'Проверьте баланс и тариф в панели {api_name}.'
+
+    if code == 429 or 'rate limit' in blob_low:
+        return f'Слишком много запросов к API {api_name}. Подождите и повторите попытку.'
+
+    return None
+
+
+def summarize_generation_failure(exc: BaseException, provider: str | None = None) -> tuple[str, str | None]:
     """
     Извлекает главное сообщение об ошибке из stdout/stderr CLI и текста исключения.
     Возвращает (сообщение для пользователя, опциональная подсказка).
     """
+    if isinstance(exc, ProviderGenerationError):
+        primary = _norm_primary(exc.user_message or 'Генерация не удалась.')
+        hint = exc.hint
+        if hint is None:
+            blob = _collect_text(exc)
+            code = _extract_http_code(blob)
+            hint = _provider_hint(_extract_provider(exc, provider), code, blob, primary)
+        return primary, hint
+
     blob = _collect_text(exc)
     hint: str | None = None
     primary: str | None = None
+    resolved_provider = _extract_provider(exc, provider)
 
     m = re.search(r'response text \(head\):\s*(.+?)(?:\r?\n|$)', blob, re.IGNORECASE | re.MULTILINE)
     if m:
@@ -43,7 +140,7 @@ def summarize_generation_failure(exc: BaseException) -> tuple[str, str | None]:
 
     if not primary:
         me = re.search(r'"error"\s*:\s*"([^"\\]*(?:\\.[^"\\]*)*)"', blob, re.IGNORECASE)
-        if me:
+        if me and me.group(1).strip():
             primary = me.group(1).strip()
 
     if not primary:
@@ -71,9 +168,15 @@ def summarize_generation_failure(exc: BaseException) -> tuple[str, str | None]:
             hint = 'Добавьте RECRAFT_API_KEY в файл .env в корне проекта и перезапустите сервер.'
 
     if not primary:
+        if 'OPENROUTER_API_KEY' in blob and ('не задан' in blob or 'not set' in blob.lower()):
+            primary = 'Не задан ключ API OpenRouter (OPENROUTER_API_KEY).'
+            hint = 'Добавьте OPENROUTER_API_KEY в файл .env в корне проекта и перезапустите сервер.'
+
+    if not primary:
         mconn = re.search(
             r'(Connection(?:Error| refused)|Timeout|Name or service not known|'
-            r'Failed to establish a new connection|Temporary failure in name resolution)'
+            r'Failed to establish a new connection|Temporary failure in name resolution|'
+            r'The read operation timed out)'
             r'[^\r\n]*',
             blob,
             re.IGNORECASE,
@@ -89,7 +192,7 @@ def summarize_generation_failure(exc: BaseException) -> tuple[str, str | None]:
                 continue
             if 'returned non-zero exit status' in s and 'Command' in s:
                 continue
-            if '[DEBUG]' in s or (s.startswith('[') and '] [INFO]' in s):
+            if re.search(r'\[(DEBUG|INFO|WARN)\]', s, re.IGNORECASE):
                 continue
             if '[ERROR]' in s and 'response text' not in s.lower():
                 inner = re.sub(r'^\[[^\]]+\]\s*(\[[^\]]+\]\s*)*', '', s)
@@ -103,16 +206,8 @@ def summarize_generation_failure(exc: BaseException) -> tuple[str, str | None]:
 
     primary = _norm_primary(primary)
 
-    low = primary.lower()
-    blob_low = blob.lower()
-    if hint is None and ('401' in blob or 'unauthorized' in low or 'request unauthorized' in blob_low):
-        hint = (
-            'Ключ Recraft отклонён (401). Проверьте RECRAFT_API_KEY в .env в корне проекта '
-            'и что на счёте есть средства / доступ к API.'
-        )
-    if hint is None and '402' in blob:
-        hint = 'Проверьте баланс и тариф в панели Recraft.'
-    if hint is None and ('429' in blob or 'rate limit' in blob_low):
-        hint = 'Слишком много запросов к API. Подождите и повторите попытку.'
+    if hint is None:
+        code = _extract_http_code(blob)
+        hint = _provider_hint(resolved_provider, code, blob, primary)
 
     return primary, hint
