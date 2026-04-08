@@ -1,19 +1,14 @@
-{% extends 'base.html' %}
+{% extends 'layouts/dashboard_shell.html' %}
 
 {% block title %}KYBBY — профиль{% endblock %}
 
-{% block content %}
-<div class="stub-page">
-    {% include 'partials/header.html' %}
-    <section class="stub-section">
-        <div class="container">
-            <div class="stub-card">
-                <h1>{{ page_title }}</h1>
-                <p>{{ page_description }}</p>
-                <p>Для пользователя <strong>{{ user_name }}</strong> этот раздел появится позже.</p>
-                <a href="/dashboard" class="btn btn-primary">Перейти к проектам</a>
-            </div>
-        </div>
-    </section>
-</div>
+{% block dashboard_main %}
+<section class="dashboard-content profile-stub-page">
+    <div class="stub-card profile-stub-card">
+        <h1>{{ page_title }}</h1>
+        <p>{{ page_description }}</p>
+        <p>Для пользователя <strong>{{ user_name }}</strong> этот раздел появится позже.</p>
+        <a href="/dashboard" class="btn btn-primary">Перейти к проектам</a>
+    </div>
+</section>
 {% endblock %}

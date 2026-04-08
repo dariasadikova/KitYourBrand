@@ -96,11 +96,14 @@ async def profile_page(request: Request) -> HTMLResponse:
     if auth_redirect:
         return auth_redirect
 
+    user_name = request.session.get('user_name') or 'Пользователь'
     context = {
         'request': request,
         'page_title': 'Профиль',
         'page_description': 'Страница профиля пока находится в разработке.',
-        'user_name': request.session.get('user_name') or 'Пользователь',
+        'user_name': user_name,
+        'user_email': request.session.get('user_email') or '',
+        'user_initial': (user_name[:1] or '?').upper(),
     }
     return templates.TemplateResponse(request, 'pages/profile_stub.html', context)
 

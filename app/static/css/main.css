@@ -911,6 +911,11 @@ img {
         padding: 10px 16px 28px;
     }
 
+    .page-dashboard .dashboard-main.project-main,
+    .page-dashboard .dashboard-main.results-main {
+        padding: 20px 16px 28px;
+    }
+
     .page-dashboard .dashboard-content {
         padding-top: 6px;
     }
@@ -1171,6 +1176,11 @@ img {
 
 .page-dashboard .dashboard-main {
     padding: 12px 48px 32px 36px;
+}
+
+.page-dashboard .dashboard-main.project-main,
+.page-dashboard .dashboard-main.results-main {
+    padding: 24px 48px 32px 36px;
 }
 
 .page-dashboard .dashboard-content {

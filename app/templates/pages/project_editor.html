@@ -1,74 +1,15 @@
-{% extends 'base.html' %}
+{% extends 'layouts/dashboard_shell.html' %}
 
 {% block title %}KYBBY — {{ project.name }}{% endblock %}
 
-{% block content %}
-<div class="dashboard-shell project-shell" data-project-slug="{{ project.slug }}">
-    <span id="project-slug" hidden>{{ project.slug }}</span>
-    <aside class="dashboard-sidebar">
-        <a href="/dashboard" class="dashboard-brand" aria-label="KYBBY dashboard">
-            <img class="brand-mark__logo" src="{{ url_for('static', path='img/kybby-whale.png') }}" alt="KYBBY" />
-            <span class="brand-mark__text">KYBBY</span>
-        </a>
+{% block dashboard_shell_classes %} project-shell{% endblock %}
 
-        <nav class="dashboard-nav" aria-label="Основная навигация">
-            <a href="/dashboard" class="dashboard-nav__item dashboard-nav__item--active">
-                <span class="dashboard-nav__icon" aria-hidden="true">
-                    <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.2" stroke-linecap="round" stroke-linejoin="round">
-                        <path d="M3 7a2 2 0 0 1 2-2h4l2 2h8a2 2 0 0 1 2 2v8a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2Z"/>
-                    </svg>
-                </span>
-                <span>Мои проекты</span>
-            </a>
-            <a href="/profile" class="dashboard-nav__item">
-                <span class="dashboard-nav__icon" aria-hidden="true">
-                    <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.2" stroke-linecap="round" stroke-linejoin="round">
-                        <circle cx="12" cy="8" r="4"/>
-                        <path d="M4 20a8 8 0 0 1 16 0"/>
-                    </svg>
-                </span>
-                <span>Профиль</span>
-            </a>
-            <a href="#" class="dashboard-nav__item">
-                <span class="dashboard-nav__icon" aria-hidden="true">
-                    <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.2" stroke-linecap="round" stroke-linejoin="round">
-                        <circle cx="12" cy="12" r="3"/>
-                        <path d="M19.4 15a1.7 1.7 0 0 0 .3 1.9l.1.1a2 2 0 0 1 0 2.8 2 2 0 0 1-2.8 0l-.1-.1a1.7 1.7 0 0 0-1.9-.3 1.7 1.7 0 0 0-1 1.6V21a2 2 0 1 1-4 0v-.2a1.7 1.7 0 0 0-1-1.6 1.7 1.7 0 0 0-1.9.3l-.1.1a2 2 0 1 1-2.8-2.8l.1-.1a1.7 1.7 0 0 0 .3-1.9 1.7 1.7 0 0 0-1.6-1H3a2 2 0 1 1 0-4h.2a1.7 1.7 0 0 0 1.6-1 1.7 1.7 0 0 0-.3-1.9l-.1-.1a2 2 0 1 1 2.8-2.8l.1.1a1.7 1.7 0 0 0 1.9.3H9a1.7 1.7 0 0 0 1-1.6V3a2 2 0 1 1 4 0v.2a1.7 1.7 0 0 0 1 1.6h.1a1.7 1.7 0 0 0 1.9-.3l.1-.1a2 2 0 1 1 2.8 2.8l-.1.1a1.7 1.7 0 0 0-.3 1.9v.1a1.7 1.7 0 0 0 1.6 1H21a2 2 0 1 1 0 4h-.2a1.7 1.7 0 0 0-1.6 1Z"/>
-                    </svg>
-                </span>
-                <span>Настройки</span>
-            </a>
-            <a href="/logout" class="dashboard-nav__item">
-                <span class="dashboard-nav__icon" aria-hidden="true">
-                    <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.2" stroke-linecap="round" stroke-linejoin="round">
-                        <path d="M9 4H5a2 2 0 0 0-2 2v12a2 2 0 0 0 2 2h4"/>
-                        <path d="M16 17l5-5-5-5"/>
-                        <path d="M21 12H9"/>
-                    </svg>
-                </span>
-                <span>Выход</span>
-            </a>
-        </nav>
-    </aside>
+{% block dashboard_shell_attrs %} data-project-slug="{{ project.slug }}"{% endblock %}
 
-    <main class="dashboard-main project-main">
-        <div class="dashboard-topbar">
-            <div class="dashboard-topbar__spacer"></div>
-            <div class="dashboard-userbar">
-                <button type="button" class="dashboard-icon-btn" aria-label="Уведомления">
-                    <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true">
-                        <path d="M6 8a6 6 0 0 1 12 0c0 7 3 9 3 9H3s3-2 3-9" />
-                        <path d="M10.3 21a1.94 1.94 0 0 0 3.4 0" />
-                    </svg>
-                    <span class="dashboard-badge"></span>
-                </button>
-                <div class="dashboard-userpill">
-                    <span class="dashboard-userpill__email">{{ user_email }}</span>
-                    <span class="dashboard-userpill__avatar">{{ user_initial }}</span>
-                </div>
-            </div>
-        </div>
+{% block dashboard_main_classes %} project-main{% endblock %}
 
+{% block dashboard_main %}
+<span id="project-slug" hidden>{{ project.slug }}</span>
         <section class="project-editor">
             <div class="project-page-head">
                 <div>
@@ -103,7 +44,8 @@
                             <input type="text" id="brand_id" />
                         </label>
                     </div>
-                    <div class="editor-note">Brand ID будет использоваться как идентификатор набора ассетов в структуре папок и путях для интеграции с Figma-плагином.</div>
+                    <div class="editor-note">Brand ID будет использоваться как идентификатор набора ассетов в структуре
+                        папок и путях для интеграции с Figma-плагином.</div>
                 </section>
 
                 <section class="editor-card editor-card--progressive" data-progress-step="2">
@@ -117,40 +59,48 @@
                     </div>
 
                     <h3 class="editor-subtitle">Палитра</h3>
-                    <div class="palette-hint">Выберите от 2 до 6 цветов, которые будут использоваться в текущей генерации.</div>
+                    <div class="palette-hint">Выберите от 2 до 6 цветов, которые будут использоваться в текущей
+                        генерации.</div>
                     <div class="palette-grid palette-grid--six">
                         <div class="palette-item">
-                            <label class="palette-item__label"><input type="checkbox" id="palette.primary_enabled" checked /> <span>Primary</span></label>
+                            <label class="palette-item__label"><input type="checkbox" id="palette.primary_enabled"
+                                    checked /> <span>Primary</span></label>
                             <input type="color" id="palette.primary" class="palette-swatch" />
                             <input type="text" id="palette.primary_text" class="editor-field__compact" />
                         </div>
                         <div class="palette-item">
-                            <label class="palette-item__label"><input type="checkbox" id="palette.secondary_enabled" checked /> <span>Secondary</span></label>
+                            <label class="palette-item__label"><input type="checkbox" id="palette.secondary_enabled"
+                                    checked /> <span>Secondary</span></label>
                             <input type="color" id="palette.secondary" class="palette-swatch" />
                             <input type="text" id="palette.secondary_text" class="editor-field__compact" />
                         </div>
                         <div class="palette-item">
-                            <label class="palette-item__label"><input type="checkbox" id="palette.accent_enabled" checked /> <span>Accent</span></label>
+                            <label class="palette-item__label"><input type="checkbox" id="palette.accent_enabled"
+                                    checked /> <span>Accent</span></label>
                             <input type="color" id="palette.accent" class="palette-swatch" />
                             <input type="text" id="palette.accent_text" class="editor-field__compact" />
                         </div>
                         <div class="palette-item">
-                            <label class="palette-item__label"><input type="checkbox" id="palette.tertiary_enabled" /> <span>Tertiary</span></label>
+                            <label class="palette-item__label"><input type="checkbox" id="palette.tertiary_enabled" />
+                                <span>Tertiary</span></label>
                             <input type="color" id="palette.tertiary" class="palette-swatch" />
                             <input type="text" id="palette.tertiary_text" class="editor-field__compact" />
                         </div>
                         <div class="palette-item">
-                            <label class="palette-item__label"><input type="checkbox" id="palette.neutral_enabled" /> <span>Neutral</span></label>
+                            <label class="palette-item__label"><input type="checkbox" id="palette.neutral_enabled" />
+                                <span>Neutral</span></label>
                             <input type="color" id="palette.neutral" class="palette-swatch" />
                             <input type="text" id="palette.neutral_text" class="editor-field__compact" />
                         </div>
                         <div class="palette-item">
-                            <label class="palette-item__label"><input type="checkbox" id="palette.extra_enabled" /> <span>Extra</span></label>
+                            <label class="palette-item__label"><input type="checkbox" id="palette.extra_enabled" />
+                                <span>Extra</span></label>
                             <input type="color" id="palette.extra" class="palette-swatch" />
                             <input type="text" id="palette.extra_text" class="editor-field__compact" />
                         </div>
                     </div>
-                    <div id="palette-validation" class="editor-note editor-note--compact" hidden>Выберите минимум 2 цвета палитры.</div>
+                    <div id="palette-validation" class="editor-note editor-note--compact" hidden>Выберите минимум 2
+                        цвета палитры.</div>
 
                 </section>
 
@@ -164,17 +114,25 @@
                         </div>
                     </div>
                     <div class="asset-tabs" role="tablist" aria-label="Тип ассетов">
-                        <button type="button" class="asset-tab asset-tab--active" role="tab" id="asset-tab-icons" data-asset-tab="icons" aria-selected="true" aria-controls="asset-panel-icons">Иконки</button>
-                        <button type="button" class="asset-tab" role="tab" id="asset-tab-patterns" data-asset-tab="patterns" aria-selected="false" aria-controls="asset-panel-patterns">Паттерны</button>
-                        <button type="button" class="asset-tab" role="tab" id="asset-tab-illustrations" data-asset-tab="illustrations" aria-selected="false" aria-controls="asset-panel-illustrations">Иллюстрации</button>
+                        <button type="button" class="asset-tab asset-tab--active" role="tab" id="asset-tab-icons"
+                            data-asset-tab="icons" aria-selected="true"
+                            aria-controls="asset-panel-icons">Иконки</button>
+                        <button type="button" class="asset-tab" role="tab" id="asset-tab-patterns"
+                            data-asset-tab="patterns" aria-selected="false"
+                            aria-controls="asset-panel-patterns">Паттерны</button>
+                        <button type="button" class="asset-tab" role="tab" id="asset-tab-illustrations"
+                            data-asset-tab="illustrations" aria-selected="false"
+                            aria-controls="asset-panel-illustrations">Иллюстрации</button>
                     </div>
 
-                    <div id="asset-panel-icons" class="asset-panel asset-panel--active" role="tabpanel" aria-labelledby="asset-tab-icons">
+                    <div id="asset-panel-icons" class="asset-panel asset-panel--active" role="tabpanel"
+                        aria-labelledby="asset-tab-icons">
                         <div class="editor-list-field">
                             <span class="editor-field-title">Темы генерации</span>
                             <div id="chip-list-icons" class="chip-list" role="list"></div>
                             <div class="chip-add-row">
-                                <input type="text" id="icons-input" placeholder="camera, chat..." class="editor-grow-input" autocomplete="off" />
+                                <input type="text" id="icons-input" placeholder="camera, chat..."
+                                    class="editor-grow-input" autocomplete="off" />
                                 <button type="button" class="small-action" data-chip-add="icons">Добавить</button>
                             </div>
                         </div>
@@ -208,12 +166,14 @@
                         </div>
                     </div>
 
-                    <div id="asset-panel-patterns" class="asset-panel" role="tabpanel" aria-labelledby="asset-tab-patterns" hidden>
+                    <div id="asset-panel-patterns" class="asset-panel" role="tabpanel"
+                        aria-labelledby="asset-tab-patterns" hidden>
                         <div class="editor-list-field">
                             <span class="editor-field-title">Темы генерации</span>
                             <div id="chip-list-patterns" class="chip-list" role="list"></div>
                             <div class="chip-add-row">
-                                <input type="text" id="patterns-input" placeholder="minimal wave..." class="editor-grow-input" autocomplete="off" />
+                                <input type="text" id="patterns-input" placeholder="minimal wave..."
+                                    class="editor-grow-input" autocomplete="off" />
                                 <button type="button" class="small-action" data-chip-add="patterns">Добавить</button>
                             </div>
                         </div>
@@ -225,13 +185,16 @@
                         </div>
                     </div>
 
-                    <div id="asset-panel-illustrations" class="asset-panel" role="tabpanel" aria-labelledby="asset-tab-illustrations" hidden>
+                    <div id="asset-panel-illustrations" class="asset-panel" role="tabpanel"
+                        aria-labelledby="asset-tab-illustrations" hidden>
                         <div class="editor-list-field">
                             <span class="editor-field-title">Темы генерации</span>
                             <div id="chip-list-illustrations" class="chip-list" role="list"></div>
                             <div class="chip-add-row">
-                                <input type="text" id="illustrations-input" placeholder="friendly mascot for..." class="editor-grow-input" autocomplete="off" />
-                                <button type="button" class="small-action" data-chip-add="illustrations">Добавить</button>
+                                <input type="text" id="illustrations-input" placeholder="friendly mascot for..."
+                                    class="editor-grow-input" autocomplete="off" />
+                                <button type="button" class="small-action"
+                                    data-chip-add="illustrations">Добавить</button>
                             </div>
                         </div>
                         <div class="illustration-format-row">
@@ -253,7 +216,8 @@
                     </div>
                 </section>
 
-                <section class="editor-card editor-card--progressive editor-card--collapsible" data-progress-step="4" data-collapsed="true">
+                <section class="editor-card editor-card--progressive editor-card--collapsible" data-progress-step="4"
+                    data-collapsed="true">
                     <div class="editor-card__head">
                         <span class="step-badge">4</span>
                         <div>
@@ -265,7 +229,8 @@
                     <div class="editor-card__body editor-card__body--refs" hidden>
                         <div class="refs-toolbar">
                             <label class="btn btn-primary btn-upload">
-                                <input id="upload-refs" type="file" multiple accept=".png,.jpg,.jpeg,.webp,.gif,.bmp" hidden />
+                                <input id="upload-refs" type="file" multiple accept=".png,.jpg,.jpeg,.webp,.gif,.bmp"
+                                    hidden />
                                 Загрузить изображения
                             </label>
                         </div>
@@ -286,7 +251,8 @@
                         <input type="checkbox" id="build_style" checked />
                         <div>
                             <strong>Создать новый стиль по текущим референсам</strong>
-                            <span>Если включено, система проанализирует загруженные референсные изображения и создаст новый Style ID.</span>
+                            <span>Если включено, система проанализирует загруженные референсные изображения и создаст
+                                новый Style ID.</span>
                         </div>
                     </label>
 
@@ -311,18 +277,23 @@
                         </div>
                     </div>
                     <div class="figma-card-inner">
-                        <p>После генерации бренд-комплекта вы сможете экспортировать метаданные в формате JSON для использования в Figma-плагине.</p>
+                        <p>После генерации бренд-комплекта вы сможете экспортировать метаданные в формате JSON для
+                            использования в Figma-плагине.</p>
                         <label class="editor-field editor-field--readonly">
                             <span>Production URL:</span>
-                            <input type="text" id="figma-production-url" value="https://brand.kit/assets/&lt;brand_id&gt;/icons|patterns|illustrations" readonly />
+                            <input type="text" id="figma-production-url"
+                                value="https://brand.kit/assets/&lt;brand_id&gt;/icons|patterns|illustrations"
+                                readonly />
                         </label>
                         <label class="editor-field editor-field--readonly">
                             <span>Local Development:</span>
-                            <input type="text" id="figma-local-url" value="http://localhost:8000/assets/&lt;brand_id&gt;/..." readonly />
+                            <input type="text" id="figma-local-url"
+                                value="http://localhost:8000/assets/&lt;brand_id&gt;/..." readonly />
                         </label>
                     </div>
                     <div class="editor-inline-actions">
-                        <button type="button" id="gen-figma" class="btn btn-primary btn-inline">Сгенерировать Figma Plugin JSON</button>
+                        <button type="button" id="gen-figma" class="btn btn-primary btn-inline">Сгенерировать Figma
+                            Plugin JSON</button>
                         <a id="figma-link" class="btn btn-outline btn-inline" href="#" hidden>Скачать manifest</a>
                     </div>
                 </section>
@@ -332,26 +303,28 @@
                     <div class="cta-icon">✧</div>
                     <h2>Готово к генерации?</h2>
                     <p>Все параметры настроены. Нажмите кнопку ниже, чтобы запустить генерацию бренд-комплекта.</p>
-                    <button type="button" id="btn-generate" class="btn btn-primary editor-generate-btn">Собрать бренд-комплект</button>
+                    <button type="button" id="btn-generate" class="btn btn-primary editor-generate-btn">Собрать
+                        бренд-комплект</button>
                     <div class="cta-stats">
-                      <span><strong id="summary-icons">24</strong> иконок</span>
-                      <span><strong id="summary-patterns">12</strong> паттернов</span>
-                      <span><strong id="summary-illustrations">12</strong> иллюстраций</span>
+                        <span><strong id="summary-icons">24</strong> иконок</span>
+                        <span><strong id="summary-patterns">12</strong> паттернов</span>
+                        <span><strong id="summary-illustrations">12</strong> иллюстраций</span>
                     </div>
                     <div id="generate-status" class="editor-status"></div>
                 </section>
 
                 <div class="editor-actions-row">
                     <button type="button" id="save" class="btn btn-outline btn-inline">Сохранить</button>
-                    <a href="/projects/{{ project.slug }}/download" class="btn btn-outline btn-inline">Скачать конфигурацию проекта</a>
+                    <a href="/projects/{{ project.slug }}/download" class="btn btn-outline btn-inline">Скачать
+                        конфигурацию проекта</a>
                     <button type="button" id="reset" class="btn btn-danger btn-inline">Сброс</button>
                 </div>
             </form>
         </section>
-    </main>
-</div>
 
+{% endblock %}
 
+{% block dashboard_extra %}
 <div id="generation-modal" class="generation-modal" hidden>
     <div class="generation-modal__backdrop" data-close-generation></div>
     <div class="generation-modal__dialog" role="dialog" aria-modal="true" aria-labelledby="generation-modal-title">
@@ -365,24 +338,30 @@
             <span id="generation-status-text" class="generation-status-text">Ожидание</span>
         </div>
         <div class="generation-providers">
-            <div class="generation-provider"><span>Recraft</span><span id="provider-status-recraft" class="provider-pill provider-pill--pending">ожидание</span></div>
-            <div class="generation-provider"><span>Seedream</span><span id="provider-status-seedream" class="provider-pill provider-pill--pending">ожидание</span></div>
-            <div class="generation-provider"><span>Flux</span><span id="provider-status-flux" class="provider-pill provider-pill--pending">ожидание</span></div>
+            <div class="generation-provider"><span>Recraft</span><span id="provider-status-recraft"
+                    class="provider-pill provider-pill--pending">ожидание</span></div>
+            <div class="generation-provider"><span>Seedream</span><span id="provider-status-seedream"
+                    class="provider-pill provider-pill--pending">ожидание</span></div>
+            <div class="generation-provider"><span>Flux</span><span id="provider-status-flux"
+                    class="provider-pill provider-pill--pending">ожидание</span></div>
         </div>
         <label class="generation-log-label">Лог операций</label>
         <pre id="generation-log" class="generation-log"></pre>
         <div class="generation-modal__actions">
             <button type="button" id="generation-cancel-btn" class="btn btn-outline btn-inline">Отменить</button>
             <button type="button" id="generation-modal-close-btn" class="btn btn-outline btn-inline">Закрыть</button>
-            <a id="generation-result-link" class="btn btn-primary btn-inline" href="/projects/{{ project.slug }}/results" hidden>Посмотреть результат</a>
+            <a id="generation-result-link" class="btn btn-primary btn-inline"
+                href="/projects/{{ project.slug }}/results" hidden>Посмотреть результат</a>
         </div>
     </div>
 </div>
 
 <div id="generation-error-modal" class="generation-error-modal" hidden>
     <div class="generation-error-modal__backdrop" data-close-generation-error></div>
-    <div class="generation-error-modal__dialog" role="alertdialog" aria-modal="true" aria-labelledby="generation-error-title" aria-describedby="generation-error-body">
-        <button type="button" class="generation-modal__close" id="generation-error-close" data-close-generation-error>×</button>
+    <div class="generation-error-modal__dialog" role="alertdialog" aria-modal="true"
+        aria-labelledby="generation-error-title" aria-describedby="generation-error-body">
+        <button type="button" class="generation-modal__close" id="generation-error-close"
+            data-close-generation-error>×</button>
         <h2 id="generation-error-title">Ошибка генерации</h2>
         <p id="generation-error-body" class="generation-error-modal__message"></p>
         <p id="generation-error-hint" class="generation-error-modal__hint" hidden></p>

@@ -1,78 +1,12 @@
-{% extends 'base.html' %}
+{% extends 'layouts/dashboard_shell.html' %}
 
 {% block title %}KYBBY — результаты генерации{% endblock %}
 
-{% block content %}
-<div class="dashboard-shell results-shell">
-    <aside class="dashboard-sidebar">
-        <a href="/dashboard" class="dashboard-brand" aria-label="KYBBY dashboard">
-            <img class="brand-mark__logo" src="{{ url_for('static', path='img/kybby-whale.png') }}" alt="KYBBY" />
-            <span class="brand-mark__text">KYBBY</span>
-        </a>
+{% block dashboard_shell_classes %} results-shell{% endblock %}
 
-        <nav class="dashboard-nav" aria-label="Основная навигация">
-            <a href="/dashboard" class="dashboard-nav__item dashboard-nav__item--active">
-                <span class="dashboard-nav__icon" aria-hidden="true">
-                    <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.2" stroke-linecap="round" stroke-linejoin="round">
-                        <path d="M3 7a2 2 0 0 1 2-2h4l2 2h8a2 2 0 0 1 2 2v8a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2Z"/>
-                    </svg>
-                </span>
-                <span>Мои проекты</span>
-            </a>
-            <a href="/profile" class="dashboard-nav__item">
-                <span class="dashboard-nav__icon" aria-hidden="true">
-                    <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.2" stroke-linecap="round" stroke-linejoin="round">
-                        <circle cx="12" cy="8" r="4"/>
-                        <path d="M4 20a8 8 0 0 1 16 0"/>
-                    </svg>
-                </span>
-                <span>Профиль</span>
-            </a>
-            <a href="#" class="dashboard-nav__item">
-                <span class="dashboard-nav__icon" aria-hidden="true">
-                    <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.2" stroke-linecap="round" stroke-linejoin="round">
-                        <circle cx="12" cy="12" r="3"/>
-                        <path d="M19.4 15a1.7 1.7 0 0 0 .3 1.9l.1.1a2 2 0 0 1 0 2.8 2 2 0 0 1-2.8 0l-.1-.1a1.7 1.7 0 0 0-1.9-.3 1.7 1.7 0 0 0-1 1.6V21a2 2 0 1 1-4 0v-.2a1.7 1.7 0 0 0-1-1.6 1.7 1.7 0 0 0-1.9.3l-.1.1a2 2 0 1 1-2.8-2.8l.1-.1a1.7 1.7 0 0 0 .3-1.9 1.7 1.7 0 0 0-1.6-1H3a2 2 0 1 1 0-4h.2a1.7 1.7 0 0 0 1.6-1 1.7 1.7 0 0 0-.3-1.9l-.1-.1a2 2 0 1 1 2.8-2.8l.1.1a1.7 1.7 0 0 0 1.9.3H9a1.7 1.7 0 0 0 1-1.6V3a2 2 0 1 1 4 0v.2a1.7 1.7 0 0 0 1 1.6h.1a1.7 1.7 0 0 0 1.9-.3l.1-.1a2 2 0 1 1 2.8 2.8l-.1.1a1.7 1.7 0 0 0-.3 1.9v.1a1.7 1.7 0 0 0 1.6 1H21a2 2 0 1 1 0 4h-.2a1.7 1.7 0 0 0-1.6 1Z"/>
-                    </svg>
-                </span>
-                <span>Настройки</span>
-            </a>
-            <a href="/logout" class="dashboard-nav__item">
-                <span class="dashboard-nav__icon" aria-hidden="true">
-                    <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.2" stroke-linecap="round" stroke-linejoin="round">
-                        <path d="M9 4H5a2 2 0 0 0-2 2v12a2 2 0 0 0 2 2h4"/>
-                        <path d="M16 17l5-5-5-5"/>
-                        <path d="M21 12H9"/>
-                    </svg>
-                </span>
-                <span>Выход</span>
-            </a>
-        </nav>
+{% block dashboard_main_classes %} results-main{% endblock %}
 
-        <div class="dashboard-sidebar__footer">
-            <img class="brand-mark__logo brand-mark__logo--small" src="{{ url_for('static', path='img/kybby-whale.png') }}" alt="KYBBY" />
-            <span class="brand-mark__text">KYBBY</span>
-        </div>
-    </aside>
-
-    <main class="dashboard-main results-main">
-        <div class="dashboard-topbar">
-            <div class="dashboard-topbar__spacer"></div>
-            <div class="dashboard-userbar">
-                <button type="button" class="dashboard-icon-btn" aria-label="Уведомления">
-                    <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true">
-                        <path d="M6 8a6 6 0 0 1 12 0c0 7 3 9 3 9H3s3-2 3-9" />
-                        <path d="M10.3 21a1.94 1.94 0 0 0 3.4 0" />
-                    </svg>
-                    <span class="dashboard-badge"></span>
-                </button>
-                <div class="dashboard-userpill">
-                    <span class="dashboard-userpill__email">{{ user_email }}</span>
-                    <span class="dashboard-userpill__avatar">{{ user_initial }}</span>
-                </div>
-            </div>
-        </div>
-
+{% block dashboard_main %}
         <section class="results-page">
             <div class="results-page__head">
                 <div>
@@ -110,12 +44,14 @@
                             <span class="results-card__icon">◌</span>
                             <h2>Иконки</h2>
                         </div>
-                        <a href="/projects/{{ project.slug }}/downloads/icons" class="btn btn-primary btn-inline">Скачать</a>
+                        <a href="/projects/{{ project.slug }}/downloads/icons"
+                            class="btn btn-primary btn-inline">Скачать</a>
                     </div>
                     {% if icons %}
                     <div class="results-icons-grid">
                         {% for asset in icons %}
-                        <a href="{{ asset.url }}" target="_blank" rel="noopener" class="results-icon-card" title="{{ asset.provider }} / {{ asset.name }}">
+                        <a href="{{ asset.url }}" target="_blank" rel="noopener" class="results-icon-card"
+                            title="{{ asset.provider }} / {{ asset.name }}">
                             <img src="{{ asset.url }}" alt="{{ asset.name }}">
                         </a>
                         {% endfor %}
@@ -131,12 +67,14 @@
                             <span class="results-card__icon">▦</span>
                             <h2>Паттерны</h2>
                         </div>
-                        <a href="/projects/{{ project.slug }}/downloads/patterns" class="btn btn-primary btn-inline">Скачать</a>
+                        <a href="/projects/{{ project.slug }}/downloads/patterns"
+                            class="btn btn-primary btn-inline">Скачать</a>
                     </div>
                     {% if patterns %}
                     <div class="results-media-grid results-media-grid--patterns">
                         {% for asset in patterns %}
-                        <a href="{{ asset.url }}" target="_blank" rel="noopener" class="results-media-card" title="{{ asset.provider }} / {{ asset.name }}">
+                        <a href="{{ asset.url }}" target="_blank" rel="noopener" class="results-media-card"
+                            title="{{ asset.provider }} / {{ asset.name }}">
                             <img src="{{ asset.url }}" alt="{{ asset.name }}">
                         </a>
                         {% endfor %}
@@ -152,12 +90,14 @@
                             <span class="results-card__icon">◫</span>
                             <h2>Иллюстрации</h2>
                         </div>
-                        <a href="/projects/{{ project.slug }}/downloads/illustrations" class="btn btn-primary btn-inline">Скачать</a>
+                        <a href="/projects/{{ project.slug }}/downloads/illustrations"
+                            class="btn btn-primary btn-inline">Скачать</a>
                     </div>
                     {% if illustrations %}
                     <div class="results-media-grid">
                         {% for asset in illustrations %}
-                        <a href="{{ asset.url }}" target="_blank" rel="noopener" class="results-media-card" title="{{ asset.provider }} / {{ asset.name }}">
+                        <a href="{{ asset.url }}" target="_blank" rel="noopener" class="results-media-card"
+                            title="{{ asset.provider }} / {{ asset.name }}">
                             <img src="{{ asset.url }}" alt="{{ asset.name }}">
                         </a>
                         {% endfor %}
@@ -172,6 +112,4 @@
                 </div>
             </div>
         </section>
-    </main>
-</div>
 {% endblock %}
