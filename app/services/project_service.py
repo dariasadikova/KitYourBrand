@@ -30,7 +30,8 @@ DEFAULT_TOKENS = {
         "substyle": "seamless",
     },
     "illustration": {
-        "vector": False,
+        "vector": True,
+        "raster": True,
         "prompt_suffix": "minimal, soft contrast",
     },
     "prompts": {
@@ -204,6 +205,7 @@ class ProjectService:
         data['texture'].setdefault('substyle', 'seamless')
         data.setdefault('illustration', {})
         data['illustration'].setdefault('vector', False)
+        data['illustration'].setdefault('raster', True)
         data['illustration'].setdefault('prompt_suffix', '')
         data.setdefault('prompts', {})
         data['prompts'].setdefault('icons', [])

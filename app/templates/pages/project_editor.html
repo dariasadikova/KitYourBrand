@@ -1,38 +1,54 @@
 {% extends 'base.html' %}
 
-{% block title %}KitYourBrand — {{ project.name }}{% endblock %}
+{% block title %}KYBBY — {{ project.name }}{% endblock %}
 
 {% block content %}
 <div class="dashboard-shell project-shell" data-project-slug="{{ project.slug }}">
     <span id="project-slug" hidden>{{ project.slug }}</span>
     <aside class="dashboard-sidebar">
-        <a href="/dashboard" class="dashboard-brand" aria-label="KitYourBrand dashboard">
-            <span class="brand-mark__dot"></span>
-            <span class="brand-mark__text">KITYOURBRAND</span>
+        <a href="/dashboard" class="dashboard-brand" aria-label="KYBBY dashboard">
+            <img class="brand-mark__logo" src="{{ url_for('static', path='img/kybby-whale.png') }}" alt="KYBBY" />
+            <span class="brand-mark__text">KYBBY</span>
         </a>
 
         <nav class="dashboard-nav" aria-label="Основная навигация">
             <a href="/dashboard" class="dashboard-nav__item dashboard-nav__item--active">
-                <span class="dashboard-nav__icon">▣</span>
+                <span class="dashboard-nav__icon" aria-hidden="true">
+                    <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.2" stroke-linecap="round" stroke-linejoin="round">
+                        <path d="M3 7a2 2 0 0 1 2-2h4l2 2h8a2 2 0 0 1 2 2v8a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2Z"/>
+                    </svg>
+                </span>
                 <span>Мои проекты</span>
             </a>
             <a href="/profile" class="dashboard-nav__item">
-                <span class="dashboard-nav__icon">◌</span>
+                <span class="dashboard-nav__icon" aria-hidden="true">
+                    <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.2" stroke-linecap="round" stroke-linejoin="round">
+                        <circle cx="12" cy="8" r="4"/>
+                        <path d="M4 20a8 8 0 0 1 16 0"/>
+                    </svg>
+                </span>
                 <span>Профиль</span>
             </a>
             <a href="#" class="dashboard-nav__item">
-                <span class="dashboard-nav__icon">⚙</span>
+                <span class="dashboard-nav__icon" aria-hidden="true">
+                    <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.2" stroke-linecap="round" stroke-linejoin="round">
+                        <circle cx="12" cy="12" r="3"/>
+                        <path d="M19.4 15a1.7 1.7 0 0 0 .3 1.9l.1.1a2 2 0 0 1 0 2.8 2 2 0 0 1-2.8 0l-.1-.1a1.7 1.7 0 0 0-1.9-.3 1.7 1.7 0 0 0-1 1.6V21a2 2 0 1 1-4 0v-.2a1.7 1.7 0 0 0-1-1.6 1.7 1.7 0 0 0-1.9.3l-.1.1a2 2 0 1 1-2.8-2.8l.1-.1a1.7 1.7 0 0 0 .3-1.9 1.7 1.7 0 0 0-1.6-1H3a2 2 0 1 1 0-4h.2a1.7 1.7 0 0 0 1.6-1 1.7 1.7 0 0 0-.3-1.9l-.1-.1a2 2 0 1 1 2.8-2.8l.1.1a1.7 1.7 0 0 0 1.9.3H9a1.7 1.7 0 0 0 1-1.6V3a2 2 0 1 1 4 0v.2a1.7 1.7 0 0 0 1 1.6h.1a1.7 1.7 0 0 0 1.9-.3l.1-.1a2 2 0 1 1 2.8 2.8l-.1.1a1.7 1.7 0 0 0-.3 1.9v.1a1.7 1.7 0 0 0 1.6 1H21a2 2 0 1 1 0 4h-.2a1.7 1.7 0 0 0-1.6 1Z"/>
+                    </svg>
+                </span>
                 <span>Настройки</span>
             </a>
             <a href="/logout" class="dashboard-nav__item">
-                <span class="dashboard-nav__icon">⇥</span>
+                <span class="dashboard-nav__icon" aria-hidden="true">
+                    <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.2" stroke-linecap="round" stroke-linejoin="round">
+                        <path d="M9 4H5a2 2 0 0 0-2 2v12a2 2 0 0 0 2 2h4"/>
+                        <path d="M16 17l5-5-5-5"/>
+                        <path d="M21 12H9"/>
+                    </svg>
+                </span>
                 <span>Выход</span>
             </a>
         </nav>
-        <div class="dashboard-sidebar__footer">
-            <span class="brand-mark__dot"></span>
-            <span class="brand-mark__text">KITYOURBRAND</span>
-        </div>
     </aside>
 
     <main class="dashboard-main project-main">
@@ -40,7 +56,10 @@
             <div class="dashboard-topbar__spacer"></div>
             <div class="dashboard-userbar">
                 <button type="button" class="dashboard-icon-btn" aria-label="Уведомления">
-                    <span>◔</span>
+                    <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true">
+                        <path d="M6 8a6 6 0 0 1 12 0c0 7 3 9 3 9H3s3-2 3-9" />
+                        <path d="M10.3 21a1.94 1.94 0 0 0 3.4 0" />
+                    </svg>
                     <span class="dashboard-badge"></span>
                 </button>
                 <div class="dashboard-userpill">
@@ -59,10 +78,11 @@
             </div>
 
             <form id="project-editor-form" class="editor-sections" onsubmit="return false;">
-                <section class="editor-card">
+                <section class="editor-card editor-card--progressive" data-progress-step="1">
                     <div class="editor-card__head">
                         <span class="step-badge">1</span>
                         <div>
+                            <div class="step-progress-caption">Шаг 1 из 7</div>
                             <h2>Бренд</h2>
                             <p>Основные параметры вашего бренда</p>
                         </div>
@@ -86,10 +106,11 @@
                     <div class="editor-note">Brand ID будет использоваться как идентификатор набора ассетов в структуре папок и путях для интеграции с Figma-плагином.</div>
                 </section>
 
-                <section class="editor-card">
+                <section class="editor-card editor-card--progressive" data-progress-step="2">
                     <div class="editor-card__head">
                         <span class="step-badge">2</span>
                         <div>
+                            <div class="step-progress-caption">Шаг 2 из 7</div>
                             <h2>Визуальный стиль</h2>
                             <p>Цветовая палитра и параметры иконок</p>
                         </div>
@@ -131,92 +152,132 @@
                     </div>
                     <div id="palette-validation" class="editor-note editor-note--compact" hidden>Выберите минимум 2 цвета палитры.</div>
 
-                    <div class="editor-divider"></div>
-                    <h3 class="editor-subtitle">Параметры иконок</h3>
-                    <div class="editor-grid">
-                        <label class="editor-field">
-                            <span>Stroke Width (px)</span>
-                            <input type="number" min="0" step="0.5" id="icon.strokeWidth" />
-                        </label>
-                        <label class="editor-field">
-                            <span>Corner</span>
-                            <select id="icon.corner">
-                                <option value="rounded">Rounded</option>
-                                <option value="square">Square</option>
-                                <option value="butt">Butt</option>
-                            </select>
-                        </label>
-                        <label class="editor-field">
-                            <span>Fill</span>
-                            <select id="icon.fill">
-                                <option value="outline">Outline</option>
-                                <option value="filled">Filled</option>
-                                <option value="duotone">Duotone</option>
-                            </select>
-                        </label>
-                    </div>
                 </section>
 
-                <section class="editor-card">
+                <section class="editor-card editor-card--progressive" data-progress-step="3">
                     <div class="editor-card__head">
                         <span class="step-badge">3</span>
                         <div>
+                            <div class="step-progress-caption">Шаг 3 из 7</div>
                             <h2>Генерируемые ассеты</h2>
                             <p>Настройте параметры для иконок, паттернов и иллюстраций</p>
                         </div>
                     </div>
                     <div class="asset-tabs" role="tablist" aria-label="Тип ассетов">
-                        <button type="button" class="asset-tab asset-tab--active">Иконки</button>
-                        <button type="button" class="asset-tab">Паттерны</button>
-                        <button type="button" class="asset-tab">Иллюстрации</button>
+                        <button type="button" class="asset-tab asset-tab--active" role="tab" id="asset-tab-icons" data-asset-tab="icons" aria-selected="true" aria-controls="asset-panel-icons">Иконки</button>
+                        <button type="button" class="asset-tab" role="tab" id="asset-tab-patterns" data-asset-tab="patterns" aria-selected="false" aria-controls="asset-panel-patterns">Паттерны</button>
+                        <button type="button" class="asset-tab" role="tab" id="asset-tab-illustrations" data-asset-tab="illustrations" aria-selected="false" aria-controls="asset-panel-illustrations">Иллюстрации</button>
                     </div>
 
-                    <div class="editor-list-field">
-                        <span class="editor-field-title">Темы генерации</span>
-                        <div id="prompts.icons" class="chip-list"></div>
-                        <div class="chip-add-row">
-                            <input type="text" id="icons-input" placeholder="camera, chat..." class="editor-grow-input" />
-                            <button type="button" class="small-action" data-add="prompts.icons">Добавить</button>
+                    <div id="asset-panel-icons" class="asset-panel asset-panel--active" role="tabpanel" aria-labelledby="asset-tab-icons">
+                        <div class="editor-list-field">
+                            <span class="editor-field-title">Темы генерации</span>
+                            <div id="chip-list-icons" class="chip-list" role="list"></div>
+                            <div class="chip-add-row">
+                                <input type="text" id="icons-input" placeholder="camera, chat..." class="editor-grow-input" autocomplete="off" />
+                                <button type="button" class="small-action" data-chip-add="icons">Добавить</button>
+                            </div>
+                        </div>
+                        <div class="editor-grid">
+                            <label class="editor-field">
+                                <span>Stroke Width (px)</span>
+                                <input type="number" min="0" step="0.5" id="icon.strokeWidth" />
+                            </label>
+                            <label class="editor-field">
+                                <span>Corner</span>
+                                <select id="icon.corner">
+                                    <option value="rounded">Rounded</option>
+                                    <option value="square">Square</option>
+                                    <option value="butt">Butt</option>
+                                </select>
+                            </label>
+                            <label class="editor-field">
+                                <span>Fill</span>
+                                <select id="icon.fill">
+                                    <option value="outline">Outline</option>
+                                    <option value="filled">Filled</option>
+                                    <option value="duotone">Duotone</option>
+                                </select>
+                            </label>
+                        </div>
+                        <div class="editor-grid editor-grid--narrow asset-panel-counts">
+                            <label class="editor-field">
+                                <span>Количество иконок</span>
+                                <input type="number" id="gen.icons_count" min="1" max="20" value="8">
+                            </label>
                         </div>
                     </div>
 
-                    <div class="editor-grid editor-grid--narrow">
-                        <label class="editor-field">
-                            <span>Количество иконок</span>
-                            <input type="number" id="gen.icons_count" min="1" max="20" value="8">
-                        </label>
-                        <label class="editor-field">
-                            <span>Количество паттернов</span>
-                            <input type="number" id="gen.patterns_count" min="1" max="20" value="4" />
-                        </label>
-                        <label class="editor-field">
-                            <span>Количество иллюстраций</span>
-                            <input type="number" id="gen.illustrations_count" min="1" max="20" value="4" />
-                        </label>
+                    <div id="asset-panel-patterns" class="asset-panel" role="tabpanel" aria-labelledby="asset-tab-patterns" hidden>
+                        <div class="editor-list-field">
+                            <span class="editor-field-title">Темы генерации</span>
+                            <div id="chip-list-patterns" class="chip-list" role="list"></div>
+                            <div class="chip-add-row">
+                                <input type="text" id="patterns-input" placeholder="minimal wave..." class="editor-grow-input" autocomplete="off" />
+                                <button type="button" class="small-action" data-chip-add="patterns">Добавить</button>
+                            </div>
+                        </div>
+                        <div class="editor-grid editor-grid--narrow asset-panel-counts">
+                            <label class="editor-field">
+                                <span>Количество паттернов</span>
+                                <input type="number" id="gen.patterns_count" min="1" max="20" value="4" />
+                            </label>
+                        </div>
+                    </div>
+
+                    <div id="asset-panel-illustrations" class="asset-panel" role="tabpanel" aria-labelledby="asset-tab-illustrations" hidden>
+                        <div class="editor-list-field">
+                            <span class="editor-field-title">Темы генерации</span>
+                            <div id="chip-list-illustrations" class="chip-list" role="list"></div>
+                            <div class="chip-add-row">
+                                <input type="text" id="illustrations-input" placeholder="friendly mascot for..." class="editor-grow-input" autocomplete="off" />
+                                <button type="button" class="small-action" data-chip-add="illustrations">Добавить</button>
+                            </div>
+                        </div>
+                        <div class="illustration-format-row">
+                            <label class="illustration-format-check">
+                                <input type="checkbox" id="illustration.vector" />
+                                <span>Вектор</span>
+                            </label>
+                            <label class="illustration-format-check">
+                                <input type="checkbox" id="illustration.raster" />
+                                <span>Растр</span>
+                            </label>
+                        </div>
+                        <div class="editor-grid editor-grid--narrow asset-panel-counts">
+                            <label class="editor-field">
+                                <span>Количество иллюстраций</span>
+                                <input type="number" id="gen.illustrations_count" min="1" max="20" value="4" />
+                            </label>
+                        </div>
                     </div>
                 </section>
 
-                <section class="editor-card">
+                <section class="editor-card editor-card--progressive editor-card--collapsible" data-progress-step="4" data-collapsed="true">
                     <div class="editor-card__head">
                         <span class="step-badge">4</span>
                         <div>
+                            <div class="step-progress-caption">Шаг 4 из 7</div>
                             <h2>Референсы стиля</h2>
                             <p>Загружайте изображения, которые отражают желаемую эстетику вашего бренда.</p>
                         </div>
                     </div>
-                    <div class="refs-toolbar">
-                        <label class="btn btn-primary btn-upload">
-                            <input id="upload-refs" type="file" multiple accept=".png,.jpg,.jpeg,.webp,.gif,.bmp" hidden />
-                            Загрузить изображения
-                        </label>
+                    <div class="editor-card__body editor-card__body--refs" hidden>
+                        <div class="refs-toolbar">
+                            <label class="btn btn-primary btn-upload">
+                                <input id="upload-refs" type="file" multiple accept=".png,.jpg,.jpeg,.webp,.gif,.bmp" hidden />
+                                Загрузить изображения
+                            </label>
+                        </div>
+                        <div id="refs-list" class="refs-grid"></div>
                     </div>
-                    <div id="refs-list" class="refs-grid"></div>
                 </section>
 
-                <section class="editor-card">
+                <section class="editor-card editor-card--progressive" data-progress-step="5">
                     <div class="editor-card__head">
                         <span class="step-badge">5</span>
                         <div>
+                            <div class="step-progress-caption">Шаг 5 из 7</div>
                             <h2>Параметры генерации</h2>
                             <p>Финальные настройки перед запуском генерации бренд-комплекта</p>
                         </div>
@@ -240,10 +301,11 @@
                     </div>
                 </section>
 
-                <section class="editor-card">
+                <section class="editor-card editor-card--progressive" data-progress-step="6">
                     <div class="editor-card__head">
                         <span class="step-badge">6</span>
                         <div>
+                            <div class="step-progress-caption">Шаг 6 из 7</div>
                             <h2>Экспорт в Figma</h2>
                             <p>Сгенерируйте JSON-файл для Figma-плагина с метаданными всех ассетов</p>
                         </div>
@@ -265,7 +327,8 @@
                     </div>
                 </section>
 
-                <section class="editor-card editor-card--cta">
+                <section class="editor-card editor-card--cta editor-card--progressive" data-progress-step="7">
+                    <div class="step-progress-caption step-progress-caption--center">Шаг 7 из 7</div>
                     <div class="cta-icon">✧</div>
                     <h2>Готово к генерации?</h2>
                     <p>Все параметры настроены. Нажмите кнопку ниже, чтобы запустить генерацию бренд-комплекта.</p>

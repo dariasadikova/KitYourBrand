@@ -1,41 +1,25 @@
 {% extends 'base.html' %}
 
-{% block title %}KitYourBrand — мои проекты{% endblock %}
+{% block title %}KYBBY — мои проекты{% endblock %}
+
+{% block body_class %}page-dashboard{% endblock %}
 
 {% block content %}
-<div class="dashboard-shell">
-    <aside class="dashboard-sidebar">
-        <a href="/dashboard" class="dashboard-brand" aria-label="KitYourBrand dashboard">
-            <span class="brand-mark__dot"></span>
-            <span class="brand-mark__text">KITYOURBRAND</span>
-        </a>
-
-        <nav class="dashboard-nav" aria-label="Основная навигация">
-            <a href="/dashboard" class="dashboard-nav__item dashboard-nav__item--active">
-                <span class="dashboard-nav__icon">▣</span>
-                <span>Мои проекты</span>
+<div class="dashboard-page">
+    <header class="dashboard-page-header">
+        <div class="dashboard-page-header__brand">
+            <a href="/dashboard" class="dashboard-brand dashboard-brand--header" aria-label="KYBBY dashboard">
+                <img class="brand-mark__logo" src="{{ url_for('static', path='img/kybby-whale.png') }}" alt="KYBBY" />
+                <span class="brand-mark__text">KYBBY</span>
             </a>
-            <a href="/profile" class="dashboard-nav__item">
-                <span class="dashboard-nav__icon">◌</span>
-                <span>Профиль</span>
-            </a>
-            <a href="#" class="dashboard-nav__item">
-                <span class="dashboard-nav__icon">⚙</span>
-                <span>Настройки</span>
-            </a>
-            <a href="/logout" class="dashboard-nav__item">
-                <span class="dashboard-nav__icon">⇥</span>
-                <span>Выход</span>
-            </a>
-        </nav>
-    </aside>
-
-    <main class="dashboard-main">
-        <div class="dashboard-topbar">
-            <div class="dashboard-topbar__spacer"></div>
+        </div>
+        <div class="dashboard-page-header__actions">
             <div class="dashboard-userbar">
                 <button type="button" class="dashboard-icon-btn" aria-label="Уведомления">
-                    <span>◔</span>
+                    <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true">
+                        <path d="M6 8a6 6 0 0 1 12 0c0 7 3 9 3 9H3s3-2 3-9" />
+                        <path d="M10.3 21a1.94 1.94 0 0 0 3.4 0" />
+                    </svg>
                     <span class="dashboard-badge"></span>
                 </button>
                 <div class="dashboard-userpill">
@@ -44,19 +28,67 @@
                 </div>
             </div>
         </div>
+    </header>
 
+<div class="dashboard-shell">
+    <aside class="dashboard-sidebar">
+        <nav class="dashboard-nav" aria-label="Основная навигация">
+            <a href="/dashboard" class="dashboard-nav__item dashboard-nav__item--active">
+                <span class="dashboard-nav__icon" aria-hidden="true">
+                    <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.2" stroke-linecap="round" stroke-linejoin="round">
+                        <path d="M3 7a2 2 0 0 1 2-2h4l2 2h8a2 2 0 0 1 2 2v8a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2Z"/>
+                    </svg>
+                </span>
+                <span>Мои проекты</span>
+            </a>
+            <a href="/profile" class="dashboard-nav__item">
+                <span class="dashboard-nav__icon" aria-hidden="true">
+                    <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.2" stroke-linecap="round" stroke-linejoin="round">
+                        <circle cx="12" cy="8" r="4"/>
+                        <path d="M4 20a8 8 0 0 1 16 0"/>
+                    </svg>
+                </span>
+                <span>Профиль</span>
+            </a>
+            <a href="#" class="dashboard-nav__item">
+                <span class="dashboard-nav__icon" aria-hidden="true">
+                    <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.2" stroke-linecap="round" stroke-linejoin="round">
+                        <circle cx="12" cy="12" r="3"/>
+                        <path d="M19.4 15a1.7 1.7 0 0 0 .3 1.9l.1.1a2 2 0 0 1 0 2.8 2 2 0 0 1-2.8 0l-.1-.1a1.7 1.7 0 0 0-1.9-.3 1.7 1.7 0 0 0-1 1.6V21a2 2 0 1 1-4 0v-.2a1.7 1.7 0 0 0-1-1.6 1.7 1.7 0 0 0-1.9.3l-.1.1a2 2 0 1 1-2.8-2.8l.1-.1a1.7 1.7 0 0 0 .3-1.9 1.7 1.7 0 0 0-1.6-1H3a2 2 0 1 1 0-4h.2a1.7 1.7 0 0 0 1.6-1 1.7 1.7 0 0 0-.3-1.9l-.1-.1a2 2 0 1 1 2.8-2.8l.1.1a1.7 1.7 0 0 0 1.9.3H9a1.7 1.7 0 0 0 1-1.6V3a2 2 0 1 1 4 0v.2a1.7 1.7 0 0 0 1 1.6h.1a1.7 1.7 0 0 0 1.9-.3l.1-.1a2 2 0 1 1 2.8 2.8l-.1.1a1.7 1.7 0 0 0-.3 1.9v.1a1.7 1.7 0 0 0 1.6 1H21a2 2 0 1 1 0 4h-.2a1.7 1.7 0 0 0-1.6 1Z"/>
+                    </svg>
+                </span>
+                <span>Настройки</span>
+            </a>
+            <a href="/logout" class="dashboard-nav__item">
+                <span class="dashboard-nav__icon" aria-hidden="true">
+                    <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.2" stroke-linecap="round" stroke-linejoin="round">
+                        <path d="M9 4H5a2 2 0 0 0-2 2v12a2 2 0 0 0 2 2h4"/>
+                        <path d="M16 17l5-5-5-5"/>
+                        <path d="M21 12H9"/>
+                    </svg>
+                </span>
+                <span>Выход</span>
+            </a>
+        </nav>
+    </aside>
+
+    <main class="dashboard-main">
         <section class="dashboard-content">
             <div class="dashboard-head">
                 <h1>Мои проекты</h1>
-                <form action="/projects/create" method="post">
-                    <input type="hidden" name="name" value="Новый проект" />
-                    <button type="submit" class="btn btn-primary dashboard-create-btn">Создать проект</button>
-                </form>
+                <div class="dashboard-head__actions">
+                    <a href="#" class="btn btn-outline dashboard-history-btn">Посмотреть историю генераций</a>
+                    <form action="/projects/create" method="post" class="dashboard-create-form">
+                        <input type="hidden" name="name" value="Новый проект" />
+                        <button type="submit" class="btn btn-primary dashboard-create-btn">Создать проект</button>
+                    </form>
+                </div>
             </div>
 
-            {% if projects %}
+            {% set demo_projects = projects | selectattr('name', 'equalto', 'Demo Brand') | list %}
+            {% if demo_projects %}
             <div class="project-grid">
-                {% for project in projects %}
+                {% for project in demo_projects %}
                 <a href="/projects/{{ project.slug }}" class="project-card">
                     <div class="project-card__icon">
                         <span>✦</span>
@@ -83,5 +115,16 @@
             {% endif %}
         </section>
     </main>
+</div>
+
+    <footer class="dashboard-site-footer">
+        <div class="dashboard-site-footer__inner">
+            <div class="brand-mark brand-mark--dashboard-footer">
+                <img class="brand-mark__logo" src="{{ url_for('static', path='img/kybby-whale.png') }}" alt="KYBBY" />
+                <span class="brand-mark__text">KYBBY</span>
+            </div>
+            <p>© 2026 KYBBY. Генерация бренд-комплектов с помощью ИИ.</p>
+        </div>
+    </footer>
 </div>
 {% endblock %}

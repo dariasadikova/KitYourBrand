@@ -81,6 +81,210 @@ document.addEventListener('DOMContentLoaded', () => {
     };
   }
 
+  const promptChips = { icons: [], patterns: [], illustrations: [] };
+
+  function normalizePromptArray(raw) {
+    if (Array.isArray(raw)) {
+      return raw.map((x) => String(x).trim()).filter(Boolean);
+    }
+    if (typeof raw === 'string') {
+      return raw.split(/[,;\n]+/).map((s) => s.trim()).filter(Boolean);
+    }
+    return [];
+  }
+
+  function renderChipList(type) {
+    const listId =
+      type === 'icons' ? 'chip-list-icons'
+      : type === 'patterns' ? 'chip-list-patterns'
+      : 'chip-list-illustrations';
+    const el = byId(listId);
+    if (!el) return;
+
+    const items = promptChips[type] || [];
+    el.innerHTML = items
+      .map(
+        (text, idx) => `
+      <span class="chip" role="listitem">
+        <span class="chip__text">${escapeHtml(text)}</span>
+        <button type="button" class="chip__remove" data-chip-type="${type}" data-chip-index="${idx}" aria-label="Удалить">✕</button>
+      </span>`,
+      )
+      .join('');
+
+    el.querySelectorAll('.chip__remove').forEach((btn) => {
+      btn.addEventListener('click', () => {
+        const t = btn.getAttribute('data-chip-type');
+        const i = parseInt(btn.getAttribute('data-chip-index'), 10);
+        if (!t || Number.isNaN(i)) return;
+        markStepTouched(3);
+        promptChips[t].splice(i, 1);
+        renderChipList(t);
+        refreshStepProgression();
+      });
+    });
+  }
+
+  function addChipsFromInput(type, inputId) {
+    const input = byId(inputId);
+    const raw = input?.value || '';
+    const parts = raw.split(/[,;\n]+/).map((s) => s.trim()).filter(Boolean);
+    if (!parts.length) return;
+    markStepTouched(3);
+    promptChips[type].push(...parts);
+    input.value = '';
+    renderChipList(type);
+    refreshStepProgression();
+  }
+
+  document.querySelectorAll('[data-chip-add]').forEach((btn) => {
+    btn.addEventListener('click', () => {
+      const type = btn.getAttribute('data-chip-add');
+      if (type === 'icons') addChipsFromInput('icons', 'icons-input');
+      else if (type === 'patterns') addChipsFromInput('patterns', 'patterns-input');
+      else if (type === 'illustrations') addChipsFromInput('illustrations', 'illustrations-input');
+    });
+  });
+
+  [['icons-input', 'icons'], ['patterns-input', 'patterns'], ['illustrations-input', 'illustrations']].forEach(([inputId, type]) => {
+    byId(inputId)?.addEventListener('keydown', (e) => {
+      if (e.key !== 'Enter') return;
+      e.preventDefault();
+      addChipsFromInput(type, inputId);
+    });
+  });
+
+  function initAssetTabs() {
+    const tablist = document.querySelector('#project-editor-form .asset-tabs');
+    const panels = {
+      icons: byId('asset-panel-icons'),
+      patterns: byId('asset-panel-patterns'),
+      illustrations: byId('asset-panel-illustrations'),
+    };
+
+    function setPanelHidden(panel, hidden) {
+      if (!panel) return;
+      if (hidden) {
+        panel.setAttribute('hidden', '');
+      } else {
+        panel.removeAttribute('hidden');
+      }
+    }
+
+    function activate(tabName) {
+      if (tablist) {
+        tablist.querySelectorAll('[data-asset-tab]').forEach((tab) => {
+          const name = tab.getAttribute('data-asset-tab');
+          const active = name === tabName;
+          tab.classList.toggle('asset-tab--active', active);
+          tab.setAttribute('aria-selected', active ? 'true' : 'false');
+        });
+      } else {
+        document.querySelectorAll('#project-editor-form [data-asset-tab]').forEach((tab) => {
+          const name = tab.getAttribute('data-asset-tab');
+          const active = name === tabName;
+          tab.classList.toggle('asset-tab--active', active);
+          tab.setAttribute('aria-selected', active ? 'true' : 'false');
+        });
+      }
+      Object.entries(panels).forEach(([name, panel]) => {
+        const active = name === tabName;
+        setPanelHidden(panel, !active);
+        panel?.classList.toggle('asset-panel--active', active);
+      });
+    }
+
+    const tabClickRoot = tablist || byId('project-editor-form');
+    tabClickRoot?.addEventListener('click', (e) => {
+      const tab = e.target.closest('[data-asset-tab]');
+      if (!tab || !tabClickRoot.contains(tab)) return;
+      e.preventDefault();
+      const name = tab.getAttribute('data-asset-tab');
+      if (name) activate(name);
+    });
+
+    activate('icons');
+  }
+
+  function getProgressCards() {
+    const cards = {};
+    document.querySelectorAll('[data-progress-step]').forEach((el) => {
+      cards[el.getAttribute('data-progress-step')] = el;
+    });
+    return cards;
+  }
+
+  function setStepVisible(card, visible) {
+    if (!card) return;
+    card.classList.toggle('is-hidden-step', !visible);
+  }
+
+  const stepTouched = { 1: false, 2: false, 3: false, 4: false, 5: false, 6: false };
+
+  function markStepTouched(step) {
+    const key = Number(step);
+    if (!Number.isFinite(key) || key < 1 || key > 6) return;
+    if (!stepTouched[key]) stepTouched[key] = true;
+  }
+
+  function isStep1Complete() {
+    return stepTouched[1] && !!byId('name')?.value.trim();
+  }
+
+  function isStep2Complete() {
+    const activeCount = PALETTE_KEYS.filter((key) => byId(`palette.${key}_enabled`)?.checked).length;
+    return stepTouched[2] && activeCount >= MIN_ACTIVE_PALETTE && activeCount <= MAX_ACTIVE_PALETTE;
+  }
+
+  function isStep3Complete() {
+    return stepTouched[3] && promptChips.icons.length > 0 && promptChips.patterns.length > 0 && promptChips.illustrations.length > 0;
+  }
+
+  function setupRefsCollapsible(card) {
+    if (!card || card.dataset.refsInit === '1') return;
+    const head = card.querySelector('.editor-card__head');
+    const body = card.querySelector('.editor-card__body--refs');
+    if (!head || !body) return;
+    card.dataset.refsInit = '1';
+    head.addEventListener('click', () => {
+      markStepTouched(4);
+      const collapsed = card.dataset.collapsed !== 'false';
+      card.dataset.collapsed = collapsed ? 'false' : 'true';
+      body.toggleAttribute('hidden', !collapsed);
+      refreshStepProgression();
+    });
+  }
+
+  function refreshStepProgression() {
+    const cards = getProgressCards();
+    const step1 = isStep1Complete();
+    const step2 = isStep2Complete();
+    const step3 = isStep3Complete();
+    const step4 = stepTouched[4];
+    const step5 = stepTouched[5];
+    const step6 = stepTouched[6];
+
+    setStepVisible(cards['1'], true);
+    setStepVisible(cards['2'], step1);
+    setStepVisible(cards['3'], step1 && step2);
+    setStepVisible(cards['4'], step1 && step2 && step3);
+    setStepVisible(cards['5'], step1 && step2 && step3 && step4);
+    setStepVisible(cards['6'], step1 && step2 && step3 && step4 && step5);
+    setStepVisible(cards['7'], step1 && step2 && step3 && step4 && step5 && step6);
+
+    const refsCard = cards['4'];
+    const refsBody = refsCard?.querySelector('.editor-card__body--refs');
+    setupRefsCollapsible(refsCard);
+    if (refsCard && refsBody) {
+      if (!(step1 && step2 && step3)) {
+        refsCard.dataset.collapsed = 'true';
+        refsBody.setAttribute('hidden', '');
+      } else if (refsCard.dataset.collapsed !== 'false') {
+        refsBody.setAttribute('hidden', '');
+      }
+    }
+  }
+
   function updateGenerationSummary() {
     const providerCount = PROVIDER_NAMES.length;
     const counts = getRequestedCounts();
@@ -165,9 +369,12 @@ document.addEventListener('DOMContentLoaded', () => {
     byId('texture.scale') && (byId('texture.scale').value = deepGet(tokens, 'texture.scale', ''));
     byId('illustration.style') && (byId('illustration.style').value = deepGet(tokens, 'illustration.style', ''));
     byId('illustration.background') && (byId('illustration.background').value = deepGet(tokens, 'illustration.background', ''));
-    byId('prompts.icons') && (byId('prompts.icons').value = deepGet(tokens, 'prompts.icons', ''));
-    byId('prompts.patterns') && (byId('prompts.patterns').value = deepGet(tokens, 'prompts.patterns', ''));
-    byId('prompts.illustrations') && (byId('prompts.illustrations').value = deepGet(tokens, 'prompts.illustrations', ''));
+    promptChips.icons = normalizePromptArray(deepGet(tokens, 'prompts.icons', []));
+    promptChips.patterns = normalizePromptArray(deepGet(tokens, 'prompts.patterns', []));
+    promptChips.illustrations = normalizePromptArray(deepGet(tokens, 'prompts.illustrations', []));
+    renderChipList('icons');
+    renderChipList('patterns');
+    renderChipList('illustrations');
 
     const paletteSlots = getStoredPaletteSlots(tokens);
     const activePaletteKeys = getActivePaletteKeysFromTokens(tokens);
@@ -200,6 +407,13 @@ document.addEventListener('DOMContentLoaded', () => {
     if (byId('gen.patterns_count')) byId('gen.patterns_count').value = gen.patterns_count ?? 4;
     if (byId('gen.illustrations_count')) byId('gen.illustrations_count').value = gen.illustrations_count ?? 4;
     if (byId('build_style')) byId('build_style').checked = !!gen.build_style;
+
+    if (byId('illustration.vector')) {
+      byId('illustration.vector').checked = !!deepGet(tokens, 'illustration.vector', false);
+    }
+    if (byId('illustration.raster')) {
+      byId('illustration.raster').checked = !!deepGet(tokens, 'illustration.raster', true);
+    }
 
     updateGenerationSummary();
   }
@@ -248,10 +462,12 @@ document.addEventListener('DOMContentLoaded', () => {
     clone.texture.scale = byId('texture.scale')?.value || '';
     clone.illustration.style = byId('illustration.style')?.value || '';
     clone.illustration.background = byId('illustration.background')?.value || '';
+    clone.illustration.vector = !!byId('illustration.vector')?.checked;
+    clone.illustration.raster = !!byId('illustration.raster')?.checked;
 
-    clone.prompts.icons = byId('prompts.icons')?.value || '';
-    clone.prompts.patterns = byId('prompts.patterns')?.value || '';
-    clone.prompts.illustrations = byId('prompts.illustrations')?.value || '';
+    clone.prompts.icons = [...promptChips.icons];
+    clone.prompts.patterns = [...promptChips.patterns];
+    clone.prompts.illustrations = [...promptChips.illustrations];
 
     clone.generation.icons_count = syncCountInput('gen.icons_count', 8);
     clone.generation.patterns_count = syncCountInput('gen.patterns_count', 4);
@@ -465,6 +681,8 @@ document.addEventListener('DOMContentLoaded', () => {
   }
 
   hydrateForm();
+  initAssetTabs();
+  refreshStepProgression();
   updateFigmaExportUi({ brand_id: getCurrentBrandId() });
   refreshRefs();
 
@@ -886,6 +1104,25 @@ document.addEventListener('DOMContentLoaded', () => {
   ].forEach((el) => {
     el?.addEventListener('input', updateGenerationSummary);
     el?.addEventListener('change', updateGenerationSummary);
+  });
+  const editorForm = byId('project-editor-form');
+  editorForm?.addEventListener('input', (event) => {
+    const step = event.target?.closest?.('[data-progress-step]')?.getAttribute?.('data-progress-step');
+    if (step) markStepTouched(step);
+    refreshStepProgression();
+  });
+  editorForm?.addEventListener('change', (event) => {
+    const step = event.target?.closest?.('[data-progress-step]')?.getAttribute?.('data-progress-step');
+    if (step) markStepTouched(step);
+    refreshStepProgression();
+  });
+  byId('gen-figma')?.addEventListener('click', () => {
+    markStepTouched(6);
+    refreshStepProgression();
+  });
+  byId('figma-link')?.addEventListener('click', () => {
+    markStepTouched(6);
+    refreshStepProgression();
   });
   updateGenerationSummary();
 

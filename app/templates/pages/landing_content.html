@@ -14,7 +14,6 @@
             <p class="hero-subtitle">{{ hero_subtitle }}</p>
             <a href="#features" class="btn btn-primary btn-hero btn-hero--demo">
                 Посмотреть демо
-                <span class="btn-hero__arrow" aria-hidden="true">→</span>
             </a>
         </div>
 
@@ -46,14 +45,9 @@
 <footer class="site-footer">
     <div class="container footer-inner">
         <div class="brand-mark brand-mark--footer">
-            <span class="brand-mark__dot" aria-hidden="true">
-                <svg class="brand-mark__sparkle" xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24" width="15" height="15" fill="none" stroke="currentColor" stroke-width="2.2" stroke-linecap="round" stroke-linejoin="round">
-                    <path d="M12 3v3M12 18v3M3 12h3M18 12h3M5.6 5.6l2.1 2.1M16.3 16.3l2.1 2.1M5.6 18.4l2.1-2.1M16.3 7.7l2.1-2.1" />
-                    <circle cx="12" cy="12" r="2.8" fill="currentColor" stroke="none" />
-                </svg>
-            </span>
-            <span class="brand-mark__text">KITYOURBRAND</span>
+            <img class="brand-mark__logo brand-mark__logo--footer" src="{{ url_for('static', path='img/kybby-whale.png') }}" alt="KYBBY" />
+            <span class="brand-mark__text">KYBBY</span>
         </div>
-        <p>© 2026 KITYOURBRAND. Генерация бренд-комплектов с помощью ИИ.</p>
+        <p>© 2026 KYBBY. Генерация бренд-комплектов с помощью ИИ.</p>
     </div>
 </footer>

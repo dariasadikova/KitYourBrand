@@ -138,10 +138,19 @@ def main():
 
     # ILLUSTRATIONS
     ill_prompts = tokens.get('prompts',{}).get('illustrations', [])
-    ill_vector = tokens.get('illustration',{}).get('vector', False)
-    ill_style = 'vector_illustration' if ill_vector else 'digital_illustration'
+    ill_cfg = tokens.get('illustration', {}) or {}
+    ill_vector = bool(ill_cfg.get('vector', False))
+    ill_raster = bool(ill_cfg.get('raster', True))
+    if ill_vector and not ill_raster:
+        ill_style = 'vector_illustration'
+    elif ill_raster and not ill_vector:
+        ill_style = 'digital_illustration'
+    elif ill_vector and ill_raster:
+        ill_style = 'digital_illustration'
+    else:
+        ill_style = 'digital_illustration'
     n_ill = min(len(ill_prompts), args.illustrations)
-    info('--- Иллюстрации: до %s (из %s), vector=%s ill_style=%s ---', n_ill, len(ill_prompts), ill_vector, ill_style)
+    info('--- Иллюстрации: до %s (из %s), vector=%s raster=%s ill_style=%s ---', n_ill, len(ill_prompts), ill_vector, ill_raster, ill_style)
     for i, base in enumerate(ill_prompts[:args.illustrations], 1):
         info('Иллюстрация %s/%s: %s', i, n_ill, base)
         prompt = build_prompt(base, tokens, 'illustration')
