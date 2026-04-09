@@ -538,11 +538,11 @@ img {
 
 .landing-shell .features-section {
     background: #2E3439;
-    padding: 96px 0 72px;
+    padding: 100px 0;
 }
 
 .landing-shell .section-block {
-    padding-top: 96px;
+    padding-top: 64px;
 }
 
 .landing-shell .features-section .section-head {
