@@ -48,6 +48,7 @@ class AuthService:
                     email TEXT NOT NULL UNIQUE,
                     password_hash TEXT NOT NULL,
                     avatar_path TEXT,
+                    had_projects INTEGER NOT NULL DEFAULT 0,
                     auth_provider TEXT NOT NULL DEFAULT 'local',
                     is_active INTEGER NOT NULL DEFAULT 1,
                     created_at TEXT NOT NULL
@@ -58,6 +59,8 @@ class AuthService:
             col_names = {str(col["name"]) for col in cols}
             if "avatar_path" not in col_names:
                 conn.execute("ALTER TABLE users ADD COLUMN avatar_path TEXT")
+            if "had_projects" not in col_names:
+                conn.execute("ALTER TABLE users ADD COLUMN had_projects INTEGER NOT NULL DEFAULT 0")
             conn.commit()
 
     def email_exists(self, email: str) -> bool:
@@ -71,14 +74,14 @@ class AuthService:
     def get_user_by_email(self, email: str) -> Optional[sqlite3.Row]:
         with self._connect() as conn:
             return conn.execute(
-                "SELECT id, name, email, password_hash, is_active, avatar_path FROM users WHERE lower(email) = lower(?) LIMIT 1",
+                "SELECT id, name, email, password_hash, is_active, avatar_path, had_projects FROM users WHERE lower(email) = lower(?) LIMIT 1",
                 (email.strip(),),
             ).fetchone()
 
     def get_user_by_id(self, user_id: int) -> Optional[sqlite3.Row]:
         with self._connect() as conn:
             return conn.execute(
-                "SELECT id, name, email, password_hash, is_active, avatar_path FROM users WHERE id = ? LIMIT 1",
+                "SELECT id, name, email, password_hash, is_active, avatar_path, had_projects FROM users WHERE id = ? LIMIT 1",
                 (user_id,),
             ).fetchone()
 

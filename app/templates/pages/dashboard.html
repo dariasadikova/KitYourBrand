@@ -7,7 +7,9 @@
     <div class="dashboard-head">
         <h1>Мои проекты</h1>
         <div class="dashboard-head__actions">
+            {% if show_generation_history %}
             <a href="#" class="btn btn-outline dashboard-history-btn">Посмотреть историю генераций</a>
+            {% endif %}
             <form action="/projects/create" method="post" class="dashboard-create-form">
                 <input type="hidden" name="name" value="Новый проект" />
                 <button type="submit" class="btn btn-primary dashboard-create-btn">Создать проект</button>
@@ -43,12 +45,7 @@
     </div>
     {% else %}
     <div class="dashboard-empty">
-        <h2>У вас пока нет проектов</h2>
-        <p>Создайте первый проект и сразу перейдите к редактированию tokens.json.</p>
-        <form action="/projects/create" method="post">
-            <input type="hidden" name="name" value="Demo Brand" />
-            <button type="submit" class="btn btn-primary">Создать первый проект</button>
-        </form>
+        <p>У вас пока нет проектов. Создайте первый проект и сразу перейдите к его редактированию.</p>
     </div>
     {% endif %}
 </section>

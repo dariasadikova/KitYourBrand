@@ -1506,17 +1506,16 @@ img {
 
 
 .dashboard-empty {
-    padding: 48px;
-    border-radius: 28px;
-    background: #43484d;
-    border: 1px solid rgba(255, 255, 255, 0.08);
+    padding: 16px 0 0;
+    border: 0;
+    background: transparent;
 }
 .dashboard-empty h2 {
     margin: 0 0 12px;
-    font-size: clamp(2rem, 3vw, 3rem);
-    line-height: 1.08;
-    letter-spacing: -0.04em;
-    font-weight: 700;
+    font-size: clamp(1.5rem, 2.4vw, 2.2rem);
+    line-height: 1.2;
+    letter-spacing: -0.02em;
+    font-weight: 600;
 }
 .dashboard-empty p { margin: 0 0 22px; color: var(--muted); }
 .dashboard-sidebar__footer {
@@ -1553,7 +1552,7 @@ img {
     box-shadow: 0 22px 50px rgba(0, 0, 0, 0.24);
     display: flex;
     flex-direction: column;
-    gap: 20px;
+    gap: 28px;
 }
 .editor-card--progressive {
     transition: opacity 0.35s ease, transform 0.35s ease, max-height 0.35s ease, margin 0.35s ease, padding 0.35s ease, border-color 0.35s ease;
@@ -1644,7 +1643,7 @@ img {
     line-height: 1.55;
 }
 .editor-subtitle { margin: 0; font-size: 1.3rem; }
-.palette-grid { display: grid; grid-template-columns: repeat(3, minmax(0, 1fr)); gap: 16px; }
+.palette-grid { display: grid; grid-template-columns: repeat(3, minmax(0, 1fr)); gap: 20px; }
 .palette-item { display: flex; flex-direction: column; gap: 10px; }
 .palette-swatch {
     display: block;

@@ -86,10 +86,14 @@ async def dashboard_page(request: Request) -> HTMLResponse:
 
     user_id = int(request.session['user_id'])
     projects = project_service.list_projects(user_id)
+    user_row = auth_service.get_user_by_id(user_id)
+    had_projects = bool(int(user_row['had_projects'])) if user_row and 'had_projects' in user_row.keys() else False
+    show_generation_history = had_projects or bool(projects)
     user_name = request.session.get('user_name') or ''
     context = {
         'request': request,
         'projects': projects,
+        'show_generation_history': show_generation_history,
         'user_name': user_name,
         'user_email': request.session.get('user_email') or '',
         'user_initial': (user_name[:1] or '?').upper(),
@@ -279,11 +283,5 @@ async def register_submit(
     if not result.ok:
         context['form_error'] = result.error
         return templates.TemplateResponse(request, 'pages/register.html', context, status_code=status.HTTP_400_BAD_REQUEST)
-
-    new_user = auth_service.get_user_by_email(email.strip().lower())
-    if new_user is not None:
-        existing = project_service.list_projects(int(new_user['id']))
-        if not existing:
-            project_service.create_project(int(new_user['id']), 'Demo Brand')
 
     return RedirectResponse(url='/login?registered=1', status_code=status.HTTP_303_SEE_OTHER)

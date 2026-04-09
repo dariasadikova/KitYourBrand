@@ -142,6 +142,10 @@ class ProjectService:
                 """,
                 (user_id, slug, project_name, tokens['brand_id'], now, now),
             )
+            conn.execute(
+                "UPDATE users SET had_projects = 1 WHERE id = ?",
+                (user_id,),
+            )
             project_id = int(cur.lastrowid)
             conn.commit()
 
