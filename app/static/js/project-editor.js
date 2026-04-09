@@ -53,8 +53,11 @@ function showToast(message, isError = false) {
 }
 
 document.addEventListener('DOMContentLoaded', () => {
+  const projectShell = document.querySelector('.project-shell');
   const tokens = parseJsonScript('tokens-data', {});
-  const projectSlug = byId('project-slug')?.textContent?.trim() || document.querySelector('.project-shell')?.dataset?.projectSlug || '';
+  const styleIdPlaceholderLocked = 'Будет заполнен после генерации стиля';
+  const projectSlug = byId('project-slug')?.textContent?.trim() || projectShell?.dataset?.projectSlug || '';
+  const isNewProjectFlow = projectShell?.dataset?.newProjectFlow === '1';
   console.log('[refs] projectSlug =', projectSlug);
   const refList = byId('refs-list');
   const statusLabel = byId('generate-status');
@@ -62,6 +65,7 @@ document.addEventListener('DOMContentLoaded', () => {
   const figmaDownloadLink = byId('figma-link');
   const figmaProductionUrlInput = byId('figma-production-url');
   const figmaLocalUrlInput = byId('figma-local-url');
+  let hasGeneratedStyleId = !!String(deepGet(tokens, 'style_id', '')).trim();
 
   const PROVIDER_NAMES = ['recraft', 'seedream', 'flux'];
 
@@ -91,6 +95,13 @@ document.addEventListener('DOMContentLoaded', () => {
       patterns: peekCountInput('gen.patterns_count', 4),
       illustrations: peekCountInput('gen.illustrations_count', 4),
     };
+  }
+
+  function refreshStyleIdInputState() {
+    const styleIdInput = byId('style_id');
+    if (!styleIdInput) return;
+    styleIdInput.disabled = !hasGeneratedStyleId;
+    styleIdInput.placeholder = hasGeneratedStyleId ? '' : styleIdPlaceholderLocked;
   }
 
   const promptChips = { icons: [], patterns: [], illustrations: [] };
@@ -254,6 +265,10 @@ document.addEventListener('DOMContentLoaded', () => {
 
   function refreshStepProgression() {
     const cards = getProgressCards();
+    if (!isNewProjectFlow) {
+      Object.values(cards).forEach((card) => setStepVisible(card, true));
+      return;
+    }
     const step1 = isStep1Complete();
     const step2 = isStep2Complete();
     const step3 = isStep3Complete();
@@ -340,6 +355,8 @@ document.addEventListener('DOMContentLoaded', () => {
     byId('name') && (byId('name').value = deepGet(tokens, 'name', ''));
     byId('brand_id') && (byId('brand_id').value = deepGet(tokens, 'brand_id', ''));
     byId('style_id') && (byId('style_id').value = deepGet(tokens, 'style_id', ''));
+    hasGeneratedStyleId = !!String(deepGet(tokens, 'style_id', '')).trim();
+    refreshStyleIdInputState();
     byId('icon.style') && (byId('icon.style').value = deepGet(tokens, 'icon.style', ''));
     byId('icon.background') && (byId('icon.background').value = deepGet(tokens, 'icon.background', ''));
     byId('icon.stroke') && (byId('icon.stroke').value = deepGet(tokens, 'icon.stroke', ''));
@@ -617,9 +634,16 @@ document.addEventListener('DOMContentLoaded', () => {
       console.log('[refs] normalized refs =', refs);
 
       if (!refs.length) {
+        tokens.references = tokens.references || {};
+        tokens.references.style_images = [];
         refList.innerHTML = '<div class="refs-empty">Референсы пока не загружены</div>';
         return;
       }
+
+      tokens.references = tokens.references || {};
+      tokens.references.style_images = refs
+        .map((ref) => String(ref.path || '').trim())
+        .filter(Boolean);
 
       refList.innerHTML = refs.map((ref) => {
         const safePath = String(ref.path || '').replace(/"/g, '&quot;');
@@ -1231,6 +1255,8 @@ document.addEventListener('DOMContentLoaded', () => {
       const job = await pollGenerationJob(data.job_id, status);
 
       if (job.style_id && byId('style_id')) {
+        hasGeneratedStyleId = true;
+        refreshStyleIdInputState();
         byId('style_id').value = job.style_id;
       }
 

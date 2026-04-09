@@ -133,7 +133,15 @@ async def create_project(request: Request, name: str = Form('Новый прое
         return auth_redirect
     user_id = int(request.session['user_id'])
     project = project_service.create_project(user_id, name)
-    return RedirectResponse(url=f'/projects/{project.slug}', status_code=status.HTTP_303_SEE_OTHER)
+    return RedirectResponse(url=f'/projects/{project.slug}?new=1', status_code=status.HTTP_303_SEE_OTHER)
+
+
+@router.post('/projects/{project_slug}/delete')
+async def delete_project(request: Request, project_slug: str):
+    user_id = require_auth(request)
+    project_or_404(user_id, project_slug)
+    project_service.delete_project(user_id, project_slug)
+    return RedirectResponse(url='/dashboard', status_code=status.HTTP_303_SEE_OTHER)
 
 
 @router.get('/projects/{project_slug}', response_class=HTMLResponse)
@@ -144,9 +152,11 @@ async def project_editor_page(request: Request, project_slug: str) -> HTMLRespon
     user_id = int(request.session['user_id'])
     project = project_or_404(user_id, project_slug)
     tokens = project_service.load_tokens(user_id, project_slug)
+    is_new_project_flow = request.query_params.get('new') == '1'
     context = {
         'request': request,
         'project': project,
+        'is_new_project_flow': is_new_project_flow,
         'tokens_json': json.dumps(tokens, ensure_ascii=False),
         'user_email': request.session.get('user_email') or '',
         'user_initial': ((request.session.get('user_name') or '?')[:1]).upper(),

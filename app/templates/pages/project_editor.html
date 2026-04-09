@@ -4,7 +4,7 @@
 
 {% block dashboard_shell_classes %} project-shell{% endblock %}
 
-{% block dashboard_shell_attrs %} data-project-slug="{{ project.slug }}"{% endblock %}
+{% block dashboard_shell_attrs %} data-project-slug="{{ project.slug }}" data-new-project-flow="{{ 1 if is_new_project_flow else 0 }}"{% endblock %}
 
 {% block dashboard_main_classes %} project-main{% endblock %}
 

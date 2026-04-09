@@ -35,9 +35,9 @@ DEFAULT_TOKENS = {
         "prompt_suffix": "minimal, soft contrast",
     },
     "prompts": {
-        "icons": ["camera", "chat", "settings", "user", "home", "star", "bell", "heart"],
-        "patterns": ["minimal wave dots background", "soft abstract geometry"],
-        "illustrations": ["friendly mascot for a chat app", "hero header abstract shapes"],
+        "icons": [],
+        "patterns": [],
+        "illustrations": [],
     },
     "references": {
         "style_images": [],
@@ -166,6 +166,20 @@ class ProjectService:
         if row is None:
             return None
         return ProjectRecord(**dict(row))
+
+    def delete_project(self, user_id: int, slug: str) -> bool:
+        project = self.get_project(user_id, slug)
+        if project is None:
+            return False
+
+        with self._connect() as conn:
+            conn.execute('DELETE FROM projects WHERE id = ?', (project.id,))
+            conn.commit()
+
+        project_root = self.user_projects_dir(user_id) / slug
+        if project_root.exists():
+            shutil.rmtree(project_root, ignore_errors=True)
+        return True
 
     def ensure_project(self, user_id: int, slug: str) -> ProjectRecord:
         project = self.get_project(user_id, slug)

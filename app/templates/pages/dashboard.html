@@ -15,11 +15,12 @@
         </div>
     </div>
 
-    {% set demo_projects = projects | selectattr('name', 'equalto', 'Demo Brand') | list %}
-    {% if demo_projects %}
+    {% if projects %}
     <div class="project-grid">
-        {% for project in demo_projects %}
-        <a href="/projects/{{ project.slug }}" class="project-card">
+        {% for project in projects %}
+        <article class="project-card">
+            <a href="/projects/{{ project.slug }}/results" class="project-card__main-link"
+                aria-label="Открыть результаты генерации {{ project.name }}"></a>
             <div class="project-card__icon">
                 <span>✦</span>
                 <span>✦</span>
@@ -29,8 +30,15 @@
                 <p>Дата создания:</p>
                 <span>{{ project.created_at[:10] }}</span>
             </div>
-            <div class="project-card__action" aria-hidden="true">✎</div>
-        </a>
+            <div class="project-card__actions">
+                <form action="/projects/{{ project.slug }}/delete" method="post" class="project-card__delete-form"
+                    onsubmit="return confirm('Удалить проект &quot;{{ project.name }}&quot;?');">
+                    <button type="submit" class="project-card__action project-card__action--delete"
+                        aria-label="Удалить проект">🗑</button>
+                </form>
+                <a href="/projects/{{ project.slug }}" class="project-card__action" aria-label="Открыть редактор проекта">✎</a>
+            </div>
+        </article>
         {% endfor %}
     </div>
     {% else %}

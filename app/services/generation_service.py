@@ -83,6 +83,18 @@ class GenerationService:
                 items.append((Path(fn).stem, fn))
         return items
 
+    def clear_brand_outputs(self, brand_id: str) -> None:
+        """Remove previous generation files for this brand only."""
+        if not brand_id:
+            return
+        for provider_root in (self.recraft_out_root, self.seedream_out_root, self.flux_out_root):
+            brand_root = provider_root / brand_id
+            for section in ('icons', 'patterns', 'illustrations'):
+                section_dir = brand_root / section
+                if section_dir.exists():
+                    shutil.rmtree(section_dir, ignore_errors=True)
+                section_dir.mkdir(parents=True, exist_ok=True)
+
     def build_and_save_figma_manifest(
         self,
         user_id: int,
@@ -353,6 +365,8 @@ class GenerationService:
             raise ValueError('Не указан brand_id.')
 
         report(5, 'Загрузка конфигурации проекта')
+        self.clear_brand_outputs(brand_id)
+        report(9, 'Очистка результатов прошлой генерации')
 
         style_id = (payload.get('style_id') or tokens.get('style_id') or '').strip()
         icons_count = int(payload.get('icons_count') or 0)
