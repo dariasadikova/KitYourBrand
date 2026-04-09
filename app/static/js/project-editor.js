@@ -65,8 +65,20 @@ document.addEventListener('DOMContentLoaded', () => {
 
   const PROVIDER_NAMES = ['recraft', 'seedream', 'flux'];
 
+  /** IDs вида gen.icons_count: в querySelector нельзя писать #gen.icons_count (точка = класс). */
+  function resolveGenCountInput(id) {
+    const root = byId('project-editor-form');
+    return root?.querySelector(`[id="${id}"]`) ?? byId(id);
+  }
+
+  function peekCountInput(id, fallback) {
+    const input = resolveGenCountInput(id);
+    if (!input) return fallback;
+    return clampAssetCount(input.value, fallback);
+  }
+
   function syncCountInput(id, fallback) {
-    const input = byId(id);
+    const input = resolveGenCountInput(id);
     if (!input) return fallback;
     const normalized = clampAssetCount(input.value, fallback);
     input.value = String(normalized);
@@ -75,9 +87,9 @@ document.addEventListener('DOMContentLoaded', () => {
 
   function getRequestedCounts() {
     return {
-      icons: syncCountInput('gen.icons_count', 8),
-      patterns: syncCountInput('gen.patterns_count', 4),
-      illustrations: syncCountInput('gen.illustrations_count', 4),
+      icons: peekCountInput('gen.icons_count', 8),
+      patterns: peekCountInput('gen.patterns_count', 4),
+      illustrations: peekCountInput('gen.illustrations_count', 4),
     };
   }
 
@@ -240,21 +252,6 @@ document.addEventListener('DOMContentLoaded', () => {
     return stepTouched[3] && promptChips.icons.length > 0 && promptChips.patterns.length > 0 && promptChips.illustrations.length > 0;
   }
 
-  function setupRefsCollapsible(card) {
-    if (!card || card.dataset.refsInit === '1') return;
-    const head = card.querySelector('.editor-card__head');
-    const body = card.querySelector('.editor-card__body--refs');
-    if (!head || !body) return;
-    card.dataset.refsInit = '1';
-    head.addEventListener('click', () => {
-      markStepTouched(4);
-      const collapsed = card.dataset.collapsed !== 'false';
-      card.dataset.collapsed = collapsed ? 'false' : 'true';
-      body.toggleAttribute('hidden', !collapsed);
-      refreshStepProgression();
-    });
-  }
-
   function refreshStepProgression() {
     const cards = getProgressCards();
     const step1 = isStep1Complete();
@@ -272,35 +269,18 @@ document.addEventListener('DOMContentLoaded', () => {
     setStepVisible(cards['6'], step1 && step2 && step3 && step4 && step5);
     setStepVisible(cards['7'], step1 && step2 && step3 && step4 && step5 && step6);
 
-    const refsCard = cards['4'];
-    const refsBody = refsCard?.querySelector('.editor-card__body--refs');
-    setupRefsCollapsible(refsCard);
-    if (refsCard && refsBody) {
-      if (!(step1 && step2 && step3)) {
-        refsCard.dataset.collapsed = 'true';
-        refsBody.setAttribute('hidden', '');
-      } else if (refsCard.dataset.collapsed !== 'false') {
-        refsBody.setAttribute('hidden', '');
-      }
-    }
   }
 
   function updateGenerationSummary() {
-    const providerCount = PROVIDER_NAMES.length;
     const counts = getRequestedCounts();
-    const totals = {
-      icons: counts.icons * providerCount,
-      patterns: counts.patterns * providerCount,
-      illustrations: counts.illustrations * providerCount,
-    };
 
     const iconsLabel = byId('summary-icons');
     const patternsLabel = byId('summary-patterns');
     const illustrationsLabel = byId('summary-illustrations');
 
-    if (iconsLabel) iconsLabel.textContent = String(totals.icons);
-    if (patternsLabel) patternsLabel.textContent = String(totals.patterns);
-    if (illustrationsLabel) illustrationsLabel.textContent = String(totals.illustrations);
+    if (iconsLabel) iconsLabel.textContent = String(counts.icons);
+    if (patternsLabel) patternsLabel.textContent = String(counts.patterns);
+    if (illustrationsLabel) illustrationsLabel.textContent = String(counts.illustrations);
   }
 
   const PALETTE_KEYS = ['primary', 'secondary', 'accent', 'tertiary', 'neutral', 'extra'];
@@ -403,9 +383,12 @@ document.addEventListener('DOMContentLoaded', () => {
     updatePaletteControlsState();
 
     const gen = tokens.generation || {};
-    if (byId('gen.icons_count')) byId('gen.icons_count').value = gen.icons_count ?? 8;
-    if (byId('gen.patterns_count')) byId('gen.patterns_count').value = gen.patterns_count ?? 4;
-    if (byId('gen.illustrations_count')) byId('gen.illustrations_count').value = gen.illustrations_count ?? 4;
+    const iconsEl = resolveGenCountInput('gen.icons_count');
+    const patternsEl = resolveGenCountInput('gen.patterns_count');
+    const illEl = resolveGenCountInput('gen.illustrations_count');
+    if (iconsEl) iconsEl.value = gen.icons_count ?? 8;
+    if (patternsEl) patternsEl.value = gen.patterns_count ?? 4;
+    if (illEl) illEl.value = gen.illustrations_count ?? 4;
     if (byId('build_style')) byId('build_style').checked = !!gen.build_style;
 
     if (byId('illustration.vector')) {
@@ -572,27 +555,25 @@ document.addEventListener('DOMContentLoaded', () => {
 
     return raw.map((item) => {
       if (typeof item === 'string') {
-        const name = item.split('/').pop();
+        const path = item;
+        const name = path.split('/').pop() || 'ref';
         return {
+          path,
           name,
-          url: `/projects/${projectSlug}/refs/${name}`,
+          url: `/projects/${projectSlug}/refs/${encodeURIComponent(name)}`,
         };
       }
 
       if (item && typeof item === 'object') {
-        const name =
-          item.name ||
-          item.filename ||
-          item.file ||
-          item.path?.split('/')?.pop() ||
-          'ref';
-
+        const path =
+          typeof item.path === 'string' && item.path.startsWith('uploads/refs/')
+            ? item.path
+            : null;
+        if (!path) return null;
+        const name = path.split('/').pop() || 'ref';
         const url =
-          item.url ||
-          item.path ||
-          `/projects/${projectSlug}/refs/${name}`;
-
-        return { name, url };
+          item.url || `/projects/${projectSlug}/refs/${encodeURIComponent(name)}`;
+        return { path, name, url };
       }
 
       return null;
@@ -640,25 +621,30 @@ document.addEventListener('DOMContentLoaded', () => {
         return;
       }
 
-      refList.innerHTML = refs.map((ref) => `
+      refList.innerHTML = refs.map((ref) => {
+        const safePath = String(ref.path || '').replace(/"/g, '&quot;');
+        return `
         <div class="ref-card">
           <a href="${ref.url}" target="_blank" rel="noopener" class="ref-card__preview">
             <img src="${ref.url}" alt="${ref.name}" class="ref-card__image" />
           </a>
-          <button type="button" class="ref-delete" data-ref-name="${ref.name}">Удалить</button>
+          <button type="button" class="ref-delete" data-ref-path="${safePath}">Удалить</button>
         </div>
-      `).join('');
+      `;
+      }).join('');
 
       refList.querySelectorAll('.ref-delete').forEach((btn) => {
-        btn.addEventListener('click', async () => {
-          const name = btn.getAttribute('data-ref-name');
-          if (!name) return;
+        btn.addEventListener('click', async (e) => {
+          e.preventDefault();
+          e.stopPropagation();
+          const relPath = btn.getAttribute('data-ref-path');
+          if (!relPath) return;
 
           try {
             const response = await fetch(`/projects/${projectSlug}/delete-ref`, {
               method: 'POST',
               headers: { 'Content-Type': 'application/json' },
-              body: JSON.stringify({ name }),
+              body: JSON.stringify({ path: relPath }),
             });
 
             const data = await response.json();
@@ -674,6 +660,9 @@ document.addEventListener('DOMContentLoaded', () => {
           }
         });
       });
+
+      markStepTouched(4);
+      refreshStepProgression();
     } catch (error) {
       console.error('[refs] refresh failed', error);
       refList.innerHTML = '<div class="refs-empty">Не удалось загрузить референсы</div>';
@@ -685,6 +674,11 @@ document.addEventListener('DOMContentLoaded', () => {
   refreshStepProgression();
   updateFigmaExportUi({ brand_id: getCurrentBrandId() });
   refreshRefs();
+
+  document.querySelector('[data-progress-step="4"] .editor-card__head')?.addEventListener('click', () => {
+    markStepTouched(4);
+    refreshStepProgression();
+  });
 
   const generationModal = byId('generation-modal');
   const generationLog = byId('generation-log');
@@ -1097,14 +1091,6 @@ document.addEventListener('DOMContentLoaded', () => {
     }
   });
 
-  [
-    byId('gen.icons_count'),
-    byId('gen.patterns_count'),
-    byId('gen.illustrations_count'),
-  ].forEach((el) => {
-    el?.addEventListener('input', updateGenerationSummary);
-    el?.addEventListener('change', updateGenerationSummary);
-  });
   const editorForm = byId('project-editor-form');
   editorForm?.addEventListener('input', (event) => {
     const step = event.target?.closest?.('[data-progress-step]')?.getAttribute?.('data-progress-step');
@@ -1115,6 +1101,12 @@ document.addEventListener('DOMContentLoaded', () => {
     const step = event.target?.closest?.('[data-progress-step]')?.getAttribute?.('data-progress-step');
     if (step) markStepTouched(step);
     refreshStepProgression();
+  });
+
+  ['gen.icons_count', 'gen.patterns_count', 'gen.illustrations_count'].forEach((fid) => {
+    const node = resolveGenCountInput(fid);
+    node?.addEventListener('input', updateGenerationSummary);
+    node?.addEventListener('change', updateGenerationSummary);
   });
   byId('gen-figma')?.addEventListener('click', () => {
     markStepTouched(6);

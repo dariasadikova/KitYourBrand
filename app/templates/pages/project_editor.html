@@ -216,8 +216,7 @@
                     </div>
                 </section>
 
-                <section class="editor-card editor-card--progressive editor-card--collapsible" data-progress-step="4"
-                    data-collapsed="true">
+                <section class="editor-card editor-card--progressive" data-progress-step="4">
                     <div class="editor-card__head">
                         <span class="step-badge">4</span>
                         <div>
@@ -226,16 +225,21 @@
                             <p>Загружайте изображения, которые отражают желаемую эстетику вашего бренда.</p>
                         </div>
                     </div>
-                    <div class="editor-card__body editor-card__body--refs" hidden>
-                        <div class="refs-toolbar">
-                            <label class="btn btn-primary btn-upload">
-                                <input id="upload-refs" type="file" multiple accept=".png,.jpg,.jpeg,.webp,.gif,.bmp"
-                                    hidden />
-                                Загрузить изображения
-                            </label>
-                        </div>
-                        <div id="refs-list" class="refs-grid"></div>
+                    <div class="refs-upload-row">
+                        <label class="btn btn-primary btn-upload">
+                            <input id="upload-refs" type="file" multiple accept=".png,.jpg,.jpeg,.webp,.gif,.bmp"
+                                hidden />
+                            <svg class="btn-upload__icon" xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24"
+                                fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round"
+                                stroke-linejoin="round" aria-hidden="true">
+                                <path d="M21 15v4a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2v-4" />
+                                <polyline points="17 8 12 3 7 8" />
+                                <line x1="12" y1="3" x2="12" y2="15" />
+                            </svg>
+                            <span>Загрузить изображения</span>
+                        </label>
                     </div>
+                    <div id="refs-list" class="refs-grid"></div>
                 </section>
 
                 <section class="editor-card editor-card--progressive" data-progress-step="5">
@@ -306,9 +310,9 @@
                     <button type="button" id="btn-generate" class="btn btn-primary editor-generate-btn">Собрать
                         бренд-комплект</button>
                     <div class="cta-stats">
-                        <span><strong id="summary-icons">24</strong> иконок</span>
-                        <span><strong id="summary-patterns">12</strong> паттернов</span>
-                        <span><strong id="summary-illustrations">12</strong> иллюстраций</span>
+                        <span><strong id="summary-icons">8</strong> иконок</span>
+                        <span><strong id="summary-patterns">4</strong> паттернов</span>
+                        <span><strong id="summary-illustrations">4</strong> иллюстраций</span>
                     </div>
                     <div id="generate-status" class="editor-status"></div>
                 </section>
@@ -317,7 +321,7 @@
                     <button type="button" id="save" class="btn btn-outline btn-inline">Сохранить</button>
                     <a href="/projects/{{ project.slug }}/download" class="btn btn-outline btn-inline">Скачать
                         конфигурацию проекта</a>
-                    <button type="button" id="reset" class="btn btn-danger btn-inline">Сброс</button>
+                    <button type="button" id="reset" class="btn btn-inline btn-reset-light">Сброс</button>
                 </div>
             </form>
         </section>
