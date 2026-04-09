@@ -1,7 +1,11 @@
 from __future__ import annotations
 
-from fastapi import APIRouter, Form, Request, status
-from fastapi.responses import HTMLResponse, RedirectResponse
+import uuid
+from pathlib import Path
+from urllib.parse import quote
+
+from fastapi import APIRouter, File, Form, Request, UploadFile, status
+from fastapi.responses import FileResponse, HTMLResponse, RedirectResponse
 from fastapi.templating import Jinja2Templates
 
 from app.core.paths import TEMPLATES_DIR
@@ -15,6 +19,9 @@ auth_service = AuthService(settings.data_dir / 'app.db')
 auth_service.init_db()
 project_service = ProjectService(settings.data_dir / 'app.db', settings.data_dir / 'projects')
 project_service.init_db()
+PROFILE_AVATARS_DIR = settings.data_dir / 'profile_avatars'
+PROFILE_AVATARS_DIR.mkdir(parents=True, exist_ok=True)
+ALLOWED_AVATAR_EXT = {'.png', '.jpg', '.jpeg', '.webp'}
 
 
 FEATURES = [
@@ -96,16 +103,91 @@ async def profile_page(request: Request) -> HTMLResponse:
     if auth_redirect:
         return auth_redirect
 
-    user_name = request.session.get('user_name') or 'Пользователь'
+    user_id = int(request.session['user_id'])
+    user_row = auth_service.get_user_by_id(user_id)
+    user_name = (str(user_row['name']) if user_row else '') or request.session.get('user_name') or 'Пользователь'
+    user_email = (str(user_row['email']) if user_row else '') or request.session.get('user_email') or ''
+    avatar_path = str(user_row['avatar_path']) if user_row and user_row['avatar_path'] else ''
     context = {
         'request': request,
         'page_title': 'Профиль',
         'page_description': 'Страница профиля пока находится в разработке.',
         'user_name': user_name,
-        'user_email': request.session.get('user_email') or '',
+        'user_email': user_email,
         'user_initial': (user_name[:1] or '?').upper(),
+        'avatar_url': f'/profile/avatar/{avatar_path}' if avatar_path else '',
+        'profile_error': request.query_params.get('error') or '',
+        'profile_success': request.query_params.get('success') or '',
     }
     return templates.TemplateResponse(request, 'pages/profile_stub.html', context)
+
+
+@router.get('/profile/avatar/{filename}')
+async def profile_avatar(request: Request, filename: str):
+    auth_redirect = require_auth(request)
+    if auth_redirect:
+        return auth_redirect
+    safe_name = Path(filename).name
+    file_path = PROFILE_AVATARS_DIR / safe_name
+    if not file_path.exists() or not file_path.is_file():
+        return RedirectResponse(url='/static/img/kybby-whale.png', status_code=status.HTTP_303_SEE_OTHER)
+    return FileResponse(file_path)
+
+
+@router.post('/profile/update')
+async def profile_update(
+    request: Request,
+    name: str = Form(''),
+    current_password: str = Form(''),
+    new_password: str = Form(''),
+    remove_avatar: str = Form('0'),
+    avatar: UploadFile | None = File(None),
+):
+    auth_redirect = require_auth(request)
+    if auth_redirect:
+        return auth_redirect
+
+    user_id = int(request.session['user_id'])
+    row = auth_service.get_user_by_id(user_id)
+    if row is None:
+        return RedirectResponse(url=f'/profile?error={quote("Пользователь не найден")}', status_code=status.HTTP_303_SEE_OTHER)
+
+    avatar_path = str(row['avatar_path']) if row['avatar_path'] else None
+
+    if remove_avatar == '1':
+        if avatar_path:
+            old = PROFILE_AVATARS_DIR / avatar_path
+            if old.exists():
+                old.unlink()
+        avatar_path = None
+
+    if avatar and (avatar.filename or '').strip():
+        ext = Path(avatar.filename).suffix.lower()
+        if ext not in ALLOWED_AVATAR_EXT:
+            return RedirectResponse(url=f'/profile?error={quote("Недопустимый формат аватара")}', status_code=status.HTTP_303_SEE_OTHER)
+        content = await avatar.read()
+        if len(content) > 5 * 1024 * 1024:
+            return RedirectResponse(url=f'/profile?error={quote("Файл аватара слишком большой")}', status_code=status.HTTP_303_SEE_OTHER)
+        if avatar_path:
+            old = PROFILE_AVATARS_DIR / avatar_path
+            if old.exists():
+                old.unlink()
+        new_name = f'u{user_id}_{uuid.uuid4().hex}{ext}'
+        (PROFILE_AVATARS_DIR / new_name).write_bytes(content)
+        avatar_path = new_name
+
+    try:
+        auth_service.update_user_profile(user_id, name=name, avatar_path=avatar_path)
+        if new_password.strip():
+            auth_service.change_password(
+                user_id,
+                new_password=new_password,
+            )
+    except ValueError as exc:
+        return RedirectResponse(url=f'/profile?error={quote(str(exc))}', status_code=status.HTTP_303_SEE_OTHER)
+
+    request.session['user_name'] = (name or '').strip() or request.session.get('user_name')
+    return RedirectResponse(url=f'/profile?success={quote("Изменения сохранены")}', status_code=status.HTTP_303_SEE_OTHER)
 
 
 @router.get('/login', response_class=HTMLResponse)

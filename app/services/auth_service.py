@@ -47,12 +47,17 @@ class AuthService:
                     name TEXT NOT NULL,
                     email TEXT NOT NULL UNIQUE,
                     password_hash TEXT NOT NULL,
+                    avatar_path TEXT,
                     auth_provider TEXT NOT NULL DEFAULT 'local',
                     is_active INTEGER NOT NULL DEFAULT 1,
                     created_at TEXT NOT NULL
                 )
                 """
             )
+            cols = conn.execute("PRAGMA table_info(users)").fetchall()
+            col_names = {str(col["name"]) for col in cols}
+            if "avatar_path" not in col_names:
+                conn.execute("ALTER TABLE users ADD COLUMN avatar_path TEXT")
             conn.commit()
 
     def email_exists(self, email: str) -> bool:
@@ -66,9 +71,43 @@ class AuthService:
     def get_user_by_email(self, email: str) -> Optional[sqlite3.Row]:
         with self._connect() as conn:
             return conn.execute(
-                "SELECT id, name, email, password_hash, is_active FROM users WHERE lower(email) = lower(?) LIMIT 1",
+                "SELECT id, name, email, password_hash, is_active, avatar_path FROM users WHERE lower(email) = lower(?) LIMIT 1",
                 (email.strip(),),
             ).fetchone()
+
+    def get_user_by_id(self, user_id: int) -> Optional[sqlite3.Row]:
+        with self._connect() as conn:
+            return conn.execute(
+                "SELECT id, name, email, password_hash, is_active, avatar_path FROM users WHERE id = ? LIMIT 1",
+                (user_id,),
+            ).fetchone()
+
+    def update_user_profile(self, user_id: int, *, name: str, avatar_path: str | None) -> None:
+        normalized_name = (name or "").strip()
+        if len(normalized_name) < 2:
+            raise ValueError("Имя должно содержать хотя бы 2 символа.")
+        with self._connect() as conn:
+            conn.execute(
+                "UPDATE users SET name = ?, avatar_path = ? WHERE id = ?",
+                (normalized_name, avatar_path, user_id),
+            )
+            conn.commit()
+
+    def change_password(self, user_id: int, *, new_password: str, current_password: str | None = None) -> None:
+        row = self.get_user_by_id(user_id)
+        if row is None:
+            raise ValueError("Пользователь не найден.")
+        if current_password is not None and not self.verify_password(current_password or "", str(row["password_hash"])):
+            raise ValueError("Текущий пароль введен неверно.")
+        if len((new_password or "").strip()) < 8:
+            raise ValueError("Новый пароль должен содержать минимум 8 символов.")
+        new_hash = self.hash_password(new_password)
+        with self._connect() as conn:
+            conn.execute(
+                "UPDATE users SET password_hash = ? WHERE id = ?",
+                (new_hash, user_id),
+            )
+            conn.commit()
 
     def hash_password(self, password: str) -> str:
         salt = secrets.token_bytes(16)

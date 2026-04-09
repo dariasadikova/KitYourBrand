@@ -2,13 +2,78 @@
 
 {% block title %}KYBBY — профиль{% endblock %}
 
+{% block dashboard_main_classes %} profile-main{% endblock %}
+
 {% block dashboard_main %}
-<section class="dashboard-content profile-stub-page">
-    <div class="stub-card profile-stub-card">
-        <h1>{{ page_title }}</h1>
-        <p>{{ page_description }}</p>
-        <p>Для пользователя <strong>{{ user_name }}</strong> этот раздел появится позже.</p>
-        <a href="/dashboard" class="btn btn-primary">Перейти к проектам</a>
+<section class="profile-page">
+    <div class="profile-page__head">
+        <h1>Профиль пользователя</h1>
+        <p>Управляйте настройками вашего аккаунта</p>
     </div>
+
+    {% if profile_error %}
+    <div class="profile-alert profile-alert--error">{{ profile_error }}</div>
+    {% endif %}
+    {% if profile_success %}
+    <div class="profile-alert profile-alert--success">{{ profile_success }}</div>
+    {% endif %}
+
+    <form action="/profile/update" method="post" enctype="multipart/form-data" class="profile-form">
+        <article class="profile-card">
+            <h2>Основная информация</h2>
+            <div class="profile-info-grid">
+                <div class="profile-avatar-block">
+                    {% if avatar_url %}
+                    <img src="{{ avatar_url }}" alt="Аватар пользователя" class="profile-avatar-image" />
+                    {% else %}
+                    <div class="profile-avatar-circle">{{ user_initial }}</div>
+                    {% endif %}
+                    <label class="btn btn-outline btn-inline profile-upload-btn">
+                        Загрузить фото
+                        <input type="file" name="avatar" accept=".png,.jpg,.jpeg,.webp" hidden />
+                    </label>
+                    {% if avatar_url %}
+                    <button type="submit" name="remove_avatar" value="1" class="btn btn-outline btn-inline profile-remove-avatar">Удалить фото</button>
+                    {% endif %}
+                </div>
+
+                <div class="profile-fields">
+                    <label class="editor-field">
+                        <span>ФИО</span>
+                        <input type="text" name="name" value="{{ user_name }}" minlength="2" required />
+                    </label>
+                    <label class="editor-field">
+                        <span>Email</span>
+                        <input type="email" class="profile-email-input" value="{{ user_email }}" disabled />
+                    </label>
+                    <p class="profile-field-hint">Email нельзя изменить</p>
+                    <div class="profile-role-row">
+                        <span>Роль:</span>
+                        <strong>User</strong>
+                    </div>
+                </div>
+            </div>
+        </article>
+
+        <article class="profile-card">
+            <h2>Смена пароля</h2>
+            <div class="profile-password-grid">
+                <label class="editor-field">
+                    <span>Текущий пароль</span>
+                    <input type="password" class="profile-current-password" value="••••••••••••" disabled />
+                </label>
+                <label class="editor-field">
+                    <span>Новый пароль</span>
+                    <input type="password" name="new_password" placeholder="Введите новый пароль" />
+                    <p class="profile-field-hint">Минимум 8 символов</p>
+                </label>
+            </div>
+        </article>
+
+        <div class="profile-actions">
+            <a href="/profile" class="btn btn-outline btn-inline">Отмена</a>
+            <button type="submit" class="btn btn-primary btn-inline">Сохранить изменения</button>
+        </div>
+    </form>
 </section>
 {% endblock %}
