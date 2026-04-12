@@ -1001,7 +1001,7 @@ document.addEventListener('DOMContentLoaded', () => {
     return base;
   }
 
-  function updateGenerationUi(job) {
+    function updateGenerationUi(job) {
     console.log('[generation-ui] updateGenerationUi called', job);
 
     const progress = Number(job.progress || 0);
@@ -1043,7 +1043,7 @@ document.addEventListener('DOMContentLoaded', () => {
       });
 
       generationLogLines = logs.length ? logs : ['Ошибка генерации'];
-      renderGenerationLog(generationLogLines);
+    renderGenerationLog(generationLogLines);
 
       if (job.id && generationErrorShownJobId !== job.id) {
         generationErrorShownJobId = job.id;
