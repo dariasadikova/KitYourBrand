@@ -1,0 +1,41 @@
+{% set path = request.url.path %}
+<aside class="dashboard-sidebar">
+    <nav class="dashboard-nav" aria-label="Основная навигация">
+        <a href="/dashboard" class="dashboard-nav__item{% if path == '/dashboard' or path.startswith('/projects/') or path == '/generation-history' %} dashboard-nav__item--active{% endif %}">
+            <span class="dashboard-nav__icon" aria-hidden="true">
+                <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.2" stroke-linecap="round" stroke-linejoin="round">
+                    <path d="M3 7a2 2 0 0 1 2-2h4l2 2h8a2 2 0 0 1 2 2v8a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2Z"/>
+                </svg>
+            </span>
+            <span>Мои проекты</span>
+        </a>
+        <a href="/profile" class="dashboard-nav__item{% if path.startswith('/profile') %} dashboard-nav__item--active{% endif %}">
+            <span class="dashboard-nav__icon" aria-hidden="true">
+                <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.2" stroke-linecap="round" stroke-linejoin="round">
+                    <circle cx="12" cy="8" r="4"/>
+                    <path d="M4 20a8 8 0 0 1 16 0"/>
+                </svg>
+            </span>
+            <span>Профиль</span>
+        </a>
+        <a href="#" class="dashboard-nav__item">
+            <span class="dashboard-nav__icon" aria-hidden="true">
+                <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.2" stroke-linecap="round" stroke-linejoin="round">
+                    <circle cx="12" cy="12" r="3"/>
+                    <path d="M19.4 15a1.7 1.7 0 0 0 .3 1.9l.1.1a2 2 0 0 1 0 2.8 2 2 0 0 1-2.8 0l-.1-.1a1.7 1.7 0 0 0-1.9-.3 1.7 1.7 0 0 0-1 1.6V21a2 2 0 1 1-4 0v-.2a1.7 1.7 0 0 0-1-1.6 1.7 1.7 0 0 0-1.9.3l-.1.1a2 2 0 1 1-2.8-2.8l.1-.1a1.7 1.7 0 0 0 .3-1.9 1.7 1.7 0 0 0-1.6-1H3a2 2 0 1 1 0-4h.2a1.7 1.7 0 0 0 1.6-1 1.7 1.7 0 0 0-.3-1.9l-.1-.1a2 2 0 1 1 2.8-2.8l.1.1a1.7 1.7 0 0 0 1.9.3H9a1.7 1.7 0 0 0 1-1.6V3a2 2 0 1 1 4 0v.2a1.7 1.7 0 0 0 1 1.6h.1a1.7 1.7 0 0 0 1.9-.3l.1-.1a2 2 0 1 1 2.8 2.8l-.1.1a1.7 1.7 0 0 0-.3 1.9v.1a1.7 1.7 0 0 0 1.6 1H21a2 2 0 1 1 0 4h-.2a1.7 1.7 0 0 0-1.6 1Z"/>
+                </svg>
+            </span>
+            <span>Настройки</span>
+        </a>
+        <a href="/logout" class="dashboard-nav__item">
+            <span class="dashboard-nav__icon" aria-hidden="true">
+                <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.2" stroke-linecap="round" stroke-linejoin="round">
+                    <path d="M9 4H5a2 2 0 0 0-2 2v12a2 2 0 0 0 2 2h4"/>
+                    <path d="M16 17l5-5-5-5"/>
+                    <path d="M21 12H9"/>
+                </svg>
+            </span>
+            <span>Выход</span>
+        </a>
+    </nav>
+</aside>

@@ -4,7 +4,10 @@ import threading
 import traceback
 import uuid
 from datetime import datetime
-from typing import Any
+from typing import TYPE_CHECKING, Any
+
+if TYPE_CHECKING:
+    from app.services.project_service import ProjectService
 
 from app.services.generation_error_summary import ProviderGenerationError, summarize_generation_failure
 
@@ -89,8 +92,11 @@ class GenerationJobStore:
         project_slug: str,
         payload: dict[str, Any],
         base_host: str,
+        project_service: 'ProjectService | None' = None,
     ) -> None:
         def runner() -> None:
+            if project_service is not None:
+                project_service.set_generation_job_running(job_id)
             self.update(job_id, status='running', progress=3, message='Инициализация генерации')
             self.append_log(job_id, 'Инициализация генерации...')
 
@@ -137,6 +143,8 @@ class GenerationJobStore:
                     current_provider=None,
                 )
                 self.append_log(job_id, 'Генерация завершена успешно!')
+                if project_service is not None:
+                    project_service.finalize_generation_job_record(job_id, 'success')
             except Exception as exc:
                 tb = traceback.format_exc()
                 snapshot = self.get_job(job_id) or {}
@@ -177,6 +185,8 @@ class GenerationJobStore:
                 self.append_log(job_id, user_msg or 'Ошибка генерации')
                 if hint:
                     self.append_log(job_id, hint)
+                if project_service is not None:
+                    project_service.finalize_generation_job_record(job_id, 'failed')
 
         thread = threading.Thread(target=runner, daemon=True)
         thread.start()

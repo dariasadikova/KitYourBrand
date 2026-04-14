@@ -2371,3 +2371,290 @@ img {
   overflow: hidden;
   text-overflow: ellipsis;
 }
+
+/* --- Generation history (ЛК) --- */
+.page-dashboard .generation-history-head {
+    align-items: flex-start;
+}
+
+.page-dashboard .generation-history-head h1 {
+    margin: 0;
+    font-size: clamp(2rem, 3vw, 3rem);
+    line-height: 1.08;
+    letter-spacing: -0.04em;
+    font-weight: 700;
+}
+
+.generation-history-subtitle {
+    margin: 14px 0 0;
+    font-size: 18px;
+    line-height: 1.5;
+    color: var(--muted);
+}
+
+.generation-history-stats {
+    display: grid;
+    grid-template-columns: repeat(4, minmax(0, 1fr));
+    gap: 16px;
+    margin-bottom: 28px;
+}
+
+.generation-history-stat-card {
+    display: flex;
+    align-items: center;
+    gap: 16px;
+    padding: 20px 22px;
+    border-radius: 20px;
+    background: #43484d;
+    border: 1px solid rgba(255, 255, 255, 0.08);
+    box-shadow: 0 18px 40px rgba(0, 0, 0, 0.2);
+}
+
+.generation-history-stat-card__icon {
+    width: 48px;
+    height: 48px;
+    border-radius: 14px;
+    display: grid;
+    place-items: center;
+    background: rgba(0, 174, 255, 0.12);
+    color: #00aeff;
+    flex-shrink: 0;
+}
+
+.generation-history-stat-card__icon svg {
+    width: 24px;
+    height: 24px;
+}
+
+.generation-history-stat-card__label {
+    display: block;
+    font-size: 0.88rem;
+    color: rgba(248, 250, 252, 0.62);
+    margin-bottom: 6px;
+}
+
+.generation-history-stat-card__value {
+    font-size: 1.65rem;
+    font-weight: 700;
+    letter-spacing: -0.02em;
+}
+
+.generation-history-table-wrap {
+    padding: 26px 28px 24px;
+    border-radius: 22px;
+    background: #43484d;
+    border: 1px solid rgba(255, 255, 255, 0.08);
+}
+
+.generation-history-table-title {
+    margin: 0 0 20px;
+    font-size: 1.75rem;
+    font-weight: 700;
+}
+
+.generation-history-table-scroll {
+    overflow-x: auto;
+    margin: 0 -6px;
+    padding: 0 6px;
+}
+
+.generation-history-table {
+    width: 100%;
+    border-collapse: collapse;
+    font-size: 0.95rem;
+}
+
+.generation-history-table th {
+    text-align: left;
+    padding: 12px 14px 14px;
+    color: rgba(248, 250, 252, 0.55);
+    font-weight: 600;
+    font-size: 0.82rem;
+    text-transform: uppercase;
+    letter-spacing: 0.06em;
+    border-bottom: 1px solid rgba(255, 255, 255, 0.1);
+}
+
+.generation-history-table td {
+    padding: 16px 14px;
+    border-bottom: 1px solid rgba(255, 255, 255, 0.06);
+    vertical-align: middle;
+    line-height: 1.5;
+}
+
+.generation-history-table tbody tr:last-child td {
+    border-bottom: none;
+}
+
+.generation-history-table__date {
+    color: rgba(248, 250, 252, 0.88);
+    white-space: nowrap;
+}
+
+.generation-history-table__project {
+    vertical-align: middle;
+}
+
+.generation-history-table__project-inner {
+    display: inline-flex;
+    align-items: center;
+    gap: 10px;
+    font-weight: 600;
+    color: #f8fafc;
+    line-height: 1.5;
+    vertical-align: middle;
+}
+
+.generation-history-project-dot {
+    width: 8px;
+    height: 8px;
+    border-radius: 999px;
+    background: linear-gradient(135deg, #00aeff, #7c5cff);
+    flex-shrink: 0;
+}
+
+.generation-history-table__duration {
+    color: rgba(248, 250, 252, 0.75);
+    white-space: nowrap;
+}
+
+.generation-history-table__actions {
+    white-space: nowrap;
+}
+
+.generation-history-pill {
+    display: inline-flex;
+    align-items: center;
+    padding: 5px 12px;
+    border-radius: 999px;
+    font-size: 0.82rem;
+    font-weight: 700;
+}
+
+.generation-history-pill--success {
+    background: rgba(34, 197, 94, 0.18);
+    color: #4ade80;
+}
+
+.generation-history-pill--error {
+    background: rgba(248, 113, 113, 0.16);
+    color: #fca5a5;
+}
+
+.generation-history-pill--running {
+    background: rgba(0, 174, 255, 0.16);
+    color: #38bdf8;
+}
+
+.generation-history-action-muted {
+    color: rgba(248, 250, 252, 0.45);
+    font-size: 0.92rem;
+}
+
+.generation-history-action-form {
+    display: inline;
+    margin: 0;
+}
+
+.generation-history-action-btn {
+    display: inline-flex;
+    align-items: center;
+    gap: 8px;
+    min-height: 40px;
+    padding: 0 14px;
+    border-radius: 12px;
+    font-weight: 600;
+    font-size: 0.9rem;
+}
+
+.generation-history-btn-restore {
+    min-height: 40px;
+    padding: 0 14px;
+    border-radius: 12px;
+    font-weight: 600;
+    font-size: 0.9rem;
+    border: none;
+    cursor: pointer;
+    display: inline-flex;
+    align-items: center;
+    gap: 8px;
+    background: rgba(34, 197, 94, 0.22);
+    color: #bbf7d0;
+    border: 1px solid rgba(34, 197, 94, 0.45);
+}
+
+.generation-history-btn-restore:hover {
+    background: rgba(34, 197, 94, 0.32);
+    color: #ecfdf5;
+}
+
+.generation-history-btn-repeat {
+    border-color: rgba(255, 255, 255, 0.22);
+    color: rgba(248, 250, 252, 0.88);
+    background: rgba(0, 0, 0, 0.15);
+}
+
+.generation-history-btn-repeat:hover {
+    border-color: rgba(255, 255, 255, 0.35);
+    background: rgba(255, 255, 255, 0.06);
+}
+
+.generation-history-footer {
+    display: flex;
+    align-items: center;
+    justify-content: space-between;
+    gap: 16px;
+    flex-wrap: wrap;
+    margin-top: 20px;
+    padding-top: 8px;
+}
+
+.generation-history-footer__meta {
+    margin: 0;
+    font-size: 0.9rem;
+    color: rgba(248, 250, 252, 0.55);
+}
+
+.generation-history-pagination {
+    display: flex;
+    align-items: center;
+    gap: 12px;
+}
+
+.generation-history-page-current {
+    min-width: 36px;
+    text-align: center;
+    font-weight: 700;
+    color: rgba(248, 250, 252, 0.9);
+}
+
+.generation-history-page-link--disabled {
+    opacity: 0.35;
+    pointer-events: none;
+    font-size: 0.9rem;
+    color: rgba(248, 250, 252, 0.5);
+}
+
+.generation-history-empty {
+    margin: 0;
+    color: rgba(248, 250, 252, 0.62);
+    font-size: 1rem;
+    line-height: 1.5;
+}
+
+@media (max-width: 1100px) {
+    .generation-history-stats {
+        grid-template-columns: repeat(2, minmax(0, 1fr));
+    }
+}
+
+@media (max-width: 560px) {
+    .generation-history-stats {
+        grid-template-columns: 1fr;
+    }
+
+    .generation-history-table th:nth-child(3),
+    .generation-history-table td:nth-child(3) {
+        min-width: 100px;
+    }
+}

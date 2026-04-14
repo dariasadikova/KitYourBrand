@@ -1,0 +1,23 @@
+<header class="dashboard-page-header">
+    <div class="dashboard-page-header__brand">
+        <a href="/dashboard" class="dashboard-brand dashboard-brand--header" aria-label="KYBBY dashboard">
+            <img class="brand-mark__logo" src="{{ url_for('static', path='img/kybby-whale.png') }}" alt="KYBBY" />
+            <span class="brand-mark__text">KYBBY</span>
+        </a>
+    </div>
+    <div class="dashboard-page-header__actions">
+        <div class="dashboard-userbar">
+            <button type="button" class="dashboard-icon-btn" aria-label="Уведомления">
+                <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true">
+                    <path d="M6 8a6 6 0 0 1 12 0c0 7 3 9 3 9H3s3-2 3-9" />
+                    <path d="M10.3 21a1.94 1.94 0 0 0 3.4 0" />
+                </svg>
+                <span class="dashboard-badge"></span>
+            </button>
+            <div class="dashboard-userpill">
+                <span class="dashboard-userpill__email">{{ user_email }}</span>
+                <span class="dashboard-userpill__avatar">{{ user_initial }}</span>
+            </div>
+        </div>
+    </div>
+</header>

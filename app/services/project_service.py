@@ -8,7 +8,7 @@ import uuid
 from dataclasses import dataclass
 from datetime import datetime, timezone
 from pathlib import Path
-from typing import Optional
+from typing import Any, Optional
 
 
 DEFAULT_TOKENS = {
@@ -71,6 +71,10 @@ class ProjectService:
         conn.row_factory = sqlite3.Row
         return conn
 
+    def _table_columns(self, conn: sqlite3.Connection, table: str) -> set[str]:
+        rows = conn.execute(f'PRAGMA table_info({table})').fetchall()
+        return {str(r[1]) for r in rows}
+
     def init_db(self) -> None:
         with self._connect() as conn:
             conn.execute(
@@ -83,6 +87,25 @@ class ProjectService:
                     brand_id TEXT NOT NULL,
                     created_at TEXT NOT NULL,
                     updated_at TEXT NOT NULL
+                )
+                """
+            )
+            cols = self._table_columns(conn, 'projects')
+            if 'deleted_at' not in cols:
+                conn.execute('ALTER TABLE projects ADD COLUMN deleted_at TEXT')
+            conn.execute(
+                """
+                CREATE TABLE IF NOT EXISTS generation_jobs_history (
+                    id INTEGER PRIMARY KEY AUTOINCREMENT,
+                    user_id INTEGER NOT NULL,
+                    job_id TEXT NOT NULL UNIQUE,
+                    project_id INTEGER,
+                    project_slug TEXT NOT NULL,
+                    project_name TEXT NOT NULL,
+                    status TEXT NOT NULL,
+                    started_at TEXT NOT NULL,
+                    finished_at TEXT,
+                    duration_seconds REAL
                 )
                 """
             )
@@ -156,7 +179,12 @@ class ProjectService:
     def list_projects(self, user_id: int) -> list[ProjectRecord]:
         with self._connect() as conn:
             rows = conn.execute(
-                "SELECT id, user_id, slug, name, brand_id, created_at, updated_at FROM projects WHERE user_id = ? ORDER BY updated_at DESC, id DESC",
+                """
+                SELECT id, user_id, slug, name, brand_id, created_at, updated_at
+                FROM projects
+                WHERE user_id = ? AND deleted_at IS NULL
+                ORDER BY updated_at DESC, id DESC
+                """,
                 (user_id,),
             ).fetchall()
         return [ProjectRecord(**dict(row)) for row in rows]
@@ -164,7 +192,12 @@ class ProjectService:
     def get_project(self, user_id: int, slug: str) -> Optional[ProjectRecord]:
         with self._connect() as conn:
             row = conn.execute(
-                "SELECT id, user_id, slug, name, brand_id, created_at, updated_at FROM projects WHERE user_id = ? AND slug = ? LIMIT 1",
+                """
+                SELECT id, user_id, slug, name, brand_id, created_at, updated_at
+                FROM projects
+                WHERE user_id = ? AND slug = ? AND deleted_at IS NULL
+                LIMIT 1
+                """,
                 (user_id, slug),
             ).fetchone()
         if row is None:
@@ -175,15 +208,173 @@ class ProjectService:
         project = self.get_project(user_id, slug)
         if project is None:
             return False
-
+        now = datetime.now(timezone.utc).isoformat()
         with self._connect() as conn:
-            conn.execute('DELETE FROM projects WHERE id = ?', (project.id,))
+            conn.execute(
+                'UPDATE projects SET deleted_at = ?, updated_at = ? WHERE id = ?',
+                (now, now, project.id),
+            )
+            conn.commit()
+        return True
+
+    def restore_project(self, user_id: int, slug: str) -> bool:
+        with self._connect() as conn:
+            row = conn.execute(
+                """
+                SELECT id FROM projects
+                WHERE user_id = ? AND slug = ? AND deleted_at IS NOT NULL
+                LIMIT 1
+                """,
+                (user_id, slug),
+            ).fetchone()
+            if row is None:
+                return False
+            now = datetime.now(timezone.utc).isoformat()
+            conn.execute(
+                'UPDATE projects SET deleted_at = NULL, updated_at = ? WHERE id = ?',
+                (now, int(row['id'])),
+            )
+            conn.commit()
+        self.ensure_project(user_id, slug)
+        return True
+
+    def record_generation_job(self, *, user_id: int, job_id: str, project_slug: str) -> None:
+        project = self.get_project(user_id, project_slug)
+        if project is None:
+            return
+        started = datetime.now(timezone.utc).isoformat()
+        with self._connect() as conn:
+            conn.execute(
+                """
+                INSERT INTO generation_jobs_history (
+                    user_id, job_id, project_id, project_slug, project_name, status, started_at
+                ) VALUES (?, ?, ?, ?, ?, 'pending', ?)
+                """,
+                (user_id, job_id, project.id, project_slug, project.name, started),
+            )
             conn.commit()
 
-        project_root = self.user_projects_dir(user_id) / slug
-        if project_root.exists():
-            shutil.rmtree(project_root, ignore_errors=True)
-        return True
+    def set_generation_job_running(self, job_id: str) -> None:
+        with self._connect() as conn:
+            conn.execute(
+                "UPDATE generation_jobs_history SET status = 'running' WHERE job_id = ?",
+                (job_id,),
+            )
+            conn.commit()
+
+    def finalize_generation_job_record(self, job_id: str, outcome: str) -> None:
+        """outcome: success | failed"""
+        status = 'success' if outcome == 'success' else 'failed'
+        finished = datetime.now(timezone.utc).isoformat()
+        with self._connect() as conn:
+            row = conn.execute(
+                'SELECT started_at FROM generation_jobs_history WHERE job_id = ?',
+                (job_id,),
+            ).fetchone()
+            if row is None:
+                return
+            started_raw = str(row['started_at'])
+            duration: float | None = None
+            try:
+                s = started_raw.replace('Z', '+00:00')
+                t0 = datetime.fromisoformat(s)
+                t1 = datetime.fromisoformat(finished.replace('Z', '+00:00'))
+                duration = max(0.0, (t1 - t0).total_seconds())
+            except (TypeError, ValueError):
+                duration = None
+            conn.execute(
+                """
+                UPDATE generation_jobs_history
+                SET status = ?, finished_at = ?, duration_seconds = ?
+                WHERE job_id = ?
+                """,
+                (status, finished, duration, job_id),
+            )
+            conn.commit()
+
+    def mark_abandoned_generation_jobs(self) -> None:
+        """After restart in-memory jobs are lost; pending/running rows become failed."""
+        finished = datetime.now(timezone.utc).isoformat()
+        with self._connect() as conn:
+            conn.execute(
+                """
+                UPDATE generation_jobs_history
+                SET status = 'failed', finished_at = ?, duration_seconds = NULL
+                WHERE status IN ('pending', 'running')
+                """,
+                (finished,),
+            )
+            conn.commit()
+
+    def generation_history_stats(self, user_id: int) -> dict[str, Any]:
+        with self._connect() as conn:
+            total = conn.execute(
+                'SELECT COUNT(*) AS c FROM generation_jobs_history WHERE user_id = ?',
+                (user_id,),
+            ).fetchone()
+            ok = conn.execute(
+                "SELECT COUNT(*) AS c FROM generation_jobs_history WHERE user_id = ? AND status = 'success'",
+                (user_id,),
+            ).fetchone()
+            avg = conn.execute(
+                """
+                SELECT AVG(duration_seconds) AS a
+                FROM generation_jobs_history
+                WHERE user_id = ? AND status = 'success' AND duration_seconds IS NOT NULL
+                """,
+                (user_id,),
+            ).fetchone()
+            projects_n = conn.execute(
+                """
+                SELECT COUNT(DISTINCT project_id) AS c
+                FROM generation_jobs_history
+                WHERE user_id = ?
+                """,
+                (user_id,),
+            ).fetchone()
+        return {
+            'total': int(total['c']) if total else 0,
+            'successful': int(ok['c']) if ok else 0,
+            'avg_duration': float(avg['a']) if avg and avg['a'] is not None else None,
+            'projects_with_generations': int(projects_n['c']) if projects_n else 0,
+        }
+
+    def list_generation_history_page(
+        self, user_id: int, *, page: int = 1, per_page: int = 10
+    ) -> tuple[list[dict[str, Any]], int]:
+        page = max(1, page)
+        per_page = max(1, min(per_page, 50))
+        offset = (page - 1) * per_page
+        with self._connect() as conn:
+            total_row = conn.execute(
+                'SELECT COUNT(*) AS c FROM generation_jobs_history WHERE user_id = ?',
+                (user_id,),
+            ).fetchone()
+            total = int(total_row['c']) if total_row else 0
+            rows = conn.execute(
+                """
+                SELECT
+                    h.job_id,
+                    h.project_slug,
+                    h.project_name,
+                    h.status AS db_status,
+                    h.started_at,
+                    h.finished_at,
+                    h.duration_seconds,
+                    CASE
+                        WHEN p.id IS NULL THEN 1
+                        WHEN p.deleted_at IS NOT NULL THEN 1
+                        ELSE 0
+                    END AS project_deleted
+                FROM generation_jobs_history h
+                LEFT JOIN projects p ON p.id = h.project_id
+                WHERE h.user_id = ?
+                ORDER BY datetime(h.started_at) DESC, h.id DESC
+                LIMIT ? OFFSET ?
+                """,
+                (user_id, per_page, offset),
+            ).fetchall()
+        return [dict(row) for row in rows], total
 
     def ensure_project(self, user_id: int, slug: str) -> ProjectRecord:
         project = self.get_project(user_id, slug)

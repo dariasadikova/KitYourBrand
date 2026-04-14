@@ -4,13 +4,14 @@ import uuid
 from pathlib import Path
 from urllib.parse import quote
 
-from fastapi import APIRouter, File, Form, Request, UploadFile, status
+from fastapi import APIRouter, File, Form, Query, Request, UploadFile, status
 from fastapi.responses import FileResponse, HTMLResponse, RedirectResponse
 from fastapi.templating import Jinja2Templates
 
 from app.core.paths import TEMPLATES_DIR
 from app.core.settings import settings
 from app.services.auth_service import AuthService
+from app.services.generation_jobs import generation_jobs
 from app.services.project_service import ProjectService
 
 router = APIRouter()
@@ -22,6 +23,7 @@ project_service.init_db()
 PROFILE_AVATARS_DIR = settings.data_dir / 'profile_avatars'
 PROFILE_AVATARS_DIR.mkdir(parents=True, exist_ok=True)
 ALLOWED_AVATAR_EXT = {'.png', '.jpg', '.jpeg', '.webp'}
+GENERATION_HISTORY_PER_PAGE = 10
 
 
 FEATURES = [
@@ -71,6 +73,79 @@ def require_auth(request: Request):
     return None
 
 
+def _format_history_datetime(iso: str | None) -> str:
+    if not iso:
+        return '—'
+    s = str(iso).replace('T', ' ')
+    if '+00:00' in s:
+        s = s.replace('+00:00', '').strip()
+    elif s.endswith('Z'):
+        s = s[:-1].strip()
+    return s[:16] if len(s) >= 16 else s
+
+
+def _format_history_duration(sec: float | None) -> str:
+    if sec is None:
+        return '—'
+    try:
+        s = float(sec)
+    except (TypeError, ValueError):
+        return '—'
+    if s >= 60:
+        m = int(s // 60)
+        rest = s - m * 60
+        if rest < 0.05:
+            return f'{m} мин'
+        txt = f'{m} мин {rest:.1f} сек'
+        return txt.replace('.0 сек', ' сек')
+    txt = f'{s:.1f} сек'
+    return txt.replace('.0 сек', ' сек')
+
+
+def _enrich_generation_history_rows(raw: list[dict]) -> list[dict]:
+    rows: list[dict] = []
+    for r in raw:
+        live = generation_jobs.get_job(str(r['job_id']))
+        db_status = str(r['db_status'])
+        project_deleted = bool(r['project_deleted'])
+        in_memory_running = bool(
+            live and str(live.get('status') or '') not in ('completed', 'failed')
+        )
+        db_inflight = db_status in ('pending', 'running')
+        ui_running = db_inflight and in_memory_running
+        interrupted = db_inflight and not in_memory_running
+        effective_failed = db_status == 'failed' or interrupted
+
+        if ui_running:
+            status_key = 'running'
+            action = 'running'
+        elif db_status == 'success' and not interrupted:
+            status_key = 'success'
+            action = 'restore' if project_deleted else 'open'
+        else:
+            status_key = 'error'
+            if project_deleted:
+                action = 'restore'
+            else:
+                action = 'repeat'
+
+        slug = str(r['project_slug'])
+        rows.append(
+            {
+                'job_id': r['job_id'],
+                'started_display': _format_history_datetime(r.get('started_at')),
+                'project_name': r.get('project_name') or slug,
+                'project_slug': slug,
+                'status_key': status_key,
+                'duration_display': _format_history_duration(r.get('duration_seconds')),
+                'action': action,
+                'results_url': f'/projects/{slug}/results',
+                'editor_url': f'/projects/{slug}',
+            }
+        )
+    return rows
+
+
 @router.get('/', response_class=HTMLResponse)
 async def landing_page(request: Request) -> HTMLResponse:
     context = landing_context()
@@ -99,6 +174,50 @@ async def dashboard_page(request: Request) -> HTMLResponse:
         'user_initial': (user_name[:1] or '?').upper(),
     }
     return templates.TemplateResponse(request, 'pages/dashboard.html', context)
+
+
+@router.get('/generation-history', response_class=HTMLResponse)
+async def generation_history_page(request: Request, page: int = Query(1, ge=1)) -> HTMLResponse:
+    auth_redirect = require_auth(request)
+    if auth_redirect:
+        return auth_redirect
+
+    user_id = int(request.session['user_id'])
+    user_name = request.session.get('user_name') or ''
+    per_page = GENERATION_HISTORY_PER_PAGE
+    stats = project_service.generation_history_stats(user_id)
+    total = int(stats['total'])
+    total_pages = max(1, (total + per_page - 1) // per_page)
+    page = max(1, min(page, total_pages))
+    raw_rows, _ = project_service.list_generation_history_page(
+        user_id, page=page, per_page=per_page
+    )
+    history_rows = _enrich_generation_history_rows(raw_rows)
+    avg = stats.get('avg_duration')
+    avg_display = _format_history_duration(float(avg)) if avg is not None else '—'
+    showing_from = (page - 1) * per_page + 1 if total else 0
+    showing_to = min(page * per_page, total)
+
+    context = {
+        'request': request,
+        'user_name': user_name,
+        'user_email': request.session.get('user_email') or '',
+        'user_initial': (user_name[:1] or '?').upper(),
+        'history_rows': history_rows,
+        'stats': stats,
+        'stats_avg_display': avg_display,
+        'page': page,
+        'per_page': per_page,
+        'total': total,
+        'total_pages': total_pages,
+        'has_prev': page > 1,
+        'has_next': page < total_pages,
+        'prev_page': page - 1,
+        'next_page': page + 1,
+        'showing_from': showing_from,
+        'showing_to': showing_to,
+    }
+    return templates.TemplateResponse(request, 'pages/generation_history.html', context)
 
 
 @router.get('/profile', response_class=HTMLResponse)

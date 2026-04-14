@@ -144,6 +144,17 @@ async def delete_project(request: Request, project_slug: str):
     return RedirectResponse(url='/dashboard', status_code=status.HTTP_303_SEE_OTHER)
 
 
+@router.post('/projects/{project_slug}/restore')
+async def restore_project(request: Request, project_slug: str):
+    auth_redirect = redirect_auth(request)
+    if auth_redirect:
+        return auth_redirect
+    user_id = int(request.session['user_id'])
+    if not project_service.restore_project(user_id, project_slug):
+        raise HTTPException(status_code=404, detail='Проект не найден или уже активен.')
+    return RedirectResponse(url='/generation-history', status_code=status.HTTP_303_SEE_OTHER)
+
+
 @router.get('/projects/{project_slug}', response_class=HTMLResponse)
 async def project_editor_page(request: Request, project_slug: str) -> HTMLResponse:
     auth_redirect = redirect_auth(request)
@@ -299,6 +310,7 @@ async def start_generate_assets(request: Request, project_slug: str) -> JSONResp
     project_or_404(user_id, project_slug)
     data = await request.json()
     job = generation_jobs.create_job(user_id=user_id, project_slug=project_slug)
+    project_service.record_generation_job(user_id=user_id, job_id=job['id'], project_slug=project_slug)
     generation_jobs.start_generation(
         job_id=job['id'],
         generation_service=generation_service,
@@ -306,6 +318,7 @@ async def start_generate_assets(request: Request, project_slug: str) -> JSONResp
         project_slug=project_slug,
         payload=data,
         base_host=str(request.base_url).rstrip('/'),
+        project_service=project_service,
     )
     return JSONResponse({'ok': True, 'job_id': job['id']})
 

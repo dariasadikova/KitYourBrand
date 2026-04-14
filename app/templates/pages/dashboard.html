@@ -8,7 +8,7 @@
         <h1>Мои проекты</h1>
         <div class="dashboard-head__actions">
             {% if show_generation_history %}
-            <a href="#" class="btn btn-outline dashboard-history-btn">Посмотреть историю генераций</a>
+            <a href="/generation-history" class="btn btn-outline dashboard-history-btn">Посмотреть историю генераций</a>
             {% endif %}
             <form action="/projects/create" method="post" class="dashboard-create-form">
                 <input type="hidden" name="name" value="Новый проект" />

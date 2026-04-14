@@ -30,6 +30,10 @@ def create_app() -> FastAPI:
         return response
 
     @app.on_event("startup")
+    async def mark_stale_generation_jobs():
+        pages.project_service.mark_abandoned_generation_jobs()
+
+    @app.on_event("startup")
     async def debug_routes():
         logger.info("=== REGISTERED ROUTES ===")
         for route in app.routes:
