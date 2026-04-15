@@ -7,7 +7,7 @@
 {% block dashboard_main_classes %} results-main{% endblock %}
 
 {% block dashboard_main %}
-        <section class="results-page">
+        <section class="results-page" data-results-page data-project-slug="{{ project.slug }}" data-brand-id="{{ project.brand_id or '' }}">
             <div class="results-page__head">
                 <div>
                     <h1>Результаты генерации бренд-комплекта</h1>
@@ -103,9 +103,24 @@
                     {% endif %}
                 </section>
 
-                <div class="results-actions">
-                    <a href="/projects/{{ project.slug }}/downloads/all" class="btn btn-primary">Экспорт бренд-кита</a>
-                </div>
+                <section class="results-card results-card--export" data-figma-export>
+                    <div class="results-card__head results-card__head--stacked">
+                        <div class="results-card__title">
+                            <h2>Экспорт в Figma</h2>
+                        </div>
+                        <p class="results-export__subtitle">Соберите Figma Plugin JSON для импорта бренд-комплекта в плагин.</p>
+                    </div>
+                    <div class="results-export__actions">
+                        <button type="button" class="btn btn-primary" id="results-figma-generate-btn">Экспорт бренд-комплекта</button>
+                        <a href="/projects/{{ project.slug }}/downloads/all" class="btn btn-secondary">Скачать архив</a>
+                        <a href="#" class="btn btn-secondary" id="results-figma-download-link" hidden>Скачать manifest</a>
+                    </div>
+                    <p class="results-export__status" id="results-figma-status" aria-live="polite"></p>
+                </section>
             </div>
         </section>
+{% endblock %}
+
+{% block dashboard_extra %}
+<script src="{{ url_for('static', path='js/generation-results.js') }}"></script>
 {% endblock %}
