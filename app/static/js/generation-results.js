@@ -4,6 +4,7 @@
 
   const projectSlug = root.dataset.projectSlug || '';
   const brandId = (root.dataset.brandId || '').trim();
+  const manifestPanel = document.getElementById('results-manifest-panel');
   const generateBtn = document.getElementById('results-figma-generate-btn');
   const statusNode = document.getElementById('results-figma-status');
   const downloadLink = document.getElementById('results-figma-download-link');
@@ -63,6 +64,7 @@
 
       setDownloadLink(data.download_url || data.manifest_url || '');
       setStatus('Manifest готов. Теперь его можно скачать и использовать в Figma plugin.', 'success');
+      if (manifestPanel) manifestPanel.open = true;
       setBusy(true, 'Manifest готов ✓');
 
       window.setTimeout(() => {

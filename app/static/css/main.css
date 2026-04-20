@@ -126,14 +126,14 @@ img {
     display: inline-flex;
     align-items: center;
     justify-content: center;
-    min-height: 56px;
+    min-height: 52px;
     padding: 0 28px;
     border-radius: 14px;
-    font-weight: 500;
+    font-weight: 400;
     font-size: 1rem;
     transition: transform 0.18s ease, background 0.18s ease, border-color 0.18s ease;
     cursor: pointer;
-    border: 0;
+    border: 1px solid rgba(255, 255, 255, 1);
 }
 
 .btn:hover {
@@ -2748,8 +2748,64 @@ body.generation-history-modal-open {
     gap: 14px;
 }
 
+.results-manifest {
+    width: 100%;
+    border: 1px solid rgba(255, 255, 255, 0.12);
+    border-radius: 12px;
+    background: rgba(255, 255, 255, 0.03);
+    margin-bottom: 18px;
+}
+
+.results-manifest__summary {
+    list-style: none;
+    cursor: pointer;
+    padding: 12px 14px;
+    font-weight: 500;
+    display: flex;
+    align-items: center;
+    justify-content: space-between;
+}
+
+.results-manifest__summary::-webkit-details-marker {
+    display: none;
+}
+
+.results-manifest__summary::after {
+    content: '▾';
+    color: var(--muted);
+    transition: transform .2s ease;
+}
+
+.results-manifest[open] .results-manifest__summary::after {
+    transform: rotate(180deg);
+}
+
+.results-manifest__content {
+    padding: 0 14px 14px;
+    display: grid;
+    gap: 10px;
+}
+
+#results-figma-download-link {
+    justify-self: start;
+    width: auto;
+    min-height: 44px;
+    padding: 0 16px;
+    border-radius: 12px;
+    background: #ffffff;
+    color: #0a0a0a;
+    border: 1px solid #ffffff;
+    margin-top: 12px;
+}
+
+#results-figma-download-link:hover {
+    background: #f3f4f6;
+    color: #0a0a0a;
+    border-color: #f3f4f6;
+}
+
 .results-export__subtitle {
-    margin: -6px 0 0;
+    margin: 0;
     color: var(--muted);
 }
 

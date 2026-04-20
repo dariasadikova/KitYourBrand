@@ -108,12 +108,19 @@
                         <div class="results-card__title">
                             <h2>Экспорт в Figma</h2>
                         </div>
-                        <p class="results-export__subtitle">Соберите Figma Plugin JSON для импорта бренд-комплекта в плагин.</p>
                     </div>
+                    <details class="results-manifest" id="results-manifest-panel">
+                        <summary class="results-manifest__summary">
+                            <span>Манифест</span>
+                        </summary>
+                        <div class="results-manifest__content">
+                            <p class="results-export__subtitle">Dev-блок: ручная пересборка Figma manifest при отладке.</p>
+                            <a href="#" class="btn btn-secondary" id="results-figma-download-link" hidden>Скачать manifest</a>
+                        </div>
+                    </details>
                     <div class="results-export__actions">
                         <button type="button" class="btn btn-primary" id="results-figma-generate-btn">Экспорт бренд-комплекта</button>
                         <a href="/projects/{{ project.slug }}/downloads/all" class="btn btn-secondary">Скачать архив</a>
-                        <a href="#" class="btn btn-secondary" id="results-figma-download-link" hidden>Скачать manifest</a>
                     </div>
                     <p class="results-export__status" id="results-figma-status" aria-live="polite"></p>
                 </section>

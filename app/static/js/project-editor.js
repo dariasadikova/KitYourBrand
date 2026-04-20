@@ -242,11 +242,11 @@ document.addEventListener('DOMContentLoaded', () => {
     card.classList.toggle('is-hidden-step', !visible);
   }
 
-  const stepTouched = { 1: false, 2: false, 3: false, 4: false, 5: false, 6: false };
+  const stepTouched = { 1: false, 2: false, 3: false, 4: false, 5: false };
 
   function markStepTouched(step) {
     const key = Number(step);
-    if (!Number.isFinite(key) || key < 1 || key > 6) return;
+    if (!Number.isFinite(key) || key < 1 || key > 5) return;
     if (!stepTouched[key]) stepTouched[key] = true;
   }
 
@@ -274,15 +274,14 @@ document.addEventListener('DOMContentLoaded', () => {
     const step3 = isStep3Complete();
     const step4 = stepTouched[4];
     const step5 = stepTouched[5];
-    const step6 = stepTouched[6];
+    const step6Ready = stepTouched[5];
 
     setStepVisible(cards['1'], true);
     setStepVisible(cards['2'], step1);
     setStepVisible(cards['3'], step1 && step2);
     setStepVisible(cards['4'], step1 && step2 && step3);
     setStepVisible(cards['5'], step1 && step2 && step3 && step4);
-    setStepVisible(cards['6'], step1 && step2 && step3 && step4 && step5);
-    setStepVisible(cards['7'], step1 && step2 && step3 && step4 && step5 && step6);
+    setStepVisible(cards['6'], step1 && step2 && step3 && step4 && step6Ready);
 
   }
 
@@ -1132,14 +1131,6 @@ document.addEventListener('DOMContentLoaded', () => {
     node?.addEventListener('input', updateGenerationSummary);
     node?.addEventListener('change', updateGenerationSummary);
   });
-  byId('gen-figma')?.addEventListener('click', () => {
-    markStepTouched(6);
-    refreshStepProgression();
-  });
-  byId('figma-link')?.addEventListener('click', () => {
-    markStepTouched(6);
-    refreshStepProgression();
-  });
   updateGenerationSummary();
 
   byId('reset')?.addEventListener('click', async () => {
@@ -1280,53 +1271,4 @@ document.addEventListener('DOMContentLoaded', () => {
     }
   });
 
-  figmaGenerateBtn?.addEventListener('click', async () => {
-    try {
-      setFigmaButtonBusy(true, 'Сохраняем проект…');
-      setFigmaDownloadEnabled(false);
-
-      const brandId = getCurrentBrandId();
-      if (!brandId) {
-        throw new Error('Укажите Brand ID перед генерацией Figma manifest');
-      }
-
-      if (figmaLocalUrlInput) figmaLocalUrlInput.value = 'Подготовка manifest…';
-      await saveProject();
-
-      setFigmaButtonBusy(true, 'Генерируем Figma JSON…');
-      const response = await fetch(`/projects/${projectSlug}/generate-figma`, {
-        method: 'POST',
-        headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({ brand_id: brandId }),
-      });
-
-      const data = await response.json();
-
-      if (!response.ok || !data.ok) {
-        throw new Error(data.error || 'Не удалось собрать Figma manifest');
-      }
-
-      updateFigmaExportUi({
-        brand_id: data.brand_id || brandId,
-        production_url: data.production_url,
-        local_url: data.local_url,
-        manifest_url: data.manifest_url,
-        download_url: data.download_url,
-      });
-
-      setFigmaButtonBusy(true, 'Manifest готов ✓');
-      showToast('Figma manifest собран');
-      setTimeout(() => setFigmaButtonBusy(false), 900);
-    } catch (error) {
-      updateFigmaExportUi({ brand_id: getCurrentBrandId() });
-      setFigmaDownloadEnabled(false);
-      setFigmaButtonBusy(false);
-      showToast(error.message, true);
-      return;
-    } finally {
-      if (figmaGenerateBtn?.disabled) {
-        setTimeout(() => setFigmaButtonBusy(false), 900);
-      }
-    }
-  });
 });
