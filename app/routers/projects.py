@@ -332,6 +332,23 @@ async def get_generation_job(request: Request, job_id: str) -> JSONResponse:
     return JSONResponse({'ok': True, 'job': job})
 
 
+@router.post('/generation-jobs/{job_id}/cancel')
+async def cancel_generation_job(request: Request, job_id: str) -> JSONResponse:
+    user_id = require_auth(request)
+    ok = generation_jobs.request_cancel(job_id, user_id)
+    if not ok:
+        return JSONResponse({'ok': False, 'error': 'Задача не найдена или уже завершена.'}, status_code=400)
+    return JSONResponse({'ok': True})
+
+
+@router.get('/projects/{project_slug}/generation/active')
+async def get_active_generation_job_for_project(request: Request, project_slug: str) -> JSONResponse:
+    user_id = require_auth(request)
+    project_or_404(user_id, project_slug)
+    job = generation_jobs.get_active_job_for_project(user_id=user_id, project_slug=project_slug)
+    return JSONResponse({'ok': True, 'job': job})
+
+
 @router.api_route('/assets/{brand_id}/{relpath:path}', methods=['GET', 'OPTIONS'])
 async def serve_assets(brand_id: str, relpath: str):
     if relpath.startswith('recraft/'):
@@ -373,6 +390,7 @@ async def project_results_page(request: Request, project_slug: str) -> HTMLRespo
     brand_id = (tokens.get('brand_id') or project.brand_id or '').strip()
     if not brand_id:
         raise HTTPException(status_code=400, detail='У проекта не указан brand_id.')
+    active_job = generation_jobs.get_active_job_for_project(user_id=user_id, project_slug=project_slug)
 
     context = {
         'request': request,
@@ -383,6 +401,7 @@ async def project_results_page(request: Request, project_slug: str) -> HTMLRespo
         'icons': _scan_asset_group(brand_id, 'icons', ('.png', '.svg', '.jpg', '.jpeg')),
         'patterns': _scan_asset_group(brand_id, 'patterns', ('.png', '.svg', '.jpg', '.jpeg')),
         'illustrations': _scan_asset_group(brand_id, 'illustrations', ('.png', '.svg', '.jpg', '.jpeg')),
+        'active_generation_job_id': (active_job or {}).get('id') if active_job else '',
     }
     return templates.TemplateResponse(request, 'pages/generation_results.html', context)
 

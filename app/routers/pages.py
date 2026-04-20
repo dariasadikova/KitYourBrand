@@ -118,7 +118,7 @@ def _enrich_generation_history_rows(raw: list[dict]) -> list[dict]:
 
         if ui_running:
             status_key = 'running'
-            action = 'running'
+            action = 'cancel'
         elif db_status == 'success' and not interrupted:
             status_key = 'success'
             action = 'restore' if project_deleted else 'open'
@@ -141,6 +141,9 @@ def _enrich_generation_history_rows(raw: list[dict]) -> list[dict]:
                 'action': action,
                 'results_url': f'/projects/{slug}/results',
                 'editor_url': f'/projects/{slug}',
+                'error_message': (r.get('error_message') or '').strip(),
+                'error_hint': (r.get('error_hint') or '').strip(),
+                'interrupted': interrupted,
             }
         )
     return rows

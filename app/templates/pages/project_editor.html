@@ -169,7 +169,7 @@
                             <span class="editor-field-title">Темы генерации</span>
                             <div id="chip-list-patterns" class="chip-list" role="list"></div>
                             <div class="chip-add-row">
-                                <input type="text" id="patterns-input" placeholder="minimal wave..."
+                                <input type="text" id="patterns-input" placeholder="geometric, monogram, organic..."
                                     class="editor-grow-input" autocomplete="off" />
                                 <button type="button" class="small-action" data-chip-add="patterns">Добавить</button>
                             </div>
@@ -318,8 +318,7 @@
         <label class="generation-log-label">Лог операций</label>
         <pre id="generation-log" class="generation-log"></pre>
         <div class="generation-modal__actions">
-            <button type="button" id="generation-cancel-btn" class="btn btn-outline btn-inline">Отменить</button>
-            <button type="button" id="generation-modal-close-btn" class="btn btn-outline btn-inline">Закрыть</button>
+            <button type="button" id="generation-cancel-btn" class="btn btn-outline btn-inline">Прервать генерацию</button>
             <a id="generation-result-link" class="btn btn-primary btn-inline"
                 href="/projects/{{ project.slug }}/results" hidden>Посмотреть результат</a>
         </div>

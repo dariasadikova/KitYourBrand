@@ -10,6 +10,7 @@ if TYPE_CHECKING:
     from app.services.project_service import ProjectService
 
 from app.services.generation_error_summary import ProviderGenerationError, summarize_generation_failure
+from app.services.generation_service import GenerationCancelledError
 
 
 class GenerationJobStore:
@@ -47,6 +48,7 @@ class GenerationJobStore:
             },
             'current_provider': None,
             'failed_provider': None,
+            'cancel_requested': False,
         }
         with self._lock:
             self._jobs[job_id] = job
@@ -82,6 +84,37 @@ class GenerationJobStore:
         with self._lock:
             job = self._jobs.get(job_id)
             return dict(job) if job else None
+
+    def get_active_job_for_project(self, *, user_id: int, project_slug: str) -> dict[str, Any] | None:
+        with self._lock:
+            candidates = [
+                j for j in self._jobs.values()
+                if int(j.get('user_id') or 0) == int(user_id)
+                and str(j.get('project_slug') or '') == project_slug
+                and str(j.get('status') or '') not in ('completed', 'failed', 'cancelled')
+            ]
+            if not candidates:
+                return None
+            return dict(candidates[-1])
+
+    def is_cancel_requested(self, job_id: str) -> bool:
+        with self._lock:
+            job = self._jobs.get(job_id)
+            return bool(job and job.get('cancel_requested'))
+
+    def request_cancel(self, job_id: str, user_id: int) -> bool:
+        with self._lock:
+            job = self._jobs.get(job_id)
+            if not job or int(job.get('user_id') or 0) != int(user_id):
+                return False
+            if job.get('status') in ('completed', 'failed', 'cancelled'):
+                return False
+            job['cancel_requested'] = True
+            if job.get('status') in ('pending', 'running'):
+                job['status'] = 'cancelling'
+                job['message'] = 'Прерывание генерации...'
+            job['logs'].append(f'[{self._stamp()}] Запрошено прерывание генерации пользователем')
+            return True
 
     def start_generation(
         self,
@@ -133,7 +166,10 @@ class GenerationJobStore:
                     payload,
                     base_host,
                     progress_callback=report,
+                    should_cancel=lambda: self.is_cancel_requested(job_id),
                 )
+                if self.is_cancel_requested(job_id):
+                    raise GenerationCancelledError('Генерация прервана пользователем.')
                 self.update(
                     job_id,
                     status='completed',
@@ -146,6 +182,25 @@ class GenerationJobStore:
                 if project_service is not None:
                     project_service.finalize_generation_job_record(job_id, 'success')
             except Exception as exc:
+                if isinstance(exc, GenerationCancelledError):
+                    self.update(
+                        job_id,
+                        status='cancelled',
+                        progress=100,
+                        message='Генерация прервана',
+                        error=None,
+                        error_hint=None,
+                        current_provider=None,
+                    )
+                    self.append_log(job_id, 'Генерация прервана пользователем')
+                    if project_service is not None:
+                        project_service.finalize_generation_job_record(
+                            job_id,
+                            'failed',
+                            error_message='Генерация прервана пользователем.',
+                            error_hint='Откройте проект, исправьте параметры и запустите генерацию снова.',
+                        )
+                    return
                 tb = traceback.format_exc()
                 snapshot = self.get_job(job_id) or {}
 
@@ -186,7 +241,12 @@ class GenerationJobStore:
                 if hint:
                     self.append_log(job_id, hint)
                 if project_service is not None:
-                    project_service.finalize_generation_job_record(job_id, 'failed')
+                    project_service.finalize_generation_job_record(
+                        job_id,
+                        'failed',
+                        error_message=user_msg or 'Ошибка генерации',
+                        error_hint=hint,
+                    )
 
         thread = threading.Thread(target=runner, daemon=True)
         thread.start()

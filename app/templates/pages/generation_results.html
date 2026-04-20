@@ -7,7 +7,7 @@
 {% block dashboard_main_classes %} results-main{% endblock %}
 
 {% block dashboard_main %}
-        <section class="results-page" data-results-page data-project-slug="{{ project.slug }}" data-brand-id="{{ project.brand_id or '' }}">
+        <section class="results-page" data-results-page data-project-slug="{{ project.slug }}" data-brand-id="{{ project.brand_id or '' }}" data-active-job-id="{{ active_generation_job_id or '' }}">
             <div class="results-page__head">
                 <div>
                     <h1>Результаты генерации бренд-комплекта</h1>
@@ -126,6 +126,35 @@
                 </section>
             </div>
         </section>
+
+        <div id="results-generation-modal" class="generation-modal" hidden>
+            <div class="generation-modal__backdrop"></div>
+            <div class="generation-modal__dialog" role="dialog" aria-modal="true" aria-labelledby="results-generation-modal-title">
+                <button type="button" class="generation-modal__close" id="results-generation-close" hidden>×</button>
+                <h2 id="results-generation-modal-title">Генерация бренд-комплекта</h2>
+                <div class="generation-progress">
+                    <div id="results-generation-progress-bar" class="generation-progress__bar" style="width: 0%"></div>
+                </div>
+                <div class="generation-status-row">
+                    <strong id="results-generation-progress-text">0%</strong>
+                    <span id="results-generation-status-text" class="generation-status-text">Ожидание</span>
+                </div>
+                <div class="generation-providers">
+                    <div class="generation-provider"><span>Recraft</span><span id="results-provider-status-recraft"
+                            class="provider-pill provider-pill--pending">ожидание</span></div>
+                    <div class="generation-provider"><span>Seedream</span><span id="results-provider-status-seedream"
+                            class="provider-pill provider-pill--pending">ожидание</span></div>
+                    <div class="generation-provider"><span>Flux</span><span id="results-provider-status-flux"
+                            class="provider-pill provider-pill--pending">ожидание</span></div>
+                </div>
+                <label class="generation-log-label">Лог операций</label>
+                <pre id="results-generation-log" class="generation-log"></pre>
+                <div class="generation-modal__actions">
+                    <span id="results-generation-blocking-note" class="generation-history-action-muted">Окно будет доступно для закрытия после завершения процесса</span>
+                    <button type="button" id="results-generation-close-btn" class="btn btn-outline btn-inline" hidden>Закрыть</button>
+                </div>
+            </div>
+        </div>
 {% endblock %}
 
 {% block dashboard_extra %}

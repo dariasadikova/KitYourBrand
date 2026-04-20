@@ -4,7 +4,7 @@
     --surface: rgba(28, 11, 57, 0.78);
     --surface-border: rgba(124, 63, 214, 0.28);
     --text: #f4f2fb;
-    --muted: #b6afcc;
+    --muted: #99A1AF;
     --primary: #00AEFF;
     --primary-pressed: #0097DD;
     --white-08: rgba(255, 255, 255, 0.08);
@@ -1862,6 +1862,26 @@ img {
     font: 500 .9rem/1.5 'SFMono-Regular', Consolas, monospace;
 }
 .generation-modal__actions { display: flex; justify-content: flex-end; gap: 12px; margin-top: 16px; flex-shrink: 0; padding-top: 2px; }
+.generation-modal__actions .btn-outline {
+    color: #1f2937;
+    border-color: rgba(31, 41, 55, 0.28);
+    background: #f4f4f6;
+}
+.generation-modal__actions .btn-outline:hover {
+    color: #111827;
+    border-color: rgba(31, 41, 55, 0.45);
+    background: #eceff3;
+}
+#generation-cancel-btn {
+    color: #991b1b;
+    border-color: rgba(185, 28, 28, 0.45);
+    background: #fff5f5;
+}
+#generation-cancel-btn:hover {
+    color: #7f1d1d;
+    border-color: rgba(185, 28, 28, 0.65);
+    background: #ffe9e9;
+}
 @media (max-width: 740px) { .generation-modal__dialog { padding: 20px 18px; } .generation-providers { grid-template-columns: 1fr; } }
 @media (max-height: 640px) {
     .generation-modal__dialog { padding: 18px 16px; border-radius: 20px; }
@@ -2524,6 +2544,12 @@ body.generation-history-modal-open {
     border: 1px solid rgba(255, 255, 255, 0.08);
 }
 
+.generation-history-table-hint {
+    margin: 0 0 28px;
+    font-size: 0.85rem;
+    color: #A0B9C5;
+}
+
 .generation-history-table-title {
     margin: 0 0 20px;
     font-size: 1.75rem;
@@ -2565,7 +2591,7 @@ body.generation-history-modal-open {
 }
 
 .generation-history-table__date {
-    color: rgba(248, 250, 252, 0.88);
+    color: rgba(248, 250, 252);
     white-space: nowrap;
 }
 
@@ -2587,12 +2613,12 @@ body.generation-history-modal-open {
     width: 8px;
     height: 8px;
     border-radius: 999px;
-    background: linear-gradient(135deg, #00aeff, #7c5cff);
+    background: #00aeff;
     flex-shrink: 0;
 }
 
 .generation-history-table__duration {
-    color: rgba(248, 250, 252, 0.75);
+    color: rgba(248, 250, 252);
     white-space: nowrap;
 }
 
@@ -2603,10 +2629,37 @@ body.generation-history-modal-open {
 .generation-history-pill {
     display: inline-flex;
     align-items: center;
+    justify-content: center;
+    box-sizing: border-box;
+    min-width: 6rem;
     padding: 5px 12px;
     border-radius: 999px;
     font-size: 0.82rem;
     font-weight: 700;
+    line-height: 1.2;
+    white-space: nowrap;
+}
+
+.generation-history-pill-button {
+    border: none;
+    cursor: pointer;
+}
+
+.generation-history-pill-button:hover {
+    transform: translateY(-1px);
+    filter: brightness(1.08);
+}
+
+.generation-history-pill-help {
+    margin-left: 6px;
+    display: inline-grid;
+    place-items: center;
+    width: 14px;
+    height: 14px;
+    border-radius: 999px;
+    background: rgba(255, 255, 255, 0.18);
+    font-size: 0.72rem;
+    line-height: 1;
 }
 
 .generation-history-pill--success {
@@ -2678,6 +2731,18 @@ body.generation-history-modal-open {
     background: rgba(255, 255, 255, 0.06);
 }
 
+.generation-history-btn-cancel {
+    border-color: rgba(248, 113, 113, 0.5);
+    color: #fecaca;
+    background: rgba(127, 29, 29, 0.25);
+}
+
+.generation-history-btn-cancel:hover {
+    border-color: rgba(248, 113, 113, 0.75);
+    color: #fee2e2;
+    background: rgba(127, 29, 29, 0.42);
+}
+
 .generation-history-footer {
     display: flex;
     align-items: center;
@@ -2712,6 +2777,24 @@ body.generation-history-modal-open {
     pointer-events: none;
     font-size: 0.9rem;
     color: rgba(248, 250, 252, 0.5);
+}
+
+.generation-history-error-body {
+    margin: 0;
+    font-size: 1rem;
+    line-height: 1.5;
+    color: rgba(248, 250, 252, 0.95);
+}
+
+.generation-history-error-hint {
+    margin: 10px 0 0;
+    color: rgba(248, 250, 252, 0.72);
+}
+
+.generation-history-modal__actions {
+    margin-top: 16px;
+    display: flex;
+    justify-content: flex-end;
 }
 
 .generation-history-empty {

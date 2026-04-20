@@ -4,10 +4,24 @@
 
   const projectSlug = root.dataset.projectSlug || '';
   const brandId = (root.dataset.brandId || '').trim();
+  const activeJobIdFromPage = (root.dataset.activeJobId || '').trim();
   const manifestPanel = document.getElementById('results-manifest-panel');
   const generateBtn = document.getElementById('results-figma-generate-btn');
   const statusNode = document.getElementById('results-figma-status');
   const downloadLink = document.getElementById('results-figma-download-link');
+  const generationModal = document.getElementById('results-generation-modal');
+  const generationClose = document.getElementById('results-generation-close');
+  const generationCloseBtn = document.getElementById('results-generation-close-btn');
+  const generationBlockingNote = document.getElementById('results-generation-blocking-note');
+  const progressBar = document.getElementById('results-generation-progress-bar');
+  const progressText = document.getElementById('results-generation-progress-text');
+  const statusText = document.getElementById('results-generation-status-text');
+  const generationLog = document.getElementById('results-generation-log');
+  const providerPills = {
+    recraft: document.getElementById('results-provider-status-recraft'),
+    seedream: document.getElementById('results-provider-status-seedream'),
+    flux: document.getElementById('results-provider-status-flux'),
+  };
 
   if (!projectSlug || !generateBtn || !statusNode || !downloadLink) return;
 
@@ -75,4 +89,83 @@
       setBusy(false, initialLabel);
     }
   });
+
+  function openGenerationModal() {
+    if (!generationModal) return;
+    generationModal.hidden = false;
+    document.body.classList.add('modal-open');
+  }
+
+  function closeGenerationModal() {
+    if (!generationModal) return;
+    generationModal.hidden = true;
+    document.body.classList.remove('modal-open');
+  }
+
+  function setProviderStatus(name, status, text) {
+    const el = providerPills[name];
+    if (!el) return;
+    const normalized = ['pending', 'running', 'success', 'error'].includes(status) ? status : 'pending';
+    el.className = 'provider-pill';
+    el.classList.add(`provider-pill--${normalized}`);
+    el.textContent = text || (
+      normalized === 'running' ? 'выполняется'
+        : normalized === 'success' ? 'успех'
+          : normalized === 'error' ? 'ошибка'
+            : 'ожидание'
+    );
+  }
+
+  function updateGenerationModal(job) {
+    if (!job) return;
+    const progress = Number(job.progress || 0);
+    if (progressBar) progressBar.style.width = `${progress}%`;
+    if (progressText) progressText.textContent = `${progress}%`;
+    if (statusText) statusText.textContent = job.message || 'Выполняется';
+    if (generationLog) generationLog.textContent = Array.isArray(job.logs) ? job.logs.join('\n') : '';
+    const statuses = job.provider_statuses || job.providers || {};
+    ['recraft', 'seedream', 'flux'].forEach((name) => setProviderStatus(name, statuses[name], ''));
+    const terminal = ['completed', 'failed', 'cancelled', 'completed_with_errors'].includes(String(job.status || ''));
+    if (generationClose) generationClose.hidden = !terminal;
+    if (generationCloseBtn) generationCloseBtn.hidden = !terminal;
+    if (generationBlockingNote) generationBlockingNote.hidden = terminal;
+    if (terminal && statusText) {
+      statusText.textContent = job.status === 'cancelled' ? 'Генерация прервана' : (job.message || 'Генерация завершена');
+    }
+  }
+
+  async function pollJob(jobId) {
+    openGenerationModal();
+    while (true) {
+      const response = await fetch(`/generation-jobs/${jobId}`);
+      const payload = await response.json().catch(() => ({}));
+      if (!response.ok || !payload.ok || !payload.job) break;
+      const job = payload.job;
+      updateGenerationModal(job);
+      const terminal = ['completed', 'failed', 'cancelled', 'completed_with_errors'].includes(String(job.status || ''));
+      if (terminal) break;
+      await new Promise((resolve) => setTimeout(resolve, 1000));
+    }
+  }
+
+  async function attachActiveGenerationWatcher() {
+    if (!generationModal) return;
+    if (activeJobIdFromPage) {
+      await pollJob(activeJobIdFromPage);
+      return;
+    }
+    try {
+      const response = await fetch(`/projects/${projectSlug}/generation/active`);
+      const payload = await response.json().catch(() => ({}));
+      if (!response.ok || !payload.ok || !payload.job || !payload.job.id) return;
+      const jobId = payload.job.id;
+      await pollJob(jobId);
+    } catch (_) {
+      // silently ignore watcher errors on results page
+    }
+  }
+
+  generationClose?.addEventListener('click', closeGenerationModal);
+  generationCloseBtn?.addEventListener('click', closeGenerationModal);
+  attachActiveGenerationWatcher();
 })();

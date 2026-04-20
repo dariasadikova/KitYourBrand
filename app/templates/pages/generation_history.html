@@ -16,6 +16,7 @@
     </div>
 
     <div class="generation-history-table-wrap">
+        <p class="generation-history-table-hint">Подсказка: нажмите на статус <strong>Ошибка</strong>, чтобы посмотреть подробности причины.</p>
         {% if history_rows %}
         <div class="generation-history-table-scroll">
             <table class="generation-history-table">
@@ -44,13 +45,18 @@
                             {% elif row.status_key == 'running' %}
                             <span class="generation-history-pill generation-history-pill--running">В процессе</span>
                             {% else %}
-                            <span class="generation-history-pill generation-history-pill--error">Ошибка</span>
+                            <button type="button" class="generation-history-pill generation-history-pill--error generation-history-pill-button"
+                                data-job-id="{{ row.job_id }}"
+                                data-error-message="{{ (row.error_message or '')|e }}"
+                                data-error-hint="{{ (row.error_hint or '')|e }}"
+                                title="Нажмите, чтобы открыть подробности ошибки">Ошибка</button>
                             {% endif %}
                         </td>
                         <td class="generation-history-table__duration">{{ row.duration_display }}</td>
                         <td class="generation-history-table__actions">
-                            {% if row.action == 'running' %}
-                            <span class="generation-history-action-muted">Выполняется…</span>
+                            {% if row.action == 'cancel' %}
+                            <button type="button" class="btn btn-outline btn-inline generation-history-action-btn generation-history-btn-cancel"
+                                data-cancel-job-id="{{ row.job_id }}">Прервать</button>
                             {% elif row.action == 'open' %}
                             <a class="btn btn-primary btn-inline generation-history-action-btn" href="{{ row.results_url }}">
                                 <svg xmlns="http://www.w3.org/2000/svg" width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M18 13v6a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2V8a2 2 0 0 1 2-2h6"/><path d="M15 3h6v6"/><path d="M10 14 21 3"/></svg>
@@ -147,6 +153,20 @@
             </div>
         </div>
     </div>
+
+    <div id="generation-history-error-modal" class="generation-history-modal" hidden>
+        <div class="generation-history-modal__backdrop" data-close-history-error></div>
+        <div class="generation-history-modal__dialog" role="alertdialog" aria-modal="true"
+            aria-labelledby="generation-history-error-title" aria-describedby="generation-history-error-body">
+            <button type="button" class="generation-history-modal__close" data-close-history-error aria-label="Закрыть">×</button>
+            <h2 id="generation-history-error-title">Ошибка генерации</h2>
+            <p id="generation-history-error-body" class="generation-history-error-body"></p>
+            <p id="generation-history-error-hint" class="generation-history-error-hint" hidden></p>
+            <div class="generation-history-modal__actions">
+                <button type="button" class="btn btn-primary btn-inline" data-close-history-error>Понятно</button>
+            </div>
+        </div>
+    </div>
 </section>
 {% endblock %}
 
@@ -167,8 +187,12 @@
 (() => {
   const modal = document.getElementById('generation-history-stats-modal');
   const openBtn = document.getElementById('generation-history-info-open');
+  const errorModal = document.getElementById('generation-history-error-modal');
+  const errorBody = document.getElementById('generation-history-error-body');
+  const errorHint = document.getElementById('generation-history-error-hint');
   if (!modal || !openBtn) return;
-  const closeNodes = modal.querySelectorAll('[data-close-history-stats]');
+  const closeStatsNodes = modal.querySelectorAll('[data-close-history-stats]');
+  const closeErrorNodes = errorModal ? errorModal.querySelectorAll('[data-close-history-error]') : [];
 
   const openModal = () => {
     modal.hidden = false;
@@ -181,9 +205,89 @@
   };
 
   openBtn.addEventListener('click', openModal);
-  closeNodes.forEach((node) => node.addEventListener('click', closeModal));
+  closeStatsNodes.forEach((node) => node.addEventListener('click', closeModal));
+  closeErrorNodes.forEach((node) => node.addEventListener('click', () => {
+    if (errorModal) errorModal.hidden = true;
+    document.body.classList.remove('generation-history-modal-open');
+  }));
   document.addEventListener('keydown', (event) => {
     if (event.key === 'Escape' && !modal.hidden) closeModal();
+    if (event.key === 'Escape' && errorModal && !errorModal.hidden) {
+      errorModal.hidden = true;
+      document.body.classList.remove('generation-history-modal-open');
+    }
+  });
+
+  document.querySelectorAll('.generation-history-pill-button').forEach((pill) => {
+    pill.addEventListener('click', async () => {
+      if (!errorModal || !errorBody || !errorHint) return;
+      let message = (pill.getAttribute('data-error-message') || '').trim();
+      let hint = (pill.getAttribute('data-error-hint') || '').trim();
+      const jobId = (pill.getAttribute('data-job-id') || '').trim();
+
+      if ((!message || message.length < 5) && jobId) {
+        try {
+          const response = await fetch(`/generation-jobs/${jobId}`);
+          const payload = await response.json().catch(() => ({}));
+          if (response.ok && payload.ok && payload.job) {
+            const job = payload.job;
+            message = (job.error || job.message || '').trim() || message;
+            hint = (job.error_hint || '').trim() || hint;
+            if (!hint && job.provider_errors && typeof job.provider_errors === 'object') {
+              const firstProviderError = Object.values(job.provider_errors).find((x) => x && typeof x === 'object');
+              if (firstProviderError && typeof firstProviderError === 'object') {
+                const pmsg = String(firstProviderError.message || '').trim();
+                const phint = String(firstProviderError.hint || '').trim();
+                if (!message && pmsg) message = pmsg;
+                if (!hint && phint) hint = phint;
+              }
+            }
+          }
+        } catch (_) {
+          // ignore: fallback to generic message below
+        }
+      }
+
+      if (!message) {
+        message = 'Генерация не завершилась успешно. Попробуйте повторить запуск.';
+      }
+      if (!hint) {
+        hint = 'Проверьте параметры проекта и доступность сервисов генерации.';
+      }
+
+      errorBody.textContent = message;
+      if (hint.trim()) {
+        errorHint.textContent = hint;
+        errorHint.hidden = false;
+      } else {
+        errorHint.textContent = '';
+        errorHint.hidden = true;
+      }
+      errorModal.hidden = false;
+      document.body.classList.add('generation-history-modal-open');
+    });
+  });
+
+  document.querySelectorAll('[data-cancel-job-id]').forEach((btn) => {
+    btn.addEventListener('click', async () => {
+      const jobId = btn.getAttribute('data-cancel-job-id');
+      if (!jobId) return;
+      btn.disabled = true;
+      btn.textContent = 'Прерываем...';
+      try {
+        const response = await fetch(`/generation-jobs/${jobId}/cancel`, { method: 'POST' });
+        const payload = await response.json().catch(() => ({}));
+        if (!response.ok || !payload.ok) {
+          throw new Error(payload.error || 'Не удалось прервать генерацию');
+        }
+        btn.textContent = 'Прерывается...';
+        window.setTimeout(() => window.location.reload(), 700);
+      } catch (error) {
+        btn.disabled = false;
+        btn.textContent = 'Прервать';
+        alert(error?.message || 'Не удалось прервать генерацию');
+      }
+    });
   });
 })();
 </script>

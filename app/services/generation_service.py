@@ -7,6 +7,7 @@ import re
 import shutil
 import subprocess
 import sys
+import threading
 from pathlib import Path
 from typing import Any, Callable
 
@@ -17,6 +18,10 @@ from app.services.generation_error_summary import ProviderGenerationError, summa
 from app.services.project_service import ProjectService
 
 logger = logging.getLogger("kityourbrand.generation")
+
+
+class GenerationCancelledError(RuntimeError):
+    """Raised when user cancels current generation job."""
 
 
 class GenerationService:
@@ -243,19 +248,40 @@ class GenerationService:
             print(err, file=sys.stderr, flush=True)
         print(f'[KitYourBrand][{label}] --- конец вывода ---', flush=True)
 
-    def _run_checked(self, cmd: list[str], cwd: Path, *, label: str = 'cli') -> tuple[str, str]:
-        try:
-            proc = subprocess.run(
-                cmd,
-                cwd=str(cwd),
-                check=True,
-                capture_output=True,
-                text=True,
-            )
-        except subprocess.CalledProcessError as exc:
-            self._emit_cli_output(label, exc.stdout, exc.stderr)
-            raise
-        return (proc.stdout or '').strip(), (proc.stderr or '').strip()
+    def _run_checked(
+        self,
+        cmd: list[str],
+        cwd: Path,
+        *,
+        label: str = 'cli',
+        should_cancel: Callable[[], bool] | None = None,
+    ) -> tuple[str, str]:
+        proc = subprocess.Popen(
+            cmd,
+            cwd=str(cwd),
+            stdout=subprocess.PIPE,
+            stderr=subprocess.PIPE,
+            text=True,
+        )
+        while True:
+            if should_cancel and should_cancel():
+                proc.terminate()
+                try:
+                    proc.wait(timeout=5)
+                except subprocess.TimeoutExpired:
+                    proc.kill()
+                    proc.wait(timeout=5)
+                raise GenerationCancelledError('Генерация прервана пользователем.')
+            if proc.poll() is not None:
+                break
+            threading.Event().wait(0.2)
+
+        stdout, stderr = proc.communicate()
+        if proc.returncode != 0:
+            err = subprocess.CalledProcessError(proc.returncode, cmd, output=stdout, stderr=stderr)
+            self._emit_cli_output(label, stdout, stderr)
+            raise err
+        return (stdout or '').strip(), (stderr or '').strip()
 
     def _raise_provider_error(
         self,
@@ -281,9 +307,12 @@ class GenerationService:
         cmd: list[str],
         cwd: Path,
         cli_label: str,
+        should_cancel: Callable[[], bool] | None = None,
     ) -> tuple[str, str]:
         try:
-            return self._run_checked(cmd, cwd, label=cli_label)
+            return self._run_checked(cmd, cwd, label=cli_label, should_cancel=should_cancel)
+        except GenerationCancelledError:
+            raise
         except subprocess.CalledProcessError as exc:
             self._raise_provider_error(
                 provider,
@@ -307,6 +336,7 @@ class GenerationService:
         patterns_count: int,
         illustrations_count: int,
         cli_label: str = 'cli',
+        should_cancel: Callable[[], bool] | None = None,
     ) -> dict[str, Any]:
         if not main_path.exists():
             raise ProviderGenerationError(
@@ -330,6 +360,7 @@ class GenerationService:
             cmd=cmd,
             cwd=project_dir,
             cli_label=cli_label,
+            should_cancel=should_cancel,
         )
         return {
             'ok': True,
@@ -346,6 +377,7 @@ class GenerationService:
         payload: dict[str, Any],
         base_host: str,
         progress_callback: Callable[[int, str, str | None, str | None, dict[str, Any] | None], None] | None = None,
+        should_cancel: Callable[[], bool] | None = None,
     ) -> dict[str, Any]:
         def report(
             progress: int,
@@ -359,12 +391,17 @@ class GenerationService:
 
         logger.info("generate_project(project_slug=%s)", project_slug)
 
+        def ensure_not_cancelled() -> None:
+            if should_cancel and should_cancel():
+                raise GenerationCancelledError('Генерация прервана пользователем.')
+
         tokens = self.project_service.load_tokens(user_id, project_slug)
         brand_id = (payload.get('brand_id') or tokens.get('brand_id') or '').strip()
         if not brand_id:
             raise ValueError('Не указан brand_id.')
 
         report(5, 'Загрузка конфигурации проекта')
+        ensure_not_cancelled()
         self.clear_brand_outputs(brand_id)
         report(9, 'Очистка результатов прошлой генерации')
 
@@ -389,6 +426,7 @@ class GenerationService:
         self.recraft_tokens.parent.mkdir(parents=True, exist_ok=True)
         shutil.copyfile(token_path, self.recraft_tokens)
         report(12, 'Проект сохранён и подготовлен для генерации')
+        ensure_not_cancelled()
 
         recraft_out_abs = self.recraft_out_root / brand_id
         recraft_out_abs.mkdir(parents=True, exist_ok=True)
@@ -421,6 +459,7 @@ class GenerationService:
                 cmd=recraft_cmd,
                 cwd=self.recraft_dir,
                 cli_label='recraft',
+                should_cancel=should_cancel,
             )
             report(48, 'Recraft завершён успешно', 'recraft', 'success')
         except ProviderGenerationError as exc:
@@ -432,6 +471,7 @@ class GenerationService:
                 {'message': exc.user_message, 'hint': exc.hint},
             )
             raise
+        ensure_not_cancelled()
 
         new_style_id = ''
         m = re.search(r'created style_id:\s*([0-9a-fA-F\-]+)', recraft_stdout)
@@ -466,6 +506,7 @@ class GenerationService:
                 patterns_count=patterns_count,
                 illustrations_count=illustrations_count,
                 cli_label='seedream',
+                should_cancel=should_cancel,
             )
             report(68, 'Seedream завершён успешно', 'seedream', 'success')
         except ProviderGenerationError as exc:
@@ -477,6 +518,7 @@ class GenerationService:
                 {'message': exc.user_message, 'hint': exc.hint},
             )
             raise
+        ensure_not_cancelled()
 
         report(72, 'Запуск провайдера Flux', 'flux', 'running')
         try:
@@ -491,6 +533,7 @@ class GenerationService:
                 patterns_count=patterns_count,
                 illustrations_count=illustrations_count,
                 cli_label='flux',
+                should_cancel=should_cancel,
             )
             report(85, 'Flux завершён успешно', 'flux', 'success')
         except ProviderGenerationError as exc:
@@ -502,6 +545,7 @@ class GenerationService:
                 {'message': exc.user_message, 'hint': exc.hint},
             )
             raise
+        ensure_not_cancelled()
 
         report(90, 'Постобработка изображений WEBP → PNG')
         webp_converted = self.convert_webp_to_png_for_brand(brand_id)

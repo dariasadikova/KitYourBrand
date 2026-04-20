@@ -356,10 +356,9 @@ document.addEventListener('DOMContentLoaded', () => {
     byId('style_id') && (byId('style_id').value = deepGet(tokens, 'style_id', ''));
     hasGeneratedStyleId = !!String(deepGet(tokens, 'style_id', '')).trim();
     refreshStyleIdInputState();
-    byId('icon.style') && (byId('icon.style').value = deepGet(tokens, 'icon.style', ''));
-    byId('icon.background') && (byId('icon.background').value = deepGet(tokens, 'icon.background', ''));
-    byId('icon.stroke') && (byId('icon.stroke').value = deepGet(tokens, 'icon.stroke', ''));
-    byId('icon.corner_radius') && (byId('icon.corner_radius').value = deepGet(tokens, 'icon.corner_radius', ''));
+    byId('icon.strokeWidth') && (byId('icon.strokeWidth').value = deepGet(tokens, 'icon.strokeWidth', 2));
+    byId('icon.corner') && (byId('icon.corner').value = deepGet(tokens, 'icon.corner', 'rounded'));
+    byId('icon.fill') && (byId('icon.fill').value = deepGet(tokens, 'icon.fill', 'outline'));
     byId('texture.enabled') && (byId('texture.enabled').checked = !!deepGet(tokens, 'texture.enabled', false));
     byId('texture.mode') && (byId('texture.mode').value = deepGet(tokens, 'texture.mode', ''));
     byId('texture.scale') && (byId('texture.scale').value = deepGet(tokens, 'texture.scale', ''));
@@ -452,10 +451,11 @@ document.addEventListener('DOMContentLoaded', () => {
       clone.palette[key] = clone.palette_slots[key];
     });
 
-    clone.icon.style = byId('icon.style')?.value || '';
-    clone.icon.background = byId('icon.background')?.value || '';
-    clone.icon.stroke = byId('icon.stroke')?.value || '';
-    clone.icon.corner_radius = byId('icon.corner_radius')?.value || '';
+    clone.icon.strokeWidth = Number(byId('icon.strokeWidth')?.value || 2);
+    clone.icon.corner = byId('icon.corner')?.value || 'rounded';
+    clone.icon.fill = byId('icon.fill')?.value || 'outline';
+    // Не тащим скрытый legacy-дефолт motifs ("waves","dots"), т.к. в UI это поле не редактируется.
+    clone.texture.motifs = [];
     clone.texture.enabled = !!byId('texture.enabled')?.checked;
     clone.texture.mode = byId('texture.mode')?.value || '';
     clone.texture.scale = byId('texture.scale')?.value || '';
@@ -716,6 +716,8 @@ document.addEventListener('DOMContentLoaded', () => {
   const generationErrorBody = byId('generation-error-body');
   const generationErrorHint = byId('generation-error-hint');
   let generationErrorShownJobId = null;
+  let activeGenerationJobId = null;
+  let cancelRequested = false;
 
   document
    .querySelectorAll('[data-close-generation]')
@@ -723,7 +725,37 @@ document.addEventListener('DOMContentLoaded', () => {
 
   byId('generation-modal-close-btn')?.addEventListener('click', closeGenerationModal);
 
-  generationCancelBtn?.addEventListener('click', closeGenerationModal);
+  async function requestCancelGeneration() {
+    if (!activeGenerationJobId) {
+      closeGenerationModal();
+      return;
+    }
+    if (cancelRequested) return;
+    cancelRequested = true;
+    if (generationCancelBtn) {
+      generationCancelBtn.disabled = true;
+      generationCancelBtn.textContent = 'Прерываем...';
+    }
+    try {
+      const response = await fetch(`/generation-jobs/${activeGenerationJobId}/cancel`, { method: 'POST' });
+      const payload = await response.json().catch(() => ({}));
+      if (!response.ok || !payload.ok) {
+        throw new Error(payload.error || 'Не удалось прервать генерацию');
+      }
+      setTopStatus('Прерывание генерации...', 'warning');
+      generationLogLines.push('Запрошено прерывание генерации пользователем');
+      renderGenerationLog(generationLogLines);
+    } catch (error) {
+      cancelRequested = false;
+      if (generationCancelBtn) {
+        generationCancelBtn.disabled = false;
+        generationCancelBtn.textContent = 'Прервать генерацию';
+      }
+      showToast(error.message || 'Не удалось прервать генерацию', true);
+    }
+  }
+
+  generationCancelBtn?.addEventListener('click', requestCancelGeneration);
 
   const providerPills = {
     recraft: byId('provider-status-recraft'),
@@ -869,6 +901,13 @@ document.addEventListener('DOMContentLoaded', () => {
     renderGenerationLog([]);
     if (generationProgressText) generationProgressText.textContent = '0%';
     if (generationProgressBar) generationProgressBar.style.width = '0%';
+    cancelRequested = false;
+    activeGenerationJobId = null;
+    if (generationCancelBtn) {
+      generationCancelBtn.disabled = false;
+      generationCancelBtn.textContent = 'Прервать генерацию';
+      generationCancelBtn.hidden = false;
+    }
 
     setTopStatus('Ожидание');
     setProviderStatus('recraft', 'pending', 'ожидание');
@@ -1056,18 +1095,26 @@ document.addEventListener('DOMContentLoaded', () => {
     const fallbackResultUrl = `/projects/${projectSlug}/results`;
     const resolvedResultUrl = job.result_url || fallbackResultUrl;
 
-    if (finalState === 'failed') {
+    if (finalState === 'cancelled') {
+      setTopStatus('Генерация прервана', 'warning');
+      setResultLinkEnabled(false);
+      if (generationCancelBtn) generationCancelBtn.hidden = true;
+    } else if (finalState === 'failed') {
       setTopStatus('Ошибка генерации', 'error');
       setResultLinkEnabled(false);
+      if (generationCancelBtn) generationCancelBtn.hidden = true;
     } else if (finalState === 'completed_with_errors') {
       setTopStatus('Завершено с ошибками', 'warning');
       setResultLinkEnabled(true, resolvedResultUrl);
+      if (generationCancelBtn) generationCancelBtn.hidden = true;
     } else if (finalState === 'completed') {
       setTopStatus('Завершено', 'success');
       setResultLinkEnabled(true, resolvedResultUrl);
+      if (generationCancelBtn) generationCancelBtn.hidden = true;
     } else {
       setTopStatus(job.status_text || 'Выполняется');
       setResultLinkEnabled(false);
+      if (generationCancelBtn) generationCancelBtn.hidden = false;
     }
   }
 
@@ -1092,10 +1139,12 @@ document.addEventListener('DOMContentLoaded', () => {
               ? 'Генерация завершена с ошибками'
               : state === 'failed'
                 ? 'Ошибка генерации'
+                : state === 'cancelled'
+                  ? 'Генерация прервана'
                 : 'Идёт генерация...';
       }
 
-      if (state === 'completed' || state === 'completed_with_errors' || state === 'failed') {
+      if (state === 'completed' || state === 'completed_with_errors' || state === 'failed' || state === 'cancelled') {
         return job;
       }
 
@@ -1239,6 +1288,13 @@ document.addEventListener('DOMContentLoaded', () => {
       if (!data.job_id) {
         throw new Error('Сервер не вернул job_id');
       }
+      activeGenerationJobId = data.job_id;
+      cancelRequested = false;
+      if (generationCancelBtn) {
+        generationCancelBtn.disabled = false;
+        generationCancelBtn.textContent = 'Прервать генерацию';
+        generationCancelBtn.hidden = false;
+      }
 
       generationLogLines.push(`Задача создана: ${data.job_id}`);
       renderGenerationLog(generationLogLines);
@@ -1254,6 +1310,8 @@ document.addEventListener('DOMContentLoaded', () => {
       showToast(
         job.status === 'completed'
           ? 'Генерация завершена'
+          : job.status === 'cancelled'
+            ? 'Генерация прервана'
           : job.status === 'failed'
             ? 'Ошибка генерации'
             : 'Генерация завершена с замечаниями',

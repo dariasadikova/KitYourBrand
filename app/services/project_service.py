@@ -25,7 +25,7 @@ DEFAULT_TOKENS = {
         "fill": "outline",
     },
     "texture": {
-        "motifs": ["waves", "dots"],
+        "motifs": [],
         "density": "low",
         "substyle": "seamless",
     },
@@ -105,10 +105,17 @@ class ProjectService:
                     status TEXT NOT NULL,
                     started_at TEXT NOT NULL,
                     finished_at TEXT,
-                    duration_seconds REAL
+                    duration_seconds REAL,
+                    error_message TEXT,
+                    error_hint TEXT
                 )
                 """
             )
+            hist_cols = self._table_columns(conn, 'generation_jobs_history')
+            if 'error_message' not in hist_cols:
+                conn.execute('ALTER TABLE generation_jobs_history ADD COLUMN error_message TEXT')
+            if 'error_hint' not in hist_cols:
+                conn.execute('ALTER TABLE generation_jobs_history ADD COLUMN error_hint TEXT')
             conn.commit()
 
     def _slugify(self, value: str) -> str:
@@ -262,7 +269,14 @@ class ProjectService:
             )
             conn.commit()
 
-    def finalize_generation_job_record(self, job_id: str, outcome: str) -> None:
+    def finalize_generation_job_record(
+        self,
+        job_id: str,
+        outcome: str,
+        *,
+        error_message: str | None = None,
+        error_hint: str | None = None,
+    ) -> None:
         """outcome: success | failed"""
         status = 'success' if outcome == 'success' else 'failed'
         finished = datetime.now(timezone.utc).isoformat()
@@ -285,10 +299,10 @@ class ProjectService:
             conn.execute(
                 """
                 UPDATE generation_jobs_history
-                SET status = ?, finished_at = ?, duration_seconds = ?
+                SET status = ?, finished_at = ?, duration_seconds = ?, error_message = ?, error_hint = ?
                 WHERE job_id = ?
                 """,
-                (status, finished, duration, job_id),
+                (status, finished, duration, error_message, error_hint, job_id),
             )
             conn.commit()
 
@@ -361,6 +375,8 @@ class ProjectService:
                     h.started_at,
                     h.finished_at,
                     h.duration_seconds,
+                    h.error_message,
+                    h.error_hint,
                     CASE
                         WHEN p.id IS NULL THEN 1
                         WHEN p.deleted_at IS NOT NULL THEN 1
