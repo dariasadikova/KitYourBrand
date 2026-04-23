@@ -1,6 +1,7 @@
 from __future__ import annotations
 
 import uuid
+from datetime import datetime, timedelta, timezone
 from pathlib import Path
 from urllib.parse import quote
 
@@ -24,6 +25,7 @@ PROFILE_AVATARS_DIR = settings.data_dir / 'profile_avatars'
 PROFILE_AVATARS_DIR.mkdir(parents=True, exist_ok=True)
 ALLOWED_AVATAR_EXT = {'.png', '.jpg', '.jpeg', '.webp'}
 GENERATION_HISTORY_PER_PAGE = 10
+MSK_TZ = timezone(timedelta(hours=3))
 
 
 FEATURES = [
@@ -76,12 +78,20 @@ def require_auth(request: Request):
 def _format_history_datetime(iso: str | None) -> str:
     if not iso:
         return '—'
-    s = str(iso).replace('T', ' ')
-    if '+00:00' in s:
-        s = s.replace('+00:00', '').strip()
-    elif s.endswith('Z'):
-        s = s[:-1].strip()
-    return s[:16] if len(s) >= 16 else s
+    raw = str(iso).strip()
+    try:
+        parsed = datetime.fromisoformat(raw.replace('Z', '+00:00'))
+    except ValueError:
+        s = raw.replace('T', ' ')
+        if '+00:00' in s:
+            s = s.replace('+00:00', '').strip()
+        elif s.endswith('Z'):
+            s = s[:-1].strip()
+        return s[:16] if len(s) >= 16 else s
+
+    if parsed.tzinfo is None:
+        parsed = parsed.replace(tzinfo=timezone.utc)
+    return parsed.astimezone(MSK_TZ).strftime('%Y-%m-%d %H:%M')
 
 
 def _format_history_duration(sec: float | None) -> str:
