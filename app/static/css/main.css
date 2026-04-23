@@ -2550,6 +2550,28 @@ body.generation-history-modal-open {
     color: #A0B9C5;
 }
 
+.generation-history-bulk-actions {
+    display: flex;
+    align-items: center;
+    justify-content: space-between;
+    gap: 12px;
+    margin: 0 0 12px;
+}
+
+.generation-history-bulk-actions__buttons {
+    display: inline-flex;
+    align-items: center;
+    gap: 10px;
+}
+
+.generation-history-select-all {
+    display: inline-flex;
+    align-items: center;
+    gap: 8px;
+    color: rgba(248, 250, 252, 0.92);
+    font-size: 0.9rem;
+}
+
 .generation-history-table-title {
     margin: 0 0 20px;
     font-size: 1.75rem;
@@ -2584,6 +2606,17 @@ body.generation-history-modal-open {
     border-bottom: 1px solid rgba(255, 255, 255, 0.06);
     vertical-align: middle;
     line-height: 1.5;
+}
+
+.generation-history-table__select-col {
+    width: 42px;
+    padding-left: 10px !important;
+    padding-right: 6px !important;
+}
+
+.generation-history-row-select {
+    width: 15px;
+    height: 15px;
 }
 
 .generation-history-table tbody tr:last-child td {
@@ -2815,8 +2848,8 @@ body.generation-history-modal-open {
         padding: 18px 14px;
     }
 
-    .generation-history-table th:nth-child(3),
-    .generation-history-table td:nth-child(3) {
+    .generation-history-table th:nth-child(4),
+    .generation-history-table td:nth-child(4) {
         min-width: 100px;
     }
 }

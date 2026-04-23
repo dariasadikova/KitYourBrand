@@ -1171,7 +1171,7 @@ document.addEventListener('DOMContentLoaded', () => {
       await sleep(1000);
     }
 
-    throw new Error('Превышено время ожидания статуса генерации');
+    throw new Error('Не удалось получить актуальный статус генерации (таймаут опроса)');
   }
 
   byId('save')?.addEventListener('click', async () => {
@@ -1339,12 +1339,37 @@ document.addEventListener('DOMContentLoaded', () => {
         job.status === 'failed'
       );
     } catch (error) {
-      setTopStatus('Ошибка генерации', 'error');
+      const message = String(error?.message || '');
+      const isStatusTimeout =
+        message.includes('таймаут опроса') || message.includes('Превышено время ожидания статуса');
+
+      setTopStatus(
+        isStatusTimeout ? 'Статус генерации временно недоступен' : 'Ошибка генерации',
+        isStatusTimeout ? 'warning' : 'error',
+      );
       generationLogLines.push(`Ошибка: ${error.message}`);
       renderGenerationLog(generationLogLines);
       setResultLinkEnabled(false);
+      if (generationCancelBtn) {
+        generationCancelBtn.hidden = true;
+        generationCancelBtn.disabled = true;
+      }
+      if (isStatusTimeout) {
+        generationLogLines.push(
+          'Подсказка: откройте Историю генераций, чтобы посмотреть финальный статус и причину ошибки.',
+        );
+        renderGenerationLog(generationLogLines);
+      }
+      // После потери статуса не даём отправить "cancel", чтобы не перезаписать первопричину
+      // ошибкой "прервана пользователем" в истории.
+      activeGenerationJobId = null;
+      cancelRequested = false;
 
-      if (status) status.textContent = 'Ошибка генерации';
+      if (status) {
+        status.textContent = isStatusTimeout
+          ? 'Статус генерации временно недоступен'
+          : 'Ошибка генерации';
+      }
       showToast(error.message, true);
       console.error('generation failed', error);
     }

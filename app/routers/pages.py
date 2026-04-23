@@ -6,7 +6,7 @@ from pathlib import Path
 from urllib.parse import quote
 
 from fastapi import APIRouter, File, Form, Query, Request, UploadFile, status
-from fastapi.responses import FileResponse, HTMLResponse, RedirectResponse
+from fastapi.responses import FileResponse, HTMLResponse, JSONResponse, RedirectResponse
 from fastapi.templating import Jinja2Templates
 
 from app.core.paths import TEMPLATES_DIR
@@ -231,6 +231,38 @@ async def generation_history_page(request: Request, page: int = Query(1, ge=1)) 
         'showing_to': showing_to,
     }
     return templates.TemplateResponse(request, 'pages/generation_history.html', context)
+
+
+@router.post('/generation-history/delete-selected')
+async def generation_history_delete_selected(request: Request) -> JSONResponse:
+    auth_redirect = require_auth(request)
+    if auth_redirect:
+        return JSONResponse({'ok': False, 'error': 'Требуется авторизация.'}, status_code=status.HTTP_401_UNAUTHORIZED)
+
+    user_id = int(request.session['user_id'])
+    try:
+        payload = await request.json()
+    except Exception:
+        payload = {}
+
+    raw_ids = payload.get('job_ids') if isinstance(payload, dict) else []
+    job_ids = raw_ids if isinstance(raw_ids, list) else []
+    if len(job_ids) > 500:
+        return JSONResponse({'ok': False, 'error': 'Слишком много записей для удаления за один запрос.'}, status_code=400)
+
+    deleted, skipped = project_service.delete_generation_history_selected(user_id, [str(x) for x in job_ids])
+    return JSONResponse({'ok': True, 'deleted': deleted, 'skipped': skipped})
+
+
+@router.post('/generation-history/clear')
+async def generation_history_clear(request: Request) -> JSONResponse:
+    auth_redirect = require_auth(request)
+    if auth_redirect:
+        return JSONResponse({'ok': False, 'error': 'Требуется авторизация.'}, status_code=status.HTTP_401_UNAUTHORIZED)
+
+    user_id = int(request.session['user_id'])
+    deleted, skipped = project_service.delete_generation_history_all(user_id)
+    return JSONResponse({'ok': True, 'deleted': deleted, 'skipped': skipped})
 
 
 @router.get('/profile', response_class=HTMLResponse)

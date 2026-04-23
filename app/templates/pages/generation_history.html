@@ -18,10 +18,20 @@
     <div class="generation-history-table-wrap">
         <p class="generation-history-table-hint">Подсказка: нажмите на статус <strong>Ошибка</strong>, чтобы посмотреть подробности причины.</p>
         {% if history_rows %}
+        <div class="generation-history-bulk-actions">
+            <label class="generation-history-select-all">
+                <input type="checkbox" id="generation-history-select-all" />
+                <span>Выбрать всё</span>
+            </label>
+            <div class="generation-history-bulk-actions__buttons">
+                <button type="button" class="btn btn-outline btn-inline" id="generation-history-delete-selected" disabled>Удалить</button>
+            </div>
+        </div>
         <div class="generation-history-table-scroll">
             <table class="generation-history-table">
                 <thead>
                     <tr>
+                        <th scope="col" class="generation-history-table__select-col"></th>
                         <th scope="col">Дата</th>
                         <th scope="col">Проект</th>
                         <th scope="col">Статус</th>
@@ -32,6 +42,12 @@
                 <tbody>
                     {% for row in history_rows %}
                     <tr>
+                        <td class="generation-history-table__select-col">
+                            <input type="checkbox"
+                                class="generation-history-row-select"
+                                value="{{ row.job_id }}"
+                                {% if row.status_key == 'running' %}disabled title="Нельзя удалять активную генерацию"{% endif %} />
+                        </td>
                         <td class="generation-history-table__date">{{ row.started_display }}</td>
                         <td class="generation-history-table__project">
                             <span class="generation-history-table__project-inner">
@@ -190,6 +206,8 @@
   const errorModal = document.getElementById('generation-history-error-modal');
   const errorBody = document.getElementById('generation-history-error-body');
   const errorHint = document.getElementById('generation-history-error-hint');
+  const selectAll = document.getElementById('generation-history-select-all');
+  const deleteSelectedBtn = document.getElementById('generation-history-delete-selected');
   if (!modal || !openBtn) return;
   const closeStatsNodes = modal.querySelectorAll('[data-close-history-stats]');
   const closeErrorNodes = errorModal ? errorModal.querySelectorAll('[data-close-history-error]') : [];
@@ -321,6 +339,63 @@
         alert(error?.message || 'Не удалось прервать генерацию');
       }
     });
+  });
+
+  const rowSelectNodes = Array.from(document.querySelectorAll('.generation-history-row-select'));
+  const getSelectedJobIds = () => rowSelectNodes.filter((node) => node.checked && !node.disabled).map((node) => node.value);
+
+  const updateBulkUi = () => {
+    const selectable = rowSelectNodes.filter((node) => !node.disabled);
+    const selected = getSelectedJobIds();
+    if (deleteSelectedBtn) deleteSelectedBtn.disabled = selected.length === 0;
+    if (selectAll) {
+      if (!selectable.length) {
+        selectAll.checked = false;
+        selectAll.indeterminate = false;
+      } else {
+        selectAll.checked = selected.length === selectable.length;
+        selectAll.indeterminate = selected.length > 0 && selected.length < selectable.length;
+      }
+    }
+  };
+
+  selectAll?.addEventListener('change', () => {
+    const checked = !!selectAll.checked;
+    rowSelectNodes.forEach((node) => {
+      if (!node.disabled) node.checked = checked;
+    });
+    updateBulkUi();
+  });
+  rowSelectNodes.forEach((node) => node.addEventListener('change', updateBulkUi));
+  updateBulkUi();
+
+  deleteSelectedBtn?.addEventListener('click', async () => {
+    const selected = getSelectedJobIds();
+    if (!selected.length) return;
+    if (!window.confirm(`Удалить выбранные записи (${selected.length}) из истории генераций?`)) return;
+    deleteSelectedBtn.disabled = true;
+    const prevText = deleteSelectedBtn.textContent;
+    deleteSelectedBtn.textContent = 'Удаляем...';
+    try {
+      const response = await fetch('/generation-history/delete-selected', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ job_ids: selected }),
+      });
+      const payload = await response.json().catch(() => ({}));
+      if (!response.ok || !payload.ok) {
+        throw new Error(payload.error || 'Не удалось удалить выбранные записи');
+      }
+      const skipped = Number(payload.skipped || 0);
+      if (skipped > 0) {
+        alert(`Удалено: ${payload.deleted}. Пропущено: ${skipped} (активные или уже удалённые записи).`);
+      }
+      window.location.reload();
+    } catch (error) {
+      deleteSelectedBtn.disabled = false;
+      deleteSelectedBtn.textContent = prevText || 'Удалить';
+      alert(error?.message || 'Не удалось удалить выбранные записи');
+    }
   });
 })();
 </script>

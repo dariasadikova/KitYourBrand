@@ -393,6 +393,50 @@ class ProjectService:
             ).fetchall()
         return [dict(row) for row in rows], total
 
+    def delete_generation_history_all(self, user_id: int) -> tuple[int, int]:
+        """Delete all terminal history rows for user. Returns (deleted, skipped_active)."""
+        with self._connect() as conn:
+            total_row = conn.execute(
+                'SELECT COUNT(*) AS c FROM generation_jobs_history WHERE user_id = ?',
+                (user_id,),
+            ).fetchone()
+            total = int(total_row['c']) if total_row else 0
+            cur = conn.execute(
+                """
+                DELETE FROM generation_jobs_history
+                WHERE user_id = ? AND status NOT IN ('pending', 'running')
+                """,
+                (user_id,),
+            )
+            deleted = int(cur.rowcount or 0)
+            conn.commit()
+        skipped = max(0, total - deleted)
+        return deleted, skipped
+
+    def delete_generation_history_selected(self, user_id: int, job_ids: list[str]) -> tuple[int, int]:
+        """Delete selected terminal history rows for user. Returns (deleted, skipped_active_or_missing)."""
+        normalized = [str(j).strip() for j in job_ids if str(j).strip()]
+        unique_ids = list(dict.fromkeys(normalized))
+        if not unique_ids:
+            return 0, 0
+
+        placeholders = ', '.join(['?'] * len(unique_ids))
+        params: list[Any] = [user_id, *unique_ids]
+        with self._connect() as conn:
+            cur = conn.execute(
+                f"""
+                DELETE FROM generation_jobs_history
+                WHERE user_id = ?
+                  AND job_id IN ({placeholders})
+                  AND status NOT IN ('pending', 'running')
+                """,
+                params,
+            )
+            deleted = int(cur.rowcount or 0)
+            conn.commit()
+        skipped = max(0, len(unique_ids) - deleted)
+        return deleted, skipped
+
     def ensure_project(self, user_id: int, slug: str) -> ProjectRecord:
         project = self.get_project(user_id, slug)
         if project is None:
