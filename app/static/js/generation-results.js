@@ -11,8 +11,7 @@
   const downloadLink = document.getElementById('results-figma-download-link');
   const generationModal = document.getElementById('results-generation-modal');
   const generationClose = document.getElementById('results-generation-close');
-  const generationCloseBtn = document.getElementById('results-generation-close-btn');
-  const generationBlockingNote = document.getElementById('results-generation-blocking-note');
+  const generationCancelBtn = document.getElementById('results-generation-cancel-btn');
   const progressBar = document.getElementById('results-generation-progress-bar');
   const progressText = document.getElementById('results-generation-progress-text');
   const statusText = document.getElementById('results-generation-status-text');
@@ -26,6 +25,8 @@
   if (!projectSlug || !generateBtn || !statusNode || !downloadLink) return;
 
   const initialLabel = generateBtn.textContent.trim();
+  let activeGenerationJobId = '';
+  let cancelRequested = false;
 
   function setStatus(message, tone = '') {
     statusNode.textContent = message || '';
@@ -102,6 +103,29 @@
     document.body.classList.remove('modal-open');
   }
 
+  async function requestCancelGeneration() {
+    if (!activeGenerationJobId || cancelRequested) return;
+    cancelRequested = true;
+    if (generationCancelBtn) {
+      generationCancelBtn.disabled = true;
+      generationCancelBtn.textContent = 'Прерываем...';
+    }
+    try {
+      const response = await fetch(`/generation-jobs/${activeGenerationJobId}/cancel`, { method: 'POST' });
+      const payload = await response.json().catch(() => ({}));
+      if (!response.ok || !payload.ok) {
+        throw new Error(payload.error || 'Не удалось прервать генерацию');
+      }
+      if (statusText) statusText.textContent = 'Прерывание генерации...';
+    } catch (_) {
+      cancelRequested = false;
+      if (generationCancelBtn) {
+        generationCancelBtn.disabled = false;
+        generationCancelBtn.textContent = 'Прервать генерацию';
+      }
+    }
+  }
+
   function setProviderStatus(name, status, text) {
     const el = providerPills[name];
     if (!el) return;
@@ -118,6 +142,7 @@
 
   function updateGenerationModal(job) {
     if (!job) return;
+    activeGenerationJobId = String(job.id || activeGenerationJobId || '');
     const progress = Number(job.progress || 0);
     if (progressBar) progressBar.style.width = `${progress}%`;
     if (progressText) progressText.textContent = `${progress}%`;
@@ -127,14 +152,24 @@
     ['recraft', 'seedream', 'flux'].forEach((name) => setProviderStatus(name, statuses[name], ''));
     const terminal = ['completed', 'failed', 'cancelled', 'completed_with_errors'].includes(String(job.status || ''));
     if (generationClose) generationClose.hidden = !terminal;
-    if (generationCloseBtn) generationCloseBtn.hidden = !terminal;
-    if (generationBlockingNote) generationBlockingNote.hidden = terminal;
+    if (generationCancelBtn) {
+      generationCancelBtn.hidden = terminal;
+      generationCancelBtn.disabled = cancelRequested;
+      generationCancelBtn.textContent = cancelRequested ? 'Прерываем...' : 'Прервать генерацию';
+    }
     if (terminal && statusText) {
       statusText.textContent = job.status === 'cancelled' ? 'Генерация прервана' : (job.message || 'Генерация завершена');
     }
   }
 
   async function pollJob(jobId) {
+    activeGenerationJobId = String(jobId || '');
+    cancelRequested = false;
+    if (generationCancelBtn) {
+      generationCancelBtn.hidden = false;
+      generationCancelBtn.disabled = false;
+      generationCancelBtn.textContent = 'Прервать генерацию';
+    }
     openGenerationModal();
     while (true) {
       const response = await fetch(`/generation-jobs/${jobId}`);
@@ -166,6 +201,6 @@
   }
 
   generationClose?.addEventListener('click', closeGenerationModal);
-  generationCloseBtn?.addEventListener('click', closeGenerationModal);
+  generationCancelBtn?.addEventListener('click', requestCancelGeneration);
   attachActiveGenerationWatcher();
 })();

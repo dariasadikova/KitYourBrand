@@ -74,7 +74,11 @@ class GenerationService:
         summary: dict[str, int] = {}
         for provider in ('recraft', 'seedream', 'flux'):
             root = self.out_root / provider / brand_id
-            n = self.convert_webp_to_png_in_dir(root / 'patterns') + self.convert_webp_to_png_in_dir(root / 'illustrations')
+            n = (
+                self.convert_webp_to_png_in_dir(root / 'logos')
+                + self.convert_webp_to_png_in_dir(root / 'patterns')
+                + self.convert_webp_to_png_in_dir(root / 'illustrations')
+            )
             if n:
                 summary[provider] = n
         return summary
@@ -94,7 +98,7 @@ class GenerationService:
             return
         for provider_root in (self.recraft_out_root, self.seedream_out_root, self.flux_out_root):
             brand_root = provider_root / brand_id
-            for section in ('icons', 'patterns', 'illustrations'):
+            for section in ('logos', 'icons', 'patterns', 'illustrations'):
                 section_dir = brand_root / section
                 if section_dir.exists():
                     shutil.rmtree(section_dir, ignore_errors=True)
@@ -139,12 +143,19 @@ class GenerationService:
             ('seedream', self.seedream_out_root / effective_brand_id, 'seedream'),
             ('flux', self.flux_out_root / effective_brand_id, 'flux'),
         ]
+        logos: list[dict[str, Any]] = []
         icons: list[dict[str, Any]] = []
         patterns: list[dict[str, Any]] = []
         illustrations: list[dict[str, Any]] = []
 
         for provider, root_dir, url_prefix in provider_roots:
             prefix = f'{url_prefix}/' if url_prefix else ''
+            for n, fn in self.scan_dir(root_dir / 'logos', ('.png', '.svg', '.jpg', '.jpeg')):
+                logos.append({
+                    'name': f'{provider}-{n}',
+                    'provider': provider,
+                    'url': f'{base_url}/{prefix}logos/{fn}',
+                })
             for n, fn in self.scan_dir(root_dir / 'icons', ('.png', '.svg', '.jpg', '.jpeg')):
                 icons.append({
                     'name': f'{provider}-{n}',
@@ -177,6 +188,7 @@ class GenerationService:
         manifest = {
             'brand': brand,
             'palette': palette,
+            'logos': logos,
             'icons': icons,
             'patterns': patterns,
             'illustrations': illustrations,
@@ -197,6 +209,7 @@ class GenerationService:
             m2 = dict(manifest)
             m2['brand'] = dict(brand)
             m2['brand']['provider'] = provider_name
+            m2['logos'] = [x for x in logos if x.get('provider') == provider_name]
             m2['icons'] = [x for x in icons if x.get('provider') == provider_name]
             m2['patterns'] = [x for x in patterns if x.get('provider') == provider_name]
             m2['illustrations'] = [x for x in illustrations if x.get('provider') == provider_name]
@@ -210,6 +223,7 @@ class GenerationService:
         export_path.write_text(json.dumps(manifest, ensure_ascii=False, indent=2), encoding='utf-8')
 
         counts = {
+            'logos': len(logos),
             'icons': len(icons),
             'patterns': len(patterns),
             'illustrations': len(illustrations),
@@ -332,6 +346,7 @@ class GenerationService:
         provider_out_root: Path,
         tokens_path: Path,
         brand_id: str,
+        logos_count: int,
         icons_count: int,
         patterns_count: int,
         illustrations_count: int,
@@ -351,6 +366,7 @@ class GenerationService:
             '--tokens', str(tokens_path),
             '--out', str(provider_out_root),
             '--brand-id', brand_id,
+            '--logos', str(logos_count),
             '--icons', str(icons_count),
             '--patterns', str(patterns_count),
             '--illustrations', str(illustrations_count),
@@ -406,6 +422,7 @@ class GenerationService:
         report(9, 'Очистка результатов прошлой генерации')
 
         style_id = (payload.get('style_id') or tokens.get('style_id') or '').strip()
+        logos_count = int(payload.get('logos_count') or 0)
         icons_count = int(payload.get('icons_count') or 0)
         patterns_count = int(payload.get('patterns_count') or 0)
         illustrations_count = int(payload.get('illustrations_count') or 0)
@@ -446,6 +463,7 @@ class GenerationService:
         if build_style:
             recraft_cmd.append('--build-style')
         recraft_cmd.extend([
+            '--logos', str(logos_count),
             '--icons', str(icons_count),
             '--patterns', str(patterns_count),
             '--illustrations', str(illustrations_count),
@@ -502,6 +520,7 @@ class GenerationService:
                 provider_out_root=self.seedream_out_root,
                 tokens_path=self.recraft_tokens,
                 brand_id=brand_id,
+                logos_count=logos_count,
                 icons_count=icons_count,
                 patterns_count=patterns_count,
                 illustrations_count=illustrations_count,
@@ -529,6 +548,7 @@ class GenerationService:
                 provider_out_root=self.flux_out_root,
                 tokens_path=self.recraft_tokens,
                 brand_id=brand_id,
+                logos_count=logos_count,
                 icons_count=icons_count,
                 patterns_count=patterns_count,
                 illustrations_count=illustrations_count,

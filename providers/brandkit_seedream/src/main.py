@@ -58,6 +58,16 @@ def build_prompts(tokens: Dict, kind: str, name: str) -> Tuple[str, str]:
             pal_txt = "Palette: " + ", ".join(parts) + "."
 
     icon_cfg = tokens.get("icon") or {}
+    if kind == "logos":
+        prompt = (
+            f"Brand logo concept: {name}. "
+            f"{style_prompt} {pal_txt} "
+            f"Vector-like logo mark, centered composition, clean geometry, high contrast. "
+            f"No mockup, no watermark."
+        )
+        if icon_cfg:
+            prompt += f" Logo details: {json.dumps(icon_cfg, ensure_ascii=False)}."
+        return prompt.strip(), negative
     if kind == "icons":
         prompt = (
             f"Icon for UI: {name}. "
@@ -121,6 +131,7 @@ def main() -> int:
     ap.add_argument("--tokens", required=True, help="Path to tokens.json")
     ap.add_argument("--out", default="out", help="Output root directory (default: out)")
     ap.add_argument("--brand-id", default="", help="Brand ID subfolder inside out/")
+    ap.add_argument("--logos", type=int, default=0, help="How many logos to generate")
     ap.add_argument("--icons", type=int, default=0, help="How many icons to generate")
     ap.add_argument("--patterns", type=int, default=0, help="How many patterns to generate")
     ap.add_argument("--illustrations", type=int, default=0, help="How many illustrations to generate")
@@ -149,14 +160,17 @@ def main() -> int:
     if args.brand_id:
         brand_folder = os.path.join(args.out, args.brand_id)
 
+    logos_dir = os.path.join(brand_folder, "logos")
     icons_dir = os.path.join(brand_folder, "icons")
     patterns_dir = os.path.join(brand_folder, "patterns")
     illustrations_dir = os.path.join(brand_folder, "illustrations")
+    ensure_dir(logos_dir)
     ensure_dir(icons_dir)
     ensure_dir(patterns_dir)
     ensure_dir(illustrations_dir)
 
     prompts = tokens.get("prompts") or {}
+    logo_names = take_n(prompts.get("logos") or [], args.logos, "logo")
     icon_names = take_n(prompts.get("icons") or [], args.icons, "icon")
     pattern_names = take_n(prompts.get("patterns") or [], args.patterns, "pattern")
     ill_names = take_n(prompts.get("illustrations") or [], args.illustrations, "illustration")
@@ -165,7 +179,7 @@ def main() -> int:
         "provider": "openrouter",
         "model": model,
         "created_at": datetime.utcnow().isoformat() + "Z",
-        "outputs": {"icons": [], "patterns": [], "illustrations": []},
+        "outputs": {"logos": [], "icons": [], "patterns": [], "illustrations": []},
     }
 
     def gen(kind: str, names: List[str], out_dir: str):
@@ -199,6 +213,8 @@ def main() -> int:
                     "mime": mime,
                 })
 
+    if args.logos:
+        gen("logos", logo_names, logos_dir)
     if args.icons:
         gen("icons", icon_names, icons_dir)
     if args.patterns:

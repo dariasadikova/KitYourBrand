@@ -163,7 +163,7 @@
             <p id="generation-history-error-body" class="generation-history-error-body"></p>
             <p id="generation-history-error-hint" class="generation-history-error-hint" hidden></p>
             <div class="generation-history-modal__actions">
-                <button type="button" class="btn btn-primary btn-inline" data-close-history-error>Понятно</button>
+                <button type="button" class="btn btn-primary btn-inline" data-close-history-error>Ок</button>
             </div>
         </div>
     </div>
@@ -224,6 +224,35 @@
       let message = (pill.getAttribute('data-error-message') || '').trim();
       let hint = (pill.getAttribute('data-error-hint') || '').trim();
       const jobId = (pill.getAttribute('data-job-id') || '').trim();
+      let failedProvider = '';
+
+      const providerLabel = (providerKey) => {
+        const key = String(providerKey || '').trim().toLowerCase();
+        if (key === 'recraft') return 'Recraft';
+        if (key === 'seedream') return 'Seedream';
+        if (key === 'flux') return 'Flux';
+        return '';
+      };
+
+      const buildFallbackHint = (providerKey, rawMessage) => {
+        const provider = providerLabel(providerKey);
+        const low = String(rawMessage || '').toLowerCase();
+        const providerPart = provider ? ` у провайдера ${provider}` : '';
+
+        if (low.includes('401') || low.includes('unauthorized') || low.includes('invalid api key') || low.includes('api key')) {
+          return `Проверьте API-ключ${providerPart} в .env и перезапустите генерацию.`;
+        }
+        if (low.includes('402') || low.includes('insufficient') || low.includes('balance') || low.includes('funds') || low.includes('quota')) {
+          return `Проверьте баланс и лимиты${providerPart}, затем повторите запуск.`;
+        }
+        if (low.includes('429') || low.includes('rate limit') || low.includes('too many requests')) {
+          return `Достигнут лимит запросов${providerPart}. Подождите и повторите запуск.`;
+        }
+        if (provider) {
+          return `Проверьте настройки и доступность API ${provider}, затем запустите генерацию снова.`;
+        }
+        return 'Проверьте ключи провайдеров, баланс аккаунтов и параметры проекта, затем повторите запуск.';
+      };
 
       if ((!message || message.length < 5) && jobId) {
         try {
@@ -231,6 +260,7 @@
           const payload = await response.json().catch(() => ({}));
           if (response.ok && payload.ok && payload.job) {
             const job = payload.job;
+            failedProvider = String(job.failed_provider || job.current_provider || '').trim();
             message = (job.error || job.message || '').trim() || message;
             hint = (job.error_hint || '').trim() || hint;
             if (!hint && job.provider_errors && typeof job.provider_errors === 'object') {
@@ -249,10 +279,13 @@
       }
 
       if (!message) {
-        message = 'Генерация не завершилась успешно. Попробуйте повторить запуск.';
+        const provider = providerLabel(failedProvider);
+        message = provider
+          ? `Генерация завершилась с ошибкой у провайдера ${provider}.`
+          : 'Генерация завершилась с ошибкой. Не удалось определить провайдера по сохранённым данным.';
       }
       if (!hint) {
-        hint = 'Проверьте параметры проекта и доступность сервисов генерации.';
+        hint = buildFallbackHint(failedProvider, message);
       }
 
       errorBody.textContent = message;

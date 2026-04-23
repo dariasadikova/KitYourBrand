@@ -35,6 +35,7 @@ DEFAULT_TOKENS = {
         "prompt_suffix": "minimal, soft contrast",
     },
     "prompts": {
+        "logos": [],
         "icons": [],
         "patterns": [],
         "illustrations": [],
@@ -433,6 +434,7 @@ class ProjectService:
         data['illustration'].setdefault('raster', True)
         data['illustration'].setdefault('prompt_suffix', '')
         data.setdefault('prompts', {})
+        data['prompts'].setdefault('logos', [])
         data['prompts'].setdefault('icons', [])
         data['prompts'].setdefault('patterns', [])
         data['prompts'].setdefault('illustrations', [])

@@ -39,18 +39,19 @@ def colors_control(tokens):
             rgb.append({'rgb': hex_to_rgb_triplet(pal[k])})
     return {'colors': rgb} if rgb else None
 
-def postprocess_dirs(out_icons, out_patterns, out_ills, tokens):
+def postprocess_dirs(out_logos, out_icons, out_patterns, out_ills, tokens):
     pal = tokens.get('palette', {})
     palette = [c for c in [pal.get('primary'), pal.get('secondary'), pal.get('accent')] if c]
     # SVG normalization
-    for fn in os.listdir(out_icons):
-        if fn.lower().endswith('.svg'):
-            try:
-                normalize_svg_palette_and_stroke(os.path.join(out_icons, fn),
-                                                 target_palette=palette,
-                                                 target_stroke_width=tokens.get('icon',{}).get('strokeWidth',2))
-            except Exception as e:
-                warn('postprocess: svg normalize %s: %s', fn, e)
+    for folder in (out_logos, out_icons):
+        for fn in os.listdir(folder):
+            if fn.lower().endswith('.svg'):
+                try:
+                    normalize_svg_palette_and_stroke(os.path.join(folder, fn),
+                                                     target_palette=palette,
+                                                     target_stroke_width=tokens.get('icon',{}).get('strokeWidth',2))
+                except Exception as e:
+                    warn('postprocess: svg normalize %s: %s', fn, e)
     # Raster quantization
     for folder in (out_patterns, out_ills):
         for fn in os.listdir(folder):
@@ -68,6 +69,7 @@ def main():
     parser.add_argument('--build-style', action='store_true', help='Создать style_id из ./references')
     parser.add_argument('--style-base', default='icon', choices=['icon','vector_illustration','digital_illustration','realistic_image'])
     parser.add_argument('--style-id', default=None, help='Если уже есть готовый style_id')
+    parser.add_argument('--logos', type=int, default=4)
     parser.add_argument('--icons', type=int, default=8)
     parser.add_argument('--patterns', type=int, default=4)
     parser.add_argument('--illustrations', type=int, default=4)
@@ -77,13 +79,14 @@ def main():
     load_dotenv()
     info('=== brandkit_recraft CLI ===')
     info('tokens=%s out=%s build_style=%s style_id=%s model=%s', args.tokens, args.out, args.build_style, args.style_id, args.model)
-    info('counts: icons=%s patterns=%s illustrations=%s style_base=%s', args.icons, args.patterns, args.illustrations, args.style_base)
+    info('counts: logos=%s icons=%s patterns=%s illustrations=%s style_base=%s', args.logos, args.icons, args.patterns, args.illustrations, args.style_base)
 
     client = RecraftClient()
     tokens = load_tokens(args.tokens)
     info('tokens.json загружен, brand keys: %s', list(tokens.keys())[:20])
 
     ensure_dir(args.out)
+    out_logos = os.path.join(args.out, 'logos'); ensure_dir(out_logos)
     out_icons = os.path.join(args.out, 'icons'); ensure_dir(out_icons)
     out_patterns = os.path.join(args.out, 'patterns'); ensure_dir(out_patterns)
     out_ills = os.path.join(args.out, 'illustrations'); ensure_dir(out_ills)
@@ -105,6 +108,20 @@ def main():
         info('colors_control: передан в API (%s цветов)', len(controls.get('colors') or []))
     else:
         info('colors_control: не задан (палитра пустая по primary/secondary/accent)')
+
+    # LOGOS
+    logo_prompts = tokens.get('prompts',{}).get('logos', [])
+    n_logos = min(len(logo_prompts), args.logos)
+    info('--- Логотипы: будет сгенерировано до %s (из %s промптов), model=%s ---', n_logos, len(logo_prompts), args.model)
+    for idx, subj in enumerate(logo_prompts[:args.logos], 1):
+        info('Логотип %s/%s: %s', idx, n_logos, subj)
+        prompt = build_prompt(subj + ' logo mark', tokens, 'illustration')
+        url = client.generate(prompt=prompt, model=args.model,
+                              style_id=style_id if args.style_base=='vector_illustration' and style_id else None,
+                              style='vector_illustration' if not style_id else None,
+                              substyle=None,
+                              n=1, size='1024x1024', controls=controls)
+        client.download_asset(url, os.path.join(out_logos, f"logo-{idx:02d}"))
 
     # ICONS — Recraft V3 НЕ поддерживает стиль `icon` (см. Appendix), поэтому принудительно используем V2
     icon_prompts = tokens.get('prompts',{}).get('icons', [])
@@ -162,7 +179,7 @@ def main():
         client.download_asset(url, os.path.join(out_ills, f"illustration-{i:02d}"))
 
     info('Постобработка (SVG / растр)...')
-    postprocess_dirs(out_icons, out_patterns, out_ills, tokens)
+    postprocess_dirs(out_logos, out_icons, out_patterns, out_ills, tokens)
     info('[ok] Done. Assets saved to: %s', args.out)
 
 if __name__ == '__main__':

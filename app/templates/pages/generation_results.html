@@ -40,6 +40,28 @@
                 <section class="results-card">
                     <div class="results-card__head">
                         <div class="results-card__title">
+                            <h2>Логотипы</h2>
+                        </div>
+                        <a href="/projects/{{ project.slug }}/downloads/logos"
+                            class="btn btn-primary btn-inline">Скачать</a>
+                    </div>
+                    {% if logos %}
+                    <div class="results-icons-grid">
+                        {% for asset in logos %}
+                        <a href="{{ asset.url }}" target="_blank" rel="noopener" class="results-icon-card"
+                            title="{{ asset.provider }} / {{ asset.name }}">
+                            <img src="{{ asset.url }}" alt="{{ asset.name }}">
+                        </a>
+                        {% endfor %}
+                    </div>
+                    {% else %}
+                    <div class="results-empty">Логотипы пока не найдены.</div>
+                    {% endif %}
+                </section>
+
+                <section class="results-card">
+                    <div class="results-card__head">
+                        <div class="results-card__title">
                             <h2>Иконки</h2>
                         </div>
                         <a href="/projects/{{ project.slug }}/downloads/icons"
@@ -150,8 +172,7 @@
                 <label class="generation-log-label">Лог операций</label>
                 <pre id="results-generation-log" class="generation-log"></pre>
                 <div class="generation-modal__actions">
-                    <span id="results-generation-blocking-note" class="generation-history-action-muted">Окно будет доступно для закрытия после завершения процесса</span>
-                    <button type="button" id="results-generation-close-btn" class="btn btn-outline btn-inline" hidden>Закрыть</button>
+                    <button type="button" id="results-generation-cancel-btn" class="btn btn-outline btn-inline">Прервать генерацию</button>
                 </div>
             </div>
         </div>

@@ -61,6 +61,17 @@ def build_prompts(tokens: Dict, kind: str, name: str) -> Tuple[str, str]:
 
     icon_cfg = tokens.get("icon") or {}
 
+    if kind == "logos":
+        prompt = (
+            f"Create a brand logo concept for: {name}. "
+            f"{style_prompt} {pal_txt} "
+            f"Centered logo mark, clean geometry, minimal details, vector-like style. "
+            f"No text, no watermark, no mockup."
+        )
+        if icon_cfg:
+            prompt += f" Logo details: {json.dumps(icon_cfg, ensure_ascii=False)}."
+        return prompt.strip(), negative
+
     # Важно: FLUX (и многие модели) могут интерпретировать 'negative prompt' как обычный текст.
     # Поэтому все ограничения формулируем позитивно: что должно быть в кадре.
 
@@ -130,6 +141,7 @@ def main() -> int:
     ap.add_argument("--tokens", required=True, help="Path to tokens.json")
     ap.add_argument("--out", default="out", help="Output root directory (default: out)")
     ap.add_argument("--brand-id", default="", help="Brand ID subfolder inside out/")
+    ap.add_argument("--logos", type=int, default=0, help="How many logos to generate")
     ap.add_argument("--icons", type=int, default=0, help="How many icons to generate")
     ap.add_argument("--patterns", type=int, default=0, help="How many patterns to generate")
     ap.add_argument("--illustrations", type=int, default=0, help="How many illustrations to generate")
@@ -200,14 +212,17 @@ def main() -> int:
     if args.brand_id:
         brand_folder = os.path.join(args.out, args.brand_id)
 
+    logos_dir = os.path.join(brand_folder, "logos")
     icons_dir = os.path.join(brand_folder, "icons")
     patterns_dir = os.path.join(brand_folder, "patterns")
     illustrations_dir = os.path.join(brand_folder, "illustrations")
+    ensure_dir(logos_dir)
     ensure_dir(icons_dir)
     ensure_dir(patterns_dir)
     ensure_dir(illustrations_dir)
 
     prompts = tokens.get("prompts") or {}
+    logo_names = take_n(prompts.get("logos") or [], args.logos, "logo")
     icon_names = take_n(prompts.get("icons") or [], args.icons, "icon")
     pattern_names = take_n(prompts.get("patterns") or [], args.patterns, "pattern")
     ill_names = take_n(prompts.get("illustrations") or [], args.illustrations, "illustration")
@@ -220,7 +235,7 @@ def main() -> int:
         "seed": args.seed,
         "num_inference_steps": steps,
         "guidance_scale": guidance,
-        "outputs": {"icons": [], "patterns": [], "illustrations": []},
+        "outputs": {"logos": [], "icons": [], "patterns": [], "illustrations": []},
     }
 
     def gen(kind: str, names: List[str], out_dir: str):
@@ -266,6 +281,8 @@ def main() -> int:
                     }
                 )
 
+    if args.logos:
+        gen("logos", logo_names, logos_dir)
     if args.icons:
         gen("icons", icon_names, icons_dir)
     if args.patterns:

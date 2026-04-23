@@ -96,10 +96,11 @@ def _build_download_zip(user_id: int, project_slug: str, brand_id: str, kind: st
     zip_path = exports_dir / f'{project_slug}_{kind}.zip'
 
     section_map = {
+        'logos': ['logos'],
         'icons': ['icons'],
         'patterns': ['patterns'],
         'illustrations': ['illustrations'],
-        'all': ['icons', 'patterns', 'illustrations'],
+        'all': ['logos', 'icons', 'patterns', 'illustrations'],
     }
     if kind not in section_map:
         raise HTTPException(status_code=404, detail='Неизвестный тип экспорта.')
@@ -289,7 +290,7 @@ async def generate_figma(request: Request, project_slug: str) -> JSONResponse:
         'counts': counts,
         'manifest_url': f'/assets/{brand_id}/figma_plugin_manifest.json',
         'download_url': f'/projects/{project_slug}/exports/{export_path.name}',
-        'production_url': f'https://brand.kit/assets/{brand_id}/icons|patterns|illustrations',
+        'production_url': f'https://brand.kit/assets/{brand_id}/logos|icons|patterns|illustrations',
         'local_url': f'{base_host}/assets/{brand_id}/...',
     })
 
@@ -360,7 +361,7 @@ async def serve_assets(brand_id: str, relpath: str):
     elif relpath.startswith('flux/'):
         base_dir = OUT_DIR / 'flux' / brand_id
         rel = relpath[len('flux/'):]
-    elif relpath.startswith(('icons/', 'patterns/', 'illustrations/')):
+    elif relpath.startswith(('logos/', 'icons/', 'patterns/', 'illustrations/')):
         base_dir = OUT_DIR / 'recraft' / brand_id
         rel = relpath
     else:
@@ -398,6 +399,7 @@ async def project_results_page(request: Request, project_slug: str) -> HTMLRespo
         'user_email': request.session.get('user_email') or '',
         'user_initial': ((request.session.get('user_name') or '?')[:1]).upper(),
         'palette_items': _palette_items_from_tokens(tokens),
+        'logos': _scan_asset_group(brand_id, 'logos', ('.png', '.svg', '.jpg', '.jpeg')),
         'icons': _scan_asset_group(brand_id, 'icons', ('.png', '.svg', '.jpg', '.jpeg')),
         'patterns': _scan_asset_group(brand_id, 'patterns', ('.png', '.svg', '.jpg', '.jpeg')),
         'illustrations': _scan_asset_group(brand_id, 'illustrations', ('.png', '.svg', '.jpg', '.jpeg')),

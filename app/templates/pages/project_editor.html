@@ -14,7 +14,7 @@
             <div class="project-page-head">
                 <div>
                     <h1>Генерация бренд-комплекта</h1>
-                    <p>Настрой стиль бренда и сгенерируй иконки, паттерны и иллюстрации</p>
+                    <p>Настрой стиль бренда и сгенерируй логотипы, иконки, паттерны и иллюстрации</p>
                 </div>
             </div>
 
@@ -107,12 +107,15 @@
                         <div>
                             <div class="step-progress-caption">Шаг 3 из 6</div>
                             <h2>Генерируемые ассеты</h2>
-                            <p>Настройте параметры для иконок, паттернов и иллюстраций</p>
+                            <p>Настройте параметры для логотипов, иконок, паттернов и иллюстраций</p>
                         </div>
                     </div>
                     <div class="asset-tabs" role="tablist" aria-label="Тип ассетов">
-                        <button type="button" class="asset-tab asset-tab--active" role="tab" id="asset-tab-icons"
-                            data-asset-tab="icons" aria-selected="true"
+                        <button type="button" class="asset-tab asset-tab--active" role="tab" id="asset-tab-logos"
+                            data-asset-tab="logos" aria-selected="true"
+                            aria-controls="asset-panel-logos">Логотипы</button>
+                        <button type="button" class="asset-tab" role="tab" id="asset-tab-icons"
+                            data-asset-tab="icons" aria-selected="false"
                             aria-controls="asset-panel-icons">Иконки</button>
                         <button type="button" class="asset-tab" role="tab" id="asset-tab-patterns"
                             data-asset-tab="patterns" aria-selected="false"
@@ -122,8 +125,27 @@
                             aria-controls="asset-panel-illustrations">Иллюстрации</button>
                     </div>
 
-                    <div id="asset-panel-icons" class="asset-panel asset-panel--active" role="tabpanel"
-                        aria-labelledby="asset-tab-icons">
+                    <div id="asset-panel-logos" class="asset-panel asset-panel--active" role="tabpanel"
+                        aria-labelledby="asset-tab-logos">
+                        <div class="editor-list-field">
+                            <span class="editor-field-title">Темы генерации</span>
+                            <div id="chip-list-logos" class="chip-list" role="list"></div>
+                            <div class="chip-add-row">
+                                <input type="text" id="logos-input" placeholder="wordmark, monogram, emblem..."
+                                    class="editor-grow-input" autocomplete="off" />
+                                <button type="button" class="small-action" data-chip-add="logos">Добавить</button>
+                            </div>
+                        </div>
+                        <div class="editor-grid editor-grid--narrow asset-panel-counts">
+                            <label class="editor-field">
+                                <span>Количество логотипов</span>
+                                <input type="number" id="gen.logos_count" min="1" max="20" value="4">
+                            </label>
+                        </div>
+                    </div>
+
+                    <div id="asset-panel-icons" class="asset-panel" role="tabpanel"
+                        aria-labelledby="asset-tab-icons" hidden>
                         <div class="editor-list-field">
                             <span class="editor-field-title">Темы генерации</span>
                             <div id="chip-list-icons" class="chip-list" role="list"></div>
@@ -261,6 +283,7 @@
                         <h3>Что будет сгенерировано:</h3>
                         <ul>
                             <li>Иконки в заданном стиле и цветовой палитре</li>
+                            <li>Варианты логотипов в едином стиле бренда</li>
                             <li>Seamless паттерны с заданными мотивами</li>
                             <li>Иллюстрации в едином визуальном стиле</li>
                             <li>JSON-токены для интеграции с Figma</li>
@@ -276,6 +299,7 @@
                     <button type="button" id="btn-generate" class="btn btn-primary editor-generate-btn">Собрать
                         бренд-комплект</button>
                     <div class="cta-stats">
+                        <span><strong id="summary-logos">4</strong> логотипов</span>
                         <span><strong id="summary-icons">8</strong> иконок</span>
                         <span><strong id="summary-patterns">4</strong> паттернов</span>
                         <span><strong id="summary-illustrations">4</strong> иллюстраций</span>
@@ -335,7 +359,7 @@
         <p id="generation-error-body" class="generation-error-modal__message"></p>
         <p id="generation-error-hint" class="generation-error-modal__hint" hidden></p>
         <div class="generation-error-modal__actions">
-            <button type="button" id="generation-error-dismiss" class="btn btn-primary btn-inline">Понятно</button>
+            <button type="button" id="generation-error-dismiss" class="btn btn-primary btn-inline">Ок</button>
         </div>
     </div>
 </div>

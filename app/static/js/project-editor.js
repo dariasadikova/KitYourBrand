@@ -91,6 +91,7 @@ document.addEventListener('DOMContentLoaded', () => {
 
   function getRequestedCounts() {
     return {
+      logos: peekCountInput('gen.logos_count', 4),
       icons: peekCountInput('gen.icons_count', 8),
       patterns: peekCountInput('gen.patterns_count', 4),
       illustrations: peekCountInput('gen.illustrations_count', 4),
@@ -104,7 +105,7 @@ document.addEventListener('DOMContentLoaded', () => {
     styleIdInput.placeholder = hasGeneratedStyleId ? '' : styleIdPlaceholderLocked;
   }
 
-  const promptChips = { icons: [], patterns: [], illustrations: [] };
+  const promptChips = { logos: [], icons: [], patterns: [], illustrations: [] };
 
   function normalizePromptArray(raw) {
     if (Array.isArray(raw)) {
@@ -117,10 +118,13 @@ document.addEventListener('DOMContentLoaded', () => {
   }
 
   function renderChipList(type) {
-    const listId =
-      type === 'icons' ? 'chip-list-icons'
-      : type === 'patterns' ? 'chip-list-patterns'
-      : 'chip-list-illustrations';
+    const listIdMap = {
+      logos: 'chip-list-logos',
+      icons: 'chip-list-icons',
+      patterns: 'chip-list-patterns',
+      illustrations: 'chip-list-illustrations',
+    };
+    const listId = listIdMap[type];
     const el = byId(listId);
     if (!el) return;
 
@@ -163,13 +167,14 @@ document.addEventListener('DOMContentLoaded', () => {
   document.querySelectorAll('[data-chip-add]').forEach((btn) => {
     btn.addEventListener('click', () => {
       const type = btn.getAttribute('data-chip-add');
-      if (type === 'icons') addChipsFromInput('icons', 'icons-input');
+      if (type === 'logos') addChipsFromInput('logos', 'logos-input');
+      else if (type === 'icons') addChipsFromInput('icons', 'icons-input');
       else if (type === 'patterns') addChipsFromInput('patterns', 'patterns-input');
       else if (type === 'illustrations') addChipsFromInput('illustrations', 'illustrations-input');
     });
   });
 
-  [['icons-input', 'icons'], ['patterns-input', 'patterns'], ['illustrations-input', 'illustrations']].forEach(([inputId, type]) => {
+  [['logos-input', 'logos'], ['icons-input', 'icons'], ['patterns-input', 'patterns'], ['illustrations-input', 'illustrations']].forEach(([inputId, type]) => {
     byId(inputId)?.addEventListener('keydown', (e) => {
       if (e.key !== 'Enter') return;
       e.preventDefault();
@@ -180,6 +185,7 @@ document.addEventListener('DOMContentLoaded', () => {
   function initAssetTabs() {
     const tablist = document.querySelector('#project-editor-form .asset-tabs');
     const panels = {
+      logos: byId('asset-panel-logos'),
       icons: byId('asset-panel-icons'),
       patterns: byId('asset-panel-patterns'),
       illustrations: byId('asset-panel-illustrations'),
@@ -226,7 +232,7 @@ document.addEventListener('DOMContentLoaded', () => {
       if (name) activate(name);
     });
 
-    activate('icons');
+    activate('logos');
   }
 
   function getProgressCards() {
@@ -260,7 +266,13 @@ document.addEventListener('DOMContentLoaded', () => {
   }
 
   function isStep3Complete() {
-    return stepTouched[3] && promptChips.icons.length > 0 && promptChips.patterns.length > 0 && promptChips.illustrations.length > 0;
+    return (
+      stepTouched[3]
+      && promptChips.logos.length > 0
+      && promptChips.icons.length > 0
+      && promptChips.patterns.length > 0
+      && promptChips.illustrations.length > 0
+    );
   }
 
   function refreshStepProgression() {
@@ -288,10 +300,12 @@ document.addEventListener('DOMContentLoaded', () => {
   function updateGenerationSummary() {
     const counts = getRequestedCounts();
 
+    const logosLabel = byId('summary-logos');
     const iconsLabel = byId('summary-icons');
     const patternsLabel = byId('summary-patterns');
     const illustrationsLabel = byId('summary-illustrations');
 
+    if (logosLabel) logosLabel.textContent = String(counts.logos);
     if (iconsLabel) iconsLabel.textContent = String(counts.icons);
     if (patternsLabel) patternsLabel.textContent = String(counts.patterns);
     if (illustrationsLabel) illustrationsLabel.textContent = String(counts.illustrations);
@@ -364,9 +378,11 @@ document.addEventListener('DOMContentLoaded', () => {
     byId('texture.scale') && (byId('texture.scale').value = deepGet(tokens, 'texture.scale', ''));
     byId('illustration.style') && (byId('illustration.style').value = deepGet(tokens, 'illustration.style', ''));
     byId('illustration.background') && (byId('illustration.background').value = deepGet(tokens, 'illustration.background', ''));
+    promptChips.logos = normalizePromptArray(deepGet(tokens, 'prompts.logos', []));
     promptChips.icons = normalizePromptArray(deepGet(tokens, 'prompts.icons', []));
     promptChips.patterns = normalizePromptArray(deepGet(tokens, 'prompts.patterns', []));
     promptChips.illustrations = normalizePromptArray(deepGet(tokens, 'prompts.illustrations', []));
+    renderChipList('logos');
     renderChipList('icons');
     renderChipList('patterns');
     renderChipList('illustrations');
@@ -398,9 +414,11 @@ document.addEventListener('DOMContentLoaded', () => {
     updatePaletteControlsState();
 
     const gen = tokens.generation || {};
+    const logosEl = resolveGenCountInput('gen.logos_count');
     const iconsEl = resolveGenCountInput('gen.icons_count');
     const patternsEl = resolveGenCountInput('gen.patterns_count');
     const illEl = resolveGenCountInput('gen.illustrations_count');
+    if (logosEl) logosEl.value = gen.logos_count ?? 4;
     if (iconsEl) iconsEl.value = gen.icons_count ?? 8;
     if (patternsEl) patternsEl.value = gen.patterns_count ?? 4;
     if (illEl) illEl.value = gen.illustrations_count ?? 4;
@@ -464,10 +482,12 @@ document.addEventListener('DOMContentLoaded', () => {
     clone.illustration.vector = !!byId('illustration.vector')?.checked;
     clone.illustration.raster = !!byId('illustration.raster')?.checked;
 
+    clone.prompts.logos = [...promptChips.logos];
     clone.prompts.icons = [...promptChips.icons];
     clone.prompts.patterns = [...promptChips.patterns];
     clone.prompts.illustrations = [...promptChips.illustrations];
 
+    clone.generation.logos_count = syncCountInput('gen.logos_count', 4);
     clone.generation.icons_count = syncCountInput('gen.icons_count', 8);
     clone.generation.patterns_count = syncCountInput('gen.patterns_count', 4);
     clone.generation.illustrations_count = syncCountInput('gen.illustrations_count', 4);
@@ -1175,7 +1195,7 @@ document.addEventListener('DOMContentLoaded', () => {
     refreshStepProgression();
   });
 
-  ['gen.icons_count', 'gen.patterns_count', 'gen.illustrations_count'].forEach((fid) => {
+  ['gen.logos_count', 'gen.icons_count', 'gen.patterns_count', 'gen.illustrations_count'].forEach((fid) => {
     const node = resolveGenCountInput(fid);
     node?.addEventListener('input', updateGenerationSummary);
     node?.addEventListener('change', updateGenerationSummary);
@@ -1269,6 +1289,7 @@ document.addEventListener('DOMContentLoaded', () => {
       const payload = {
         style_id: byId('style_id')?.value.trim() || '',
         brand_id: byId('brand_id')?.value.trim() || '',
+        logos_count: syncCountInput('gen.logos_count', 4),
         icons_count: syncCountInput('gen.icons_count', 8),
         patterns_count: syncCountInput('gen.patterns_count', 4),
         illustrations_count: syncCountInput('gen.illustrations_count', 4),
