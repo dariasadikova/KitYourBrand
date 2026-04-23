@@ -23,18 +23,23 @@
             <h2>Основная информация</h2>
             <div class="profile-info-grid">
                 <div class="profile-avatar-block">
-                    {% if avatar_url %}
-                    <img src="{{ avatar_url }}" alt="Аватар пользователя" class="profile-avatar-image" />
-                    {% else %}
-                    <div class="profile-avatar-circle">{{ user_initial }}</div>
-                    {% endif %}
+                    <div class="profile-avatar-frame">
+                        {% if avatar_url %}
+                        <img src="{{ avatar_url }}" alt="Аватар пользователя" class="profile-avatar-image" />
+                        <button type="submit" name="remove_avatar" value="1" class="profile-avatar-delete-btn"
+                            aria-label="Удалить фото профиля" title="Удалить фото">
+                            <svg viewBox="0 0 512 512" aria-hidden="true">
+                                <path d="M135.2 17.7L128 32H32C14.3 32 0 46.3 0 64s14.3 32 32 32H480c17.7 0 32-14.3 32-32s-14.3-32-32-32H384l-7.2-14.3C366 6.9 349.6 0 332.8 0H179.2c-16.8 0-33.2 6.9-44 17.7zM32 128H480L456.7 467.1c-1.7 24.6-22.1 43.9-46.8 43.9H102.1c-24.7 0-45.1-19.3-46.8-43.9L32 128z" />
+                            </svg>
+                        </button>
+                        {% else %}
+                        <div class="profile-avatar-circle">{{ user_initial }}</div>
+                        {% endif %}
+                    </div>
                     <label class="btn btn-outline btn-inline profile-upload-btn">
                         Загрузить фото
                         <input type="file" name="avatar" accept=".png,.jpg,.jpeg,.webp" hidden />
                     </label>
-                    {% if avatar_url %}
-                    <button type="submit" name="remove_avatar" value="1" class="btn btn-outline btn-inline profile-remove-avatar">Удалить фото</button>
-                    {% endif %}
                 </div>
 
                 <div class="profile-fields">

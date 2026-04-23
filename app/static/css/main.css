@@ -2120,6 +2120,14 @@ img {
     font-size: 0.82rem;
 }
 
+.profile-avatar-frame {
+    position: relative;
+    width: 116px;
+    height: 116px;
+    border-radius: 50%;
+    overflow: hidden;
+}
+
 .profile-avatar-circle {
     width: 116px;
     height: 116px;
@@ -2139,10 +2147,39 @@ img {
     border-radius: 50%;
     object-fit: cover;
     border: 1px solid rgba(255, 255, 255, 0.18);
+    transition: filter 0.2s ease;
 }
 
-.profile-upload-btn,
-.profile-remove-avatar {
+.profile-avatar-delete-btn {
+    position: absolute;
+    inset: 0;
+    border: 0;
+    background: rgba(11, 15, 28, 0.58);
+    color: #ffffff;
+    display: grid;
+    place-items: center;
+    cursor: pointer;
+    opacity: 0;
+    transition: opacity 0.18s ease;
+}
+
+.profile-avatar-delete-btn svg {
+    width: 26px;
+    height: 26px;
+    fill: currentColor;
+}
+
+.profile-avatar-frame:hover .profile-avatar-image,
+.profile-avatar-frame:focus-within .profile-avatar-image {
+    filter: brightness(0.58);
+}
+
+.profile-avatar-frame:hover .profile-avatar-delete-btn,
+.profile-avatar-frame:focus-within .profile-avatar-delete-btn {
+    opacity: 1;
+}
+
+.profile-upload-btn {
     min-height: 36px;
     padding: 0 12px;
     border-radius: 10px;
