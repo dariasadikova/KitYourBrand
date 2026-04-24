@@ -12,6 +12,8 @@ if TYPE_CHECKING:
 from app.services.generation_error_summary import ProviderGenerationError, summarize_generation_failure
 from app.services.generation_service import GenerationCancelledError
 
+TERMINAL_JOB_STATUSES = ('completed', 'completed_with_errors', 'failed', 'cancelled')
+
 
 class GenerationJobStore:
     def __init__(self) -> None:
@@ -91,7 +93,7 @@ class GenerationJobStore:
                 j for j in self._jobs.values()
                 if int(j.get('user_id') or 0) == int(user_id)
                 and str(j.get('project_slug') or '') == project_slug
-                and str(j.get('status') or '') not in ('completed', 'failed', 'cancelled')
+                and str(j.get('status') or '') not in TERMINAL_JOB_STATUSES
             ]
             if not candidates:
                 return None
@@ -107,7 +109,7 @@ class GenerationJobStore:
             job = self._jobs.get(job_id)
             if not job or int(job.get('user_id') or 0) != int(user_id):
                 return False
-            if job.get('status') in ('completed', 'failed', 'cancelled'):
+            if job.get('status') in TERMINAL_JOB_STATUSES:
                 return False
             job['cancel_requested'] = True
             if job.get('status') in ('pending', 'running'):
@@ -170,17 +172,27 @@ class GenerationJobStore:
                 )
                 if self.is_cancel_requested(job_id):
                     raise GenerationCancelledError('Генерация прервана пользователем.')
+                has_errors = bool(result.get('has_errors'))
+                final_status = 'completed_with_errors' if has_errors else 'completed'
+                final_message = 'Завершено с ошибками' if has_errors else 'Завершено'
                 self.update(
                     job_id,
-                    status='completed',
+                    status=final_status,
                     progress=100,
-                    message='Завершено',
+                    message=final_message,
+                    error=result.get('error'),
+                    error_hint=result.get('error_hint'),
                     result=result,
                     current_provider=None,
                 )
-                self.append_log(job_id, 'Генерация завершена успешно!')
+                self.append_log(job_id, 'Генерация завершена с ошибками провайдеров.' if has_errors else 'Генерация завершена успешно!')
                 if project_service is not None:
-                    project_service.finalize_generation_job_record(job_id, 'success')
+                    project_service.finalize_generation_job_record(
+                        job_id,
+                        'success',
+                        error_message=(result.get('error') or None) if has_errors else None,
+                        error_hint=(result.get('error_hint') or None) if has_errors else None,
+                    )
             except Exception as exc:
                 if isinstance(exc, GenerationCancelledError):
                     self.update(

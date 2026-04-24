@@ -893,7 +893,11 @@ document.addEventListener('DOMContentLoaded', () => {
       lower.includes('с ошибкой') ||
       lower.startsWith('ошибка') ||
       lower.includes('error:') ||
-      lower.includes('traceback')
+      lower.includes('traceback') ||
+      lower.includes('не ответил в течение') ||
+      lower.includes('генерация остановлена') ||
+      lower.includes('завершился с ошибкой') ||
+      lower.includes('ошибка у провайдера')
     ) {
       color = '#ef4444';
     }

@@ -8,6 +8,7 @@ import shutil
 import subprocess
 import sys
 import threading
+import time
 from pathlib import Path
 from typing import Any, Callable
 
@@ -18,10 +19,21 @@ from app.services.generation_error_summary import ProviderGenerationError, summa
 from app.services.project_service import ProjectService
 
 logger = logging.getLogger("kityourbrand.generation")
+PROVIDER_TIMEOUT_SECONDS = 300
 
 
 class GenerationCancelledError(RuntimeError):
     """Raised when user cancels current generation job."""
+
+
+class ProviderExecutionTimeoutError(RuntimeError):
+    """Raised when provider process exceeds allowed execution time."""
+
+    def __init__(self, provider: str, timeout_seconds: int) -> None:
+        provider_name = str(provider or '').strip() or 'provider'
+        super().__init__(f'Таймаут выполнения провайдера {provider_name}: {timeout_seconds} сек.')
+        self.provider = provider_name
+        self.timeout_seconds = int(timeout_seconds)
 
 
 class GenerationService:
@@ -269,6 +281,8 @@ class GenerationService:
         *,
         label: str = 'cli',
         should_cancel: Callable[[], bool] | None = None,
+        provider: str | None = None,
+        timeout_seconds: int | None = None,
     ) -> tuple[str, str]:
         proc = subprocess.Popen(
             cmd,
@@ -277,6 +291,7 @@ class GenerationService:
             stderr=subprocess.PIPE,
             text=True,
         )
+        started_monotonic = time.monotonic()
         while True:
             if should_cancel and should_cancel():
                 proc.terminate()
@@ -286,6 +301,19 @@ class GenerationService:
                     proc.kill()
                     proc.wait(timeout=5)
                 raise GenerationCancelledError('Генерация прервана пользователем.')
+            if timeout_seconds:
+                elapsed = time.monotonic() - started_monotonic
+                if elapsed >= int(timeout_seconds):
+                    proc.terminate()
+                    try:
+                        proc.wait(timeout=5)
+                    except subprocess.TimeoutExpired:
+                        proc.kill()
+                        proc.wait(timeout=5)
+                    raise ProviderExecutionTimeoutError(
+                        provider=provider or label,
+                        timeout_seconds=int(timeout_seconds),
+                    )
             if proc.poll() is not None:
                 break
             threading.Event().wait(0.2)
@@ -324,7 +352,25 @@ class GenerationService:
         should_cancel: Callable[[], bool] | None = None,
     ) -> tuple[str, str]:
         try:
-            return self._run_checked(cmd, cwd, label=cli_label, should_cancel=should_cancel)
+            return self._run_checked(
+                cmd,
+                cwd,
+                label=cli_label,
+                should_cancel=should_cancel,
+                provider=provider,
+                timeout_seconds=PROVIDER_TIMEOUT_SECONDS,
+            )
+        except ProviderExecutionTimeoutError:
+            provider_label = provider[:1].upper() + provider[1:]
+            raise ProviderGenerationError(
+                provider=provider,
+                user_message=(
+                    f'Провайдер {provider_label} не ответил в течение 5 минут, генерация остановлена.'
+                ),
+                hint=(
+                    f'Проверьте API-ключ и баланс {provider_label}, затем повторите запуск.'
+                ),
+            )
         except GenerationCancelledError:
             raise
         except subprocess.CalledProcessError as exc:
@@ -470,6 +516,9 @@ class GenerationService:
             '--out', str(recraft_out_abs),
         ])
 
+        provider_successes: dict[str, dict[str, Any]] = {}
+        provider_failures: dict[str, dict[str, str | None]] = {}
+
         report(28, 'Запуск провайдера Recraft', 'recraft', 'running')
         try:
             recraft_stdout, recraft_stderr = self._run_provider_command(
@@ -480,6 +529,13 @@ class GenerationService:
                 should_cancel=should_cancel,
             )
             report(48, 'Recraft завершён успешно', 'recraft', 'success')
+            provider_successes['recraft'] = {
+                'ok': True,
+                'error': '',
+                'error_hint': None,
+                'stdout': recraft_stdout,
+                'stderr': recraft_stderr,
+            }
         except ProviderGenerationError as exc:
             report(
                 48,
@@ -488,13 +544,19 @@ class GenerationService:
                 'error',
                 {'message': exc.user_message, 'hint': exc.hint},
             )
-            raise
+            provider_failures['recraft'] = {
+                'message': exc.user_message,
+                'hint': exc.hint,
+            }
+            recraft_stdout = ''
+            recraft_stderr = ''
         ensure_not_cancelled()
 
         new_style_id = ''
-        m = re.search(r'created style_id:\s*([0-9a-fA-F\-]+)', recraft_stdout)
-        if m:
-            new_style_id = m.group(1).strip()
+        if recraft_stdout:
+            m = re.search(r'created style_id:\s*([0-9a-fA-F\-]+)', recraft_stdout)
+            if m:
+                new_style_id = m.group(1).strip()
         effective_style_id = new_style_id or style_id
 
         if new_style_id:
@@ -528,6 +590,7 @@ class GenerationService:
                 should_cancel=should_cancel,
             )
             report(68, 'Seedream завершён успешно', 'seedream', 'success')
+            provider_successes['seedream'] = seedream
         except ProviderGenerationError as exc:
             report(
                 68,
@@ -536,7 +599,17 @@ class GenerationService:
                 'error',
                 {'message': exc.user_message, 'hint': exc.hint},
             )
-            raise
+            provider_failures['seedream'] = {
+                'message': exc.user_message,
+                'hint': exc.hint,
+            }
+            seedream = {
+                'ok': False,
+                'error': exc.user_message or 'Seedream завершился с ошибкой',
+                'error_hint': exc.hint,
+                'stdout': '',
+                'stderr': '',
+            }
         ensure_not_cancelled()
 
         report(72, 'Запуск провайдера Flux', 'flux', 'running')
@@ -556,6 +629,7 @@ class GenerationService:
                 should_cancel=should_cancel,
             )
             report(85, 'Flux завершён успешно', 'flux', 'success')
+            provider_successes['flux'] = flux
         except ProviderGenerationError as exc:
             report(
                 85,
@@ -564,8 +638,31 @@ class GenerationService:
                 'error',
                 {'message': exc.user_message, 'hint': exc.hint},
             )
-            raise
+            provider_failures['flux'] = {
+                'message': exc.user_message,
+                'hint': exc.hint,
+            }
+            flux = {
+                'ok': False,
+                'error': exc.user_message or 'Flux завершился с ошибкой',
+                'error_hint': exc.hint,
+                'stdout': '',
+                'stderr': '',
+            }
         ensure_not_cancelled()
+
+        if not provider_successes:
+            last_provider = next(reversed(provider_failures.keys()), 'recraft')
+            last_error = provider_failures.get(last_provider) or {}
+            raise ProviderGenerationError(
+                provider=last_provider,
+                user_message=(
+                    (last_error.get('message') or 'Все провайдеры завершились с ошибкой.')
+                    if isinstance(last_error, dict)
+                    else 'Все провайдеры завершились с ошибкой.'
+                ),
+                hint='Проверьте ключи, баланс и доступность провайдеров, затем повторите запуск.',
+            )
 
         report(90, 'Постобработка изображений WEBP → PNG')
         webp_converted = self.convert_webp_to_png_for_brand(brand_id)
@@ -580,20 +677,47 @@ class GenerationService:
 
         report(100, 'Генерация завершена')
 
+        has_errors = bool(provider_failures)
+        completion_message = (
+            'Генерация завершена с ошибками провайдеров'
+            if has_errors
+            else 'Бренд-комплект успешно сгенерирован'
+        )
+        top_error_message = None
+        top_error_hint = None
+        if has_errors:
+            first_failed = next(iter(provider_failures.keys()))
+            first_err = provider_failures.get(first_failed) or {}
+            provider_label = first_failed[:1].upper() + first_failed[1:]
+            first_msg = str((first_err or {}).get('message') or '').strip()
+            top_error_message = (
+                f'Ошибка у провайдера {provider_label}: {first_msg}'
+                if first_msg
+                else f'Ошибка у провайдера {provider_label}.'
+            )
+            top_error_hint = str((first_err or {}).get('hint') or '').strip() or None
+
         return {
             'ok': True,
-            'message': 'Бренд-комплект успешно сгенерирован',
+            'message': completion_message,
             'style_id': effective_style_id,
             'providers_root': str(self.recraft_dir.parent),
             'output_root': str(self.out_root),
             'webp_converted': webp_converted,
-            'recraft': {
-                'ok': True,
-                'error': '',
-                'error_hint': None,
-                'stdout': recraft_stdout,
-                'stderr': recraft_stderr,
-            },
+            'has_errors': has_errors,
+            'error': top_error_message,
+            'error_hint': top_error_hint,
+            'provider_errors': provider_failures,
+            'recraft': provider_successes.get(
+                'recraft',
+                {
+                    'ok': False,
+                    'error': (provider_failures.get('recraft') or {}).get('message') if provider_failures.get('recraft') else '',
+                    'error_hint': (provider_failures.get('recraft') or {}).get('hint') if provider_failures.get('recraft') else None,
+                    'stdout': '',
+                    'stderr': '',
+                },
+            ),
             'seedream': seedream,
             'flux': flux,
             'figma_manifest': {
