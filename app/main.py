@@ -5,6 +5,10 @@ from starlette.middleware.sessions import SessionMiddleware
 from app.core.paths import STATIC_DIR
 from app.core.settings import settings
 from app.routers import pages, projects
+from app.routers.api import auth as api_auth
+from app.routers.api import generations as api_generations
+from app.routers.api import profile as api_profile
+from app.routers.api import projects as api_projects
 
 import logging
 
@@ -54,6 +58,10 @@ def create_app() -> FastAPI:
 
     app.include_router(pages.router)
     app.include_router(projects.router)
+    app.include_router(api_auth.router)
+    app.include_router(api_projects.router)
+    app.include_router(api_generations.router)
+    app.include_router(api_profile.router)
 
     return app
 
