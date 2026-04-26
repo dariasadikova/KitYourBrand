@@ -2005,15 +2005,131 @@ img {
     color: rgba(255, 255, 255, 0.72);
 }
 
+.palette-autofill {
+    margin-top: 18px;
+    padding: 18px;
+    border-radius: 18px;
+    border: 1px solid rgba(255, 255, 255, 0.08);
+    background: rgba(255, 255, 255, 0.03);
+    display: grid;
+    gap: 14px;
+}
+
+.palette-autofill__head {
+    display: flex;
+    align-items: flex-start;
+    justify-content: space-between;
+    gap: 12px;
+}
+
+.palette-autofill__head h3 {
+    margin: 0 0 6px;
+    font-size: 1rem;
+    color: #fff;
+}
+
+.palette-autofill__head p {
+    margin: 0;
+    color: rgba(255, 255, 255, 0.72);
+    font-size: 0.92rem;
+}
+
+.palette-autofill__refresh {
+    white-space: nowrap;
+}
+
+.palette-autofill__meta {
+    display: flex;
+    gap: 10px;
+    flex-wrap: wrap;
+}
+
+.palette-autofill__chip {
+    display: inline-flex;
+    align-items: center;
+    min-height: 34px;
+    padding: 0 12px;
+    border-radius: 999px;
+    background: rgba(255, 255, 255, 0.08);
+    color: #fff;
+    font-size: 0.88rem;
+}
+
+.palette-autofill__chip--muted {
+    color: rgba(255, 255, 255, 0.72);
+}
+
+.palette-autofill__actions {
+    display: flex;
+    gap: 10px;
+    flex-wrap: wrap;
+}
+
+.palette-variant-btn {
+    min-width: 112px;
+}
+
+.palette-variant-btn.is-active {
+    outline: 2px solid rgba(255, 255, 255, 0.55);
+    outline-offset: 2px;
+}
+
+.palette-autofill__preview {
+    display: grid;
+    grid-template-columns: repeat(6, minmax(0, 1fr));
+    gap: 10px;
+}
+
+.palette-preview-swatch {
+    overflow: hidden;
+    border-radius: 14px;
+    border: 1px solid rgba(255, 255, 255, 0.08);
+    background: #0f1118;
+}
+
+.palette-preview-swatch__color {
+    height: 54px;
+    width: 100%;
+}
+
+.palette-preview-swatch__meta {
+    display: grid;
+    gap: 2px;
+    padding: 10px;
+}
+
+.palette-preview-swatch__label {
+    font-size: 0.78rem;
+    color: rgba(255, 255, 255, 0.72);
+}
+
+.palette-preview-swatch__value {
+    font-size: 0.82rem;
+    color: #fff;
+    letter-spacing: 0.04em;
+}
+
 @media (max-width: 980px) {
     .palette-grid--six {
         grid-template-columns: repeat(2, minmax(0, 1fr));
+    }
+
+    .palette-autofill__head {
+        flex-direction: column;
+    }
+
+    .palette-autofill__preview {
+        grid-template-columns: repeat(3, minmax(0, 1fr));
     }
 }
 
 @media (max-width: 680px) {
     .palette-grid--six {
         grid-template-columns: 1fr;
+    }
+
+    .palette-autofill__preview {
+        grid-template-columns: repeat(2, minmax(0, 1fr));
     }
 }
 

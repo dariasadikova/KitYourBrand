@@ -106,6 +106,10 @@ document.addEventListener('DOMContentLoaded', () => {
   }
 
   const promptChips = { logos: [], icons: [], patterns: [], illustrations: [] };
+  let paletteSuggestions = null;
+  let activePaletteSeedRole = 'primary';
+  let activePaletteSeedColor = '';
+  let activePaletteVariant = 'balanced';
 
   function normalizePromptArray(raw) {
     if (Array.isArray(raw)) {
@@ -364,6 +368,107 @@ document.addEventListener('DOMContentLoaded', () => {
     return PALETTE_KEYS.filter((key) => byId(`palette.${key}_enabled`)?.checked);
   }
 
+  function normalizeHexColor(value) {
+    const raw = String(value || '').trim().toUpperCase();
+    if (/^#[0-9A-F]{6}$/.test(raw)) return raw;
+    if (/^#[0-9A-F]{3}$/.test(raw)) {
+      return `#${raw.slice(1).split('').map((char) => char + char).join('')}`;
+    }
+    return '';
+  }
+
+  function setPaletteSlotValue(key, color) {
+    const normalized = normalizeHexColor(color) || DEFAULT_PALETTE[key];
+    const input = byId(`palette.${key}`);
+    const textInput = byId(`palette.${key}_text`);
+    if (input) input.value = normalized;
+    if (textInput) textInput.value = normalized;
+  }
+
+  function renderPalettePreview(variantName) {
+    const preview = byId('palette-autofill-preview');
+    if (!preview || !paletteSuggestions || !paletteSuggestions[variantName]) {
+      if (preview) preview.innerHTML = '';
+      return;
+    }
+    const palette = paletteSuggestions[variantName];
+    preview.innerHTML = PALETTE_KEYS.map((key) => `
+      <div class="palette-preview-swatch">
+        <div class="palette-preview-swatch__color" style="background:${palette[key]}"></div>
+        <div class="palette-preview-swatch__meta">
+          <span class="palette-preview-swatch__label">${key[0].toUpperCase()}${key.slice(1)}</span>
+          <strong class="palette-preview-swatch__value">${palette[key]}</strong>
+        </div>
+      </div>`).join('');
+  }
+
+  function updatePaletteVariantButtons() {
+    document.querySelectorAll('.palette-variant-btn').forEach((button) => {
+      button.classList.toggle('is-active', button.dataset.paletteVariant === activePaletteVariant);
+    });
+  }
+
+  function showPaletteAutofill(seedRole, seedColor) {
+    const normalized = normalizeHexColor(seedColor);
+    const panel = byId('palette-autofill');
+    const caption = byId('palette-autofill-caption');
+    const seed = byId('palette-autofill-seed');
+    if (!panel) return;
+    if (!normalized) {
+      panel.hidden = true;
+      return;
+    }
+    activePaletteSeedRole = seedRole;
+    activePaletteSeedColor = normalized;
+    panel.hidden = false;
+    if (caption) caption.textContent = `Основа палитры: ${seedRole[0].toUpperCase()}${seedRole.slice(1)} ${normalized}. Выберите один из готовых вариантов.`;
+    if (seed) seed.textContent = `Основа: ${seedRole[0].toUpperCase()}${seedRole.slice(1)} · ${normalized}`;
+  }
+
+  async function fetchPaletteSuggestions(seedRole = activePaletteSeedRole, seedColor = activePaletteSeedColor) {
+    const normalized = normalizeHexColor(seedColor);
+    if (!normalized) return;
+    const response = await fetch(`/projects/${projectSlug}/palette/suggest`, {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({ seed_color: normalized, seed_role: seedRole }),
+    });
+    const data = await response.json();
+    if (!response.ok || !data.ok) {
+      throw new Error(data.error || 'Не удалось подобрать палитру');
+    }
+    paletteSuggestions = data.variants || null;
+    activePaletteVariant = paletteSuggestions?.balanced ? 'balanced' : 'soft';
+    updatePaletteVariantButtons();
+    renderPalettePreview(activePaletteVariant);
+  }
+
+  async function refreshPaletteSuggestions(seedRole, seedColor) {
+    showPaletteAutofill(seedRole, seedColor);
+    try {
+      await fetchPaletteSuggestions(seedRole, seedColor);
+    } catch (error) {
+      showToast(error.message, true);
+    }
+  }
+
+  function applySuggestedPalette(variantName) {
+    if (!paletteSuggestions || !paletteSuggestions[variantName]) return;
+    activePaletteVariant = variantName;
+    const palette = paletteSuggestions[variantName];
+    PALETTE_KEYS.forEach((key) => {
+      setPaletteSlotValue(key, palette[key]);
+    });
+    const activeCheckbox = byId(`palette.${activePaletteSeedRole}_enabled`);
+    if (activeCheckbox) activeCheckbox.checked = true;
+    updatePaletteControlsState();
+    updatePaletteVariantButtons();
+    renderPalettePreview(variantName);
+    markStepTouched(2);
+    refreshStepProgression();
+    showToast(`Палитра ${variantName} применена`);
+  }
+
   function hydrateForm() {
     byId('name') && (byId('name').value = deepGet(tokens, 'name', ''));
     byId('brand_id') && (byId('brand_id').value = deepGet(tokens, 'brand_id', ''));
@@ -401,10 +506,14 @@ document.addEventListener('DOMContentLoaded', () => {
 
       input?.addEventListener('input', () => {
         if (text) text.value = input.value.toUpperCase();
+        refreshPaletteSuggestions(key, input.value);
       });
       text?.addEventListener('input', () => {
-        const normalized = text.value.trim().toUpperCase();
-        if (/^#[0-9A-F]{6}$/.test(normalized) && input) input.value = normalized;
+        const normalized = normalizeHexColor(text.value);
+        if (normalized && input) {
+          input.value = normalized;
+          refreshPaletteSuggestions(key, normalized);
+        }
       });
       checkbox?.addEventListener('change', () => {
         enforcePaletteMinimum(key);
@@ -412,6 +521,11 @@ document.addEventListener('DOMContentLoaded', () => {
       });
     });
     updatePaletteControlsState();
+    const initialSeedColor = paletteSlots.primary || DEFAULT_PALETTE.primary;
+    showPaletteAutofill('primary', initialSeedColor);
+    fetchPaletteSuggestions('primary', initialSeedColor).catch((error) => {
+      console.warn('[palette] suggest failed', error);
+    });
 
     const gen = tokens.generation || {};
     const logosEl = resolveGenCountInput('gen.logos_count');
@@ -495,6 +609,32 @@ document.addEventListener('DOMContentLoaded', () => {
 
     return clone;
   }
+
+  byId('palette-autofill-refresh')?.addEventListener('click', async () => {
+    if (!activePaletteSeedColor) return;
+    try {
+      await fetchPaletteSuggestions(activePaletteSeedRole, activePaletteSeedColor);
+      showToast('Варианты палитры обновлены');
+    } catch (error) {
+      showToast(error.message, true);
+    }
+  });
+
+  document.querySelectorAll('.palette-variant-btn').forEach((button) => {
+    button.addEventListener('click', async () => {
+      const variantName = button.dataset.paletteVariant;
+      if (!variantName) return;
+      if (!paletteSuggestions) {
+        try {
+          await fetchPaletteSuggestions(activePaletteSeedRole, activePaletteSeedColor);
+        } catch (error) {
+          showToast(error.message, true);
+          return;
+        }
+      }
+      applySuggestedPalette(variantName);
+    });
+  });
 
   async function saveProject() {
     const payload = buildPayload();

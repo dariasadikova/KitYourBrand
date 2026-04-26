@@ -99,6 +99,26 @@
                     <div id="palette-validation" class="editor-note editor-note--compact" hidden>Выберите минимум 2
                         цвета палитры. Они будут использоваться в текущей генерации.</div>
 
+                    <div id="palette-autofill" class="palette-autofill" hidden>
+                        <div class="palette-autofill__head">
+                            <div>
+                                <h3>Автоподбор палитры</h3>
+                                <p id="palette-autofill-caption">Выберите базовый цвет, и KYBBY предложит готовые варианты палитры.</p>
+                            </div>
+                            <button type="button" id="palette-autofill-refresh" class="btn btn-outline btn-inline palette-autofill__refresh">Обновить варианты</button>
+                        </div>
+                        <div class="palette-autofill__meta">
+                            <span id="palette-autofill-seed" class="palette-autofill__chip">Основа: —</span>
+                            <span class="palette-autofill__chip palette-autofill__chip--muted">Палитра обновится только после выбора варианта</span>
+                        </div>
+                        <div class="palette-autofill__actions">
+                            <button type="button" class="small-action palette-variant-btn" data-palette-variant="soft">Soft</button>
+                            <button type="button" class="small-action palette-variant-btn" data-palette-variant="balanced">Balanced</button>
+                            <button type="button" class="small-action palette-variant-btn" data-palette-variant="contrast">Contrast</button>
+                        </div>
+                        <div id="palette-autofill-preview" class="palette-autofill__preview"></div>
+                    </div>
+
                 </section>
 
                 <section class="editor-card editor-card--progressive" data-progress-step="3">

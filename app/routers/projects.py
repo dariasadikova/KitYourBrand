@@ -8,10 +8,12 @@ from fastapi import APIRouter, File, Form, HTTPException, Request, Response, Upl
 from fastapi.responses import FileResponse, HTMLResponse, JSONResponse, RedirectResponse
 from fastapi.templating import Jinja2Templates
 
+from app.schemas.palette import PaletteSuggestRequest, PaletteSuggestResponse
 from app.core.paths import OUT_DIR, TEMPLATES_DIR
 from app.core.settings import settings
 from app.services.generation_service import GenerationService
 from app.services.generation_jobs import generation_jobs
+from app.services.palette_service import PaletteService
 from app.services.project_service import ProjectService
 
 router = APIRouter()
@@ -19,6 +21,7 @@ templates = Jinja2Templates(directory=str(TEMPLATES_DIR))
 project_service = ProjectService(settings.data_dir / 'app.db', settings.data_dir / 'projects')
 project_service.init_db()
 generation_service = GenerationService(project_service)
+palette_service = PaletteService()
 
 
 def require_auth(request: Request) -> int:
@@ -187,6 +190,28 @@ async def save_project(request: Request, project_slug: str) -> JSONResponse:
     except Exception as exc:
         return JSONResponse({'ok': False, 'error': str(exc)}, status_code=400)
     return JSONResponse({'ok': True, 'tokens': saved})
+
+
+@router.post('/projects/{project_slug}/palette/suggest')
+async def suggest_palette(
+    request: Request,
+    project_slug: str,
+    payload: PaletteSuggestRequest,
+) -> JSONResponse:
+    user_id = require_auth(request)
+    project_or_404(user_id, project_slug)
+    try:
+        seed_color = palette_service.normalize_hex(payload.seed_color)
+        variants = palette_service.suggest_variants(seed_color)
+    except ValueError as exc:
+        return JSONResponse({'ok': False, 'error': str(exc)}, status_code=400)
+
+    response = PaletteSuggestResponse(
+        seed_color=seed_color,
+        seed_role=payload.seed_role,
+        variants=variants,
+    )
+    return JSONResponse(response.model_dump())
 
 
 @router.get('/projects/{project_slug}/download')
