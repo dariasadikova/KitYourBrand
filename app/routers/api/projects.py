@@ -14,11 +14,22 @@ def _require_auth(request: Request) -> int:
     return int(user_id)
 
 
+def _project_to_dto(project) -> dict:
+    return ProjectDto(
+        id=int(project.id),
+        slug=str(project.slug),
+        name=str(project.name),
+        brand_id=str(project.brand_id),
+        created_at=str(project.created_at),
+        updated_at=str(project.updated_at),
+    ).model_dump()
+
+
 @router.get('')
 def list_projects(request: Request) -> JSONResponse:
     user_id = _require_auth(request)
     projects = project_service.list_projects(user_id)
-    items = [ProjectDto(**p.__dict__).model_dump() for p in projects]
+    items = [_project_to_dto(p) for p in projects]
     return JSONResponse({'ok': True, 'projects': items})
 
 
@@ -32,7 +43,7 @@ def get_project(request: Request, project_slug: str) -> JSONResponse:
     return JSONResponse(
         {
             'ok': True,
-            'project': ProjectDto(**project.__dict__).model_dump(),
+            'project': _project_to_dto(project),
             'tokens': tokens,
         }
     )
