@@ -1,5 +1,6 @@
 import { type FormEvent, useCallback, useEffect, useState } from 'react';
 import { createProject, fetchProjects } from '@/api/projects';
+import { legacyProjectEditorUrl, legacyProjectResultsUrl } from '@/config/legacyApp';
 import type { Project } from '@/types/project';
 
 export function AppHomePage() {
@@ -91,9 +92,17 @@ export function AppHomePage() {
               <p className="muted" style={{ marginTop: 0, marginBottom: '0.75rem' }}>
                 slug: <code>{project.slug}</code>
               </p>
-              <p style={{ margin: 0 }}>
+              <p style={{ margin: 0, marginBottom: '0.75rem' }}>
                 <strong>brand_id:</strong> <code>{project.brand_id}</code>
               </p>
+              <div className="project-actions">
+                <a className="btn btn-primary" href={legacyProjectEditorUrl(project.slug)}>
+                  Редактор (классический UI)
+                </a>
+                <a className="btn btn-ghost" href={legacyProjectResultsUrl(project.slug)}>
+                  Результаты (классический UI)
+                </a>
+              </div>
             </article>
           ))}
         </div>

@@ -149,3 +149,9 @@ a {
   border-radius: 6px;
   font-size: 1rem;
 }
+
+.project-actions {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 0.5rem;
+}
