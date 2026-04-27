@@ -29,3 +29,21 @@ export function legacyProjectResultsUrl(slug: string): string {
   const path = `/projects/${encodeURIComponent(slug)}/results`;
   return base ? `${base}${path}` : path;
 }
+
+export function legacyDashboardUrl(): string {
+  const base = getLegacyAppOrigin();
+  const path = '/dashboard';
+  return base ? `${base}${path}` : path;
+}
+
+export function legacyGenerationHistoryUrl(): string {
+  const base = getLegacyAppOrigin();
+  const path = '/generation-history';
+  return base ? `${base}${path}` : path;
+}
+
+export function legacyProfileUrl(): string {
+  const base = getLegacyAppOrigin();
+  const path = '/profile';
+  return base ? `${base}${path}` : path;
+}
