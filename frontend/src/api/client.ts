@@ -4,6 +4,43 @@ export type ApiErrorBody = {
   detail?: string | { msg: string }[];
 };
 
+const AUTH_401_NO_REDIRECT = new Set([
+  '/api/auth/me',
+  '/api/auth/login',
+  '/api/auth/register',
+]);
+
+function requestPathOnly(path: string): string {
+  try {
+    if (path.startsWith('http://') || path.startsWith('https://')) {
+      return new URL(path).pathname;
+    }
+  } catch {
+    /* ignore */
+  }
+  const q = path.indexOf('?');
+  return q === -1 ? path : path.slice(0, q);
+}
+
+function shouldRedirectUnauthorizedApi(path: string): boolean {
+  const pathname = requestPathOnly(path);
+  if (!pathname.startsWith('/api/')) {
+    return false;
+  }
+  return !AUTH_401_NO_REDIRECT.has(pathname);
+}
+
+function redirectToLogin(): void {
+  if (typeof window === 'undefined') {
+    return;
+  }
+  const { pathname, search, hash } = window.location;
+  if (pathname === '/login' || pathname === '/register') {
+    return;
+  }
+  window.location.replace(`/login${search}${hash}`);
+}
+
 async function parseJsonSafe(res: Response): Promise<unknown> {
   const text = await res.text();
   if (!text) {
@@ -24,11 +61,15 @@ export async function apiFetch(
   if (init.body && !(init.body instanceof FormData) && !headers.has('Content-Type')) {
     headers.set('Content-Type', 'application/json');
   }
-  return fetch(path, {
+  const res = await fetch(path, {
     ...init,
     headers,
     credentials: 'include',
   });
+  if (res.status === 401 && shouldRedirectUnauthorizedApi(path)) {
+    redirectToLogin();
+  }
+  return res;
 }
 
 export function getErrorMessage(data: unknown, fallback: string): string {
