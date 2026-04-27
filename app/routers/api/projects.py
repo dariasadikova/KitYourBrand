@@ -1,10 +1,15 @@
 from fastapi import APIRouter, HTTPException, Request
 from fastapi.responses import JSONResponse
+from pydantic import BaseModel, Field
 
 from app.routers.projects import project_service
 from app.schemas.api_models import ProjectDto
 
 router = APIRouter(prefix='/api/projects', tags=['api-projects'])
+
+
+class CreateProjectPayload(BaseModel):
+    name: str = Field(default='Новый проект', min_length=1, max_length=120)
 
 
 def _require_auth(request: Request) -> int:
@@ -46,4 +51,17 @@ def get_project(request: Request, project_slug: str) -> JSONResponse:
             'project': _project_to_dto(project),
             'tokens': tokens,
         }
+    )
+
+
+@router.post('')
+def create_project(request: Request, payload: CreateProjectPayload) -> JSONResponse:
+    user_id = _require_auth(request)
+    project = project_service.create_project(user_id, payload.name)
+    return JSONResponse(
+        {
+            'ok': True,
+            'project': _project_to_dto(project),
+        },
+        status_code=201,
     )
