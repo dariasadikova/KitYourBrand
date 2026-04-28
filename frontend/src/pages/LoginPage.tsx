@@ -1,14 +1,43 @@
-import { FormEvent, useState } from 'react';
-import { Link, Navigate, useNavigate } from 'react-router-dom';
+import { FormEvent, useEffect, useState } from 'react';
+import { Link, Navigate, useNavigate, useLocation, useSearchParams } from 'react-router-dom';
 import { useAuth } from '@/auth/AuthContext';
+
+type LoginLocationState = {
+  registered?: boolean;
+  email?: string;
+};
 
 export function LoginPage() {
   const { login, user, loading } = useAuth();
   const navigate = useNavigate();
+  const location = useLocation();
+  const [searchParams, setSearchParams] = useSearchParams();
   const [email, setEmail] = useState('');
   const [password, setPassword] = useState('');
   const [error, setError] = useState<string | null>(null);
   const [pending, setPending] = useState(false);
+  const [registeredNotice, setRegisteredNotice] = useState(false);
+
+  useEffect(() => {
+    const fromQuery = searchParams.get('registered') === '1';
+    if (fromQuery) {
+      setRegisteredNotice(true);
+      const prefill = searchParams.get('email');
+      if (prefill) {
+        setEmail(prefill);
+      }
+      setSearchParams({}, { replace: true });
+      return;
+    }
+    const state = location.state as LoginLocationState | null;
+    if (state?.registered) {
+      setRegisteredNotice(true);
+      if (state.email) {
+        setEmail(state.email);
+      }
+      navigate('/login', { replace: true, state: {} });
+    }
+  }, [location.state, navigate, searchParams, setSearchParams]);
 
   if (!loading && user) {
     return <Navigate to="/app" replace />;
@@ -36,6 +65,11 @@ export function LoginPage() {
     <div className="page">
       <div className="card" style={{ maxWidth: 420 }}>
         <h2 style={{ marginTop: 0 }}>Вход</h2>
+        {registeredNotice ? (
+          <div className="callout callout-success" role="status">
+            Регистрация прошла успешно. Войдите, используя email и пароль.
+          </div>
+        ) : null}
         {error ? <div className="error">{error}</div> : null}
         <form onSubmit={(e) => void onSubmit(e)}>
           <div className="form-field">

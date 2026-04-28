@@ -5,6 +5,7 @@ import { HomePage } from './pages/HomePage';
 import { LoginPage } from './pages/LoginPage';
 import { RegisterPage } from './pages/RegisterPage';
 import { AppHomePage } from './pages/app/AppHomePage';
+import { AppProfilePage } from './pages/app/AppProfilePage';
 
 function RequireAuth({ children }: { children: React.ReactNode }) {
   const { user, loading } = useAuth();
@@ -31,7 +32,9 @@ export default function App() {
           </RequireAuth>
         }
       >
-        <Route index element={<AppHomePage />} />
+        <Route index element={<Navigate to="/app/projects" replace />} />
+        <Route path="projects" element={<AppHomePage />} />
+        <Route path="profile" element={<AppProfilePage />} />
       </Route>
       <Route path="*" element={<Navigate to="/" replace />} />
     </Routes>

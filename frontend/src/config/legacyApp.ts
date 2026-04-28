@@ -41,9 +41,3 @@ export function legacyGenerationHistoryUrl(): string {
   const path = '/generation-history';
   return base ? `${base}${path}` : path;
 }
-
-export function legacyProfileUrl(): string {
-  const base = getLegacyAppOrigin();
-  const path = '/profile';
-  return base ? `${base}${path}` : path;
-}

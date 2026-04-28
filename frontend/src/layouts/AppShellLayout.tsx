@@ -1,10 +1,6 @@
 import { Link, NavLink, Outlet } from 'react-router-dom';
 import { useAuth } from '@/auth/AuthContext';
-import {
-  legacyDashboardUrl,
-  legacyGenerationHistoryUrl,
-  legacyProfileUrl,
-} from '@/config/legacyApp';
+import { legacyDashboardUrl, legacyGenerationHistoryUrl } from '@/config/legacyApp';
 
 function navLinkClassName({ isActive }: { isActive: boolean }): string {
   return ['shell-nav-link', isActive ? 'shell-nav-link--active' : ''].filter(Boolean).join(' ');
@@ -21,8 +17,11 @@ export function AppShellLayout() {
             KitYourBrand
           </Link>
           <nav className="shell-nav" aria-label="Разделы кабинета">
-            <NavLink to="/app" end className={navLinkClassName}>
+            <NavLink to="/app/projects" className={navLinkClassName}>
               Проекты
+            </NavLink>
+            <NavLink to="/app/profile" className={navLinkClassName}>
+              Профиль
             </NavLink>
             <a
               className="shell-nav-link shell-nav-link--legacy"
@@ -37,13 +36,6 @@ export function AppShellLayout() {
               title="Классический интерфейс (Jinja)"
             >
               История
-            </a>
-            <a
-              className="shell-nav-link shell-nav-link--legacy"
-              href={legacyProfileUrl()}
-              title="Классический интерфейс (Jinja)"
-            >
-              Профиль
             </a>
           </nav>
         </div>

@@ -28,10 +28,12 @@ def _session_user(request: Request) -> dict | None:
     if row is None:
         request.session.clear()
         return None
+    avatar_path = str(row['avatar_path']) if row['avatar_path'] else ''
     return {
         'id': int(row['id']),
         'name': str(row['name']),
         'email': str(row['email']),
+        'avatar_url': f'/profile/avatar/{avatar_path}' if avatar_path else None,
     }
 
 

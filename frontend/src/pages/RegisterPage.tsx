@@ -26,7 +26,10 @@ export function RegisterPage() {
     setPending(true);
     try {
       await register(name, email, password, passwordConfirm);
-      navigate('/login', { replace: true });
+      navigate('/login', {
+        replace: true,
+        state: { registered: true, email: email.trim() },
+      });
     } catch (err) {
       setError(err instanceof Error ? err.message : 'Ошибка регистрации.');
     } finally {
