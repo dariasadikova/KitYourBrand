@@ -1,5 +1,48 @@
 # KitYourBrand Web
 
+## UI Migration Status
+
+- React + TypeScript SPA is now the primary cabinet entry under `/app/*`.
+- FastAPI + Jinja pages are kept as transitional fallback (legacy UI), not removed.
+- Generation pipeline, providers, and DB storage model are unchanged.
+
+## Run (Current)
+
+### 1) Backend (FastAPI)
+
+Windows PowerShell:
+
+```powershell
+python -m venv .venv
+.\.venv\Scripts\Activate.ps1
+pip install -r requirements.txt
+uvicorn app.main:app --reload
+```
+
+### 2) Frontend (React + Vite)
+
+In a second terminal:
+
+```powershell
+cd frontend
+npm install
+npm run dev
+```
+
+### 3) Production-like SPA build (optional)
+
+```powershell
+cd frontend
+npm run build
+```
+
+After build, backend serves SPA entry on `/app/*` and static assets from `/app/assets/*`.
+If build is absent, `/app/*` safely falls back to legacy routes.
+
+## Regression Checklist
+
+Use `docs/REGRESSION_CHECKLIST.md` before release or before removing any legacy templates/static files.
+
 ## Текущее состояние
 
 На текущем этапе уже реализованы:
