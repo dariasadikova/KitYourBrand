@@ -1,8 +1,21 @@
 :root {
-  font-family: system-ui, -apple-system, 'Segoe UI', Roboto, sans-serif;
+  --bg: #2e3439;
+  --bg-soft: #43484d;
+  --surface: #43484d;
+  --surface-border: rgba(255, 255, 255, 0.08);
+  --text: #f8fafc;
+  --muted: #99a1af;
+  --primary: #00aeff;
+  --primary-pressed: #0097dd;
+  --container: 1240px;
+  --radius-lg: 22px;
+  --radius-md: 14px;
+  --radius-sm: 10px;
+  --shadow-card: 0 22px 50px rgba(0, 0, 0, 0.24);
+  font-family: 'Inter', -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, 'Helvetica Neue', Arial, sans-serif;
   line-height: 1.5;
-  color: #0f172a;
-  background: #f8fafc;
+  color: var(--text);
+  background: var(--bg);
 }
 
 * {
@@ -11,10 +24,12 @@
 
 body {
   margin: 0;
+  background: var(--bg);
+  color: var(--text);
 }
 
 a {
-  color: #2563eb;
+  color: inherit;
 }
 
 .page {
@@ -32,15 +47,15 @@ a {
 }
 
 .muted {
-  color: #64748b;
+  color: var(--muted);
 }
 
 .card {
-  background: #fff;
-  border: 1px solid #e2e8f0;
-  border-radius: 10px;
+  background: var(--surface);
+  border: 1px solid var(--surface-border);
+  border-radius: var(--radius-lg);
   padding: 1.5rem;
-  box-shadow: 0 1px 2px rgb(15 23 42 / 6%);
+  box-shadow: var(--shadow-card);
 }
 
 .form-field {
@@ -57,8 +72,10 @@ a {
 
 .form-field input {
   padding: 0.55rem 0.65rem;
-  border: 1px solid #cbd5e1;
-  border-radius: 6px;
+  border: 1px solid rgba(255, 255, 255, 0.1);
+  border-radius: var(--radius-sm);
+  background: rgba(7, 3, 18, 0.78);
+  color: var(--text);
   font-size: 1rem;
 }
 
@@ -66,23 +83,34 @@ a {
   display: inline-flex;
   align-items: center;
   justify-content: center;
-  padding: 0.55rem 1rem;
-  border-radius: 6px;
+  min-height: 48px;
+  padding: 0 1rem;
+  border-radius: 12px;
   border: none;
-  font-size: 1rem;
+  font-size: 0.95rem;
   cursor: pointer;
   text-decoration: none;
+  transition: transform 0.18s ease, background 0.18s ease, border-color 0.18s ease;
+}
+
+.btn:hover {
+  transform: translateY(-1px);
 }
 
 .btn-primary {
-  background: #2563eb;
-  color: #fff;
+  background: var(--primary);
+  color: #0b0f13;
+  border: 0;
+}
+
+.btn-primary:hover {
+  background: var(--primary-pressed);
 }
 
 .btn-ghost {
   background: transparent;
-  color: #334155;
-  border: 1px solid #cbd5e1;
+  color: var(--text);
+  border: 1px solid rgba(255, 255, 255, 0.6);
 }
 
 .btn-row {
@@ -93,7 +121,7 @@ a {
 }
 
 .error {
-  color: #b91c1c;
+  color: #fecaca;
   font-size: 0.9rem;
   margin-bottom: 0.75rem;
 }
@@ -107,9 +135,9 @@ a {
 }
 
 .callout-success {
-  color: #14532d;
-  background: #f0fdf4;
-  border: 1px solid #bbf7d0;
+  color: #bbf7d0;
+  background: rgba(34, 197, 94, 0.16);
+  border: 1px solid rgba(34, 197, 94, 0.4);
 }
 
 .shell {
@@ -125,8 +153,8 @@ a {
   gap: 1rem;
   flex-wrap: wrap;
   padding: 0.75rem 1.25rem;
-  background: #fff;
-  border-bottom: 1px solid #e2e8f0;
+  background: var(--bg);
+  border-bottom: 1px solid rgba(255, 255, 255, 0.08);
 }
 
 .shell-header-left {
@@ -146,7 +174,7 @@ a {
 
 .shell-brand {
   font-weight: 700;
-  color: #0f172a;
+  color: #fff;
   text-decoration: none;
   white-space: nowrap;
 }
@@ -165,29 +193,25 @@ a {
   border-radius: 6px;
   font-size: 0.9rem;
   font-weight: 500;
-  color: #475569;
+  color: rgba(248, 250, 252, 0.65);
   text-decoration: none;
   border: 1px solid transparent;
 }
 
 .shell-nav-link:hover {
-  color: #0f172a;
-  background: #f1f5f9;
+  color: var(--text);
+  background: rgba(255, 255, 255, 0.06);
 }
 
 .shell-nav-link--active {
-  color: #1d4ed8;
-  background: #eff6ff;
-  border-color: #bfdbfe;
-}
-
-.shell-nav-link--legacy {
-  color: #64748b;
+  color: #f8fafc;
+  background: rgba(255, 255, 255, 0.12);
+  border-color: rgba(255, 255, 255, 0.14);
 }
 
 .shell-user {
   font-size: 0.9rem;
-  color: #475569;
+  color: rgba(248, 250, 252, 0.86);
   max-width: 200px;
   overflow: hidden;
   text-overflow: ellipsis;
@@ -217,8 +241,10 @@ a {
   min-width: 260px;
   flex: 1;
   padding: 0.55rem 0.65rem;
-  border: 1px solid #cbd5e1;
-  border-radius: 6px;
+  border: 1px solid rgba(255, 255, 255, 0.1);
+  border-radius: var(--radius-sm);
+  background: rgba(7, 3, 18, 0.78);
+  color: var(--text);
   font-size: 1rem;
 }
 
