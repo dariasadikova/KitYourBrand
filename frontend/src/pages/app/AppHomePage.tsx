@@ -100,6 +100,9 @@ export function AppHomePage() {
                 <Link className="btn btn-primary" to={`/app/projects/${encodeURIComponent(project.slug)}/editor`}>
                   Редактор (React)
                 </Link>
+                <Link className="btn btn-ghost" to={`/app/projects/${encodeURIComponent(project.slug)}/results`}>
+                  Результаты (React)
+                </Link>
                 <a className="btn btn-ghost" href={legacyProjectResultsUrl(project.slug)}>
                   Результаты (классический UI)
                 </a>

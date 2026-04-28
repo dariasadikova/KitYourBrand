@@ -35,9 +35,3 @@ export function legacyDashboardUrl(): string {
   const path = '/dashboard';
   return base ? `${base}${path}` : path;
 }
-
-export function legacyGenerationHistoryUrl(): string {
-  const base = getLegacyAppOrigin();
-  const path = '/generation-history';
-  return base ? `${base}${path}` : path;
-}

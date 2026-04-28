@@ -280,6 +280,9 @@ export function AppProjectEditorPage() {
             <button type="button" className="btn btn-ghost" onClick={() => void onCancelGeneration()} disabled={!canCancel || cancelling}>
               {cancelling ? 'Отмена…' : 'Отменить'}
             </button>
+            <Link className="btn btn-ghost" to={`/app/projects/${encodeURIComponent(project.slug)}/results`}>
+              Результаты (React)
+            </Link>
             <a className="btn btn-ghost" href={legacyProjectResultsUrl(project.slug)}>
               Результаты (классический UI)
             </a>
