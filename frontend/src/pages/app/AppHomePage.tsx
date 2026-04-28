@@ -46,9 +46,9 @@ export function AppHomePage() {
 
   return (
     <div className="page">
-      <h2 style={{ marginTop: 0 }}>Проекты</h2>
-      <div className="card" style={{ marginBottom: '1rem' }}>
-        <h3 style={{ marginTop: 0 }}>Создать проект</h3>
+      <h2 className="page-title">Проекты</h2>
+      <div className="card card-section">
+        <h3 className="card-title">Создать проект</h3>
         {createError ? <div className="error">{createError}</div> : null}
         <form className="create-project-form" onSubmit={(e) => void onCreateProject(e)}>
           <input
@@ -68,7 +68,7 @@ export function AppHomePage() {
 
       {!loading && error ? (
         <div className="card">
-          <div className="error" style={{ marginBottom: '0.75rem' }}>
+          <div className="error">
             {error}
           </div>
           <button type="button" className="btn btn-ghost" onClick={() => void load()}>
@@ -79,8 +79,8 @@ export function AppHomePage() {
 
       {!loading && !error && projects.length === 0 ? (
         <div className="card">
-          <p style={{ marginTop: 0 }}>У вас пока нет проектов.</p>
-          <p className="muted" style={{ marginBottom: 0 }}>Создайте первый проект через форму выше.</p>
+          <p className="text-mt-0">У вас пока нет проектов.</p>
+          <p className="muted text-mb-0">Создайте первый проект через форму выше.</p>
         </div>
       ) : null}
 
@@ -88,11 +88,11 @@ export function AppHomePage() {
         <div className="projects-list">
           {projects.map((project) => (
             <article key={project.id} className="card">
-              <h3 style={{ marginTop: 0, marginBottom: '0.25rem' }}>{project.name}</h3>
-              <p className="muted" style={{ marginTop: 0, marginBottom: '0.75rem' }}>
+              <h3 className="card-title">{project.name}</h3>
+              <p className="muted text-mt-0 card-section">
                 slug: <code>{project.slug}</code>
               </p>
-              <p style={{ margin: 0, marginBottom: '0.75rem' }}>
+              <p className="card-section text-mb-0">
                 <strong>brand_id:</strong> <code>{project.brand_id}</code>
               </p>
               <div className="project-actions">

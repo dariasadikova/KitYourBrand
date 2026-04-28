@@ -70,8 +70,8 @@ export function AppProfilePage() {
 
   return (
     <div className="page">
-      <h2 style={{ marginTop: 0 }}>Профиль</h2>
-      <div className="card" style={{ maxWidth: 640 }}>
+      <h2 className="page-title">Профиль</h2>
+      <div className="card">
         {error ? <div className="error">{error}</div> : null}
         {success ? <div className="callout callout-success">{success}</div> : null}
 
@@ -85,12 +85,12 @@ export function AppProfilePage() {
               )}
             </div>
             <div className="profile-avatar-controls">
-              <label className="btn btn-ghost" style={{ cursor: 'pointer' }}>
+              <label className="btn btn-ghost profile-file-label">
                 Выбрать аватар
                 <input
                   type="file"
                   accept=".png,.jpg,.jpeg,.webp"
-                  style={{ display: 'none' }}
+                  className="file-input-hidden"
                   onChange={(event) => {
                     const file = event.target.files?.[0] ?? null;
                     setAvatarFile(file);

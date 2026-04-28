@@ -12,10 +12,10 @@ type AssetSectionProps = {
 
 function AssetSection({ title, items }: AssetSectionProps) {
   return (
-    <section className="card" style={{ marginBottom: '1rem' }}>
-      <h3 style={{ marginTop: 0 }}>{title}</h3>
+    <section className="card card-section">
+      <h3 className="card-title">{title}</h3>
       {items.length === 0 ? (
-        <p className="muted" style={{ marginBottom: 0 }}>
+        <p className="muted text-mb-0">
           Пока пусто
         </p>
       ) : (
@@ -90,11 +90,11 @@ export function AppProjectResultsPage() {
 
   return (
     <div className="page">
-      <h2 style={{ marginTop: 0, marginBottom: '0.25rem' }}>Результаты: {project.name}</h2>
-      <p className="muted" style={{ marginTop: 0 }}>
+      <h2 className="page-title">Результаты: {project.name}</h2>
+      <p className="page-subtitle">
         brand_id: <code>{result.brand_id}</code>
       </p>
-      <div className="btn-row" style={{ marginBottom: '1rem' }}>
+      <div className="btn-row section-actions">
         <Link className="btn btn-ghost" to={`/app/projects/${encodeURIComponent(project.slug)}/editor`}>
           Назад в редактор
         </Link>

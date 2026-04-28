@@ -63,8 +63,8 @@ export function LoginPage() {
 
   return (
     <div className="page">
-      <div className="card" style={{ maxWidth: 420 }}>
-        <h2 style={{ marginTop: 0 }}>Вход</h2>
+      <div className="card auth-card">
+        <h2 className="card-title">Вход</h2>
         {registeredNotice ? (
           <div className="callout callout-success" role="status">
             Регистрация прошла успешно. Войдите, используя email и пароль.
@@ -105,7 +105,7 @@ export function LoginPage() {
             </Link>
           </div>
         </form>
-        <p className="muted" style={{ marginBottom: 0, marginTop: '1.25rem', fontSize: '0.875rem' }}>
+        <p className="muted auth-footer text-caption text-mb-0">
           <Link to="/">На главную</Link>
         </p>
       </div>

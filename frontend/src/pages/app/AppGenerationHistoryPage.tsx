@@ -74,12 +74,12 @@ export function AppGenerationHistoryPage() {
 
   return (
     <div className="page">
-      <h2 style={{ marginTop: 0, marginBottom: '0.25rem' }}>История генераций</h2>
-      <p className="muted" style={{ marginTop: 0 }}>
+      <h2 className="page-title">История генераций</h2>
+      <p className="page-subtitle">
         Всего записей: {total}
       </p>
 
-      <div className="btn-row" style={{ marginBottom: '1rem' }}>
+      <div className="btn-row history-toolbar">
         <button
           type="button"
           className="btn btn-ghost"
@@ -98,7 +98,7 @@ export function AppGenerationHistoryPage() {
 
       {!loading && !error && rows.length === 0 ? (
         <div className="card">
-          <p style={{ margin: 0 }}>История пока пустая.</p>
+          <p className="text-mb-0">История пока пустая.</p>
         </div>
       ) : null}
 
@@ -157,11 +157,11 @@ export function AppGenerationHistoryPage() {
         </div>
       ) : null}
 
-      <div className="btn-row" style={{ marginTop: '1rem' }}>
+      <div className="btn-row section-actions">
         <button type="button" className="btn btn-ghost" disabled={page <= 1} onClick={() => void load(page - 1)}>
           Назад
         </button>
-        <span className="muted" style={{ alignSelf: 'center' }}>
+        <span className="muted">
           Страница {page} из {Math.max(totalPages, 1)}
         </span>
         <button type="button" className="btn btn-ghost" disabled={page >= totalPages} onClick={() => void load(page + 1)}>

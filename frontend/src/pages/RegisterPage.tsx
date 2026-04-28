@@ -39,8 +39,8 @@ export function RegisterPage() {
 
   return (
     <div className="page">
-      <div className="card" style={{ maxWidth: 480 }}>
-        <h2 style={{ marginTop: 0 }}>Регистрация</h2>
+      <div className="card auth-card">
+        <h2 className="card-title">Регистрация</h2>
         {error ? <div className="error">{error}</div> : null}
         <form onSubmit={(e) => void onSubmit(e)}>
           <div className="form-field">
@@ -102,7 +102,7 @@ export function RegisterPage() {
             </Link>
           </div>
         </form>
-        <p className="muted" style={{ marginBottom: 0, marginTop: '1.25rem', fontSize: '0.875rem' }}>
+        <p className="muted auth-footer text-caption text-mb-0">
           <Link to="/">На главную</Link>
         </p>
       </div>

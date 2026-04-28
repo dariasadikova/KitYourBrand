@@ -200,15 +200,15 @@ export function AppProjectEditorPage() {
 
   return (
     <div className="page">
-      <h2 style={{ marginTop: 0, marginBottom: '0.25rem' }}>{project.name}</h2>
-      <p className="muted" style={{ marginTop: 0 }}>
+      <h2 className="page-title">{project.name}</h2>
+      <p className="page-subtitle">
         slug: <code>{project.slug}</code> | brand_id: <code>{project.brand_id}</code>
       </p>
 
       {error ? <div className="error">{error}</div> : null}
 
-      <div className="card" style={{ marginBottom: '1rem' }}>
-        <h3 style={{ marginTop: 0 }}>Токены проекта (JSON)</h3>
+      <div className="card card-section">
+        <h3 className="card-title">Токены проекта (JSON)</h3>
         <textarea
           className="editor-json"
           value={tokensText}
@@ -225,8 +225,8 @@ export function AppProjectEditorPage() {
         </div>
       </div>
 
-      <div className="card" style={{ marginBottom: '1rem' }}>
-        <h3 style={{ marginTop: 0 }}>Запуск генерации</h3>
+      <div className="card card-section">
+        <h3 className="card-title">Запуск генерации</h3>
         <form className="generation-form-grid" onSubmit={(e) => void onStartGeneration(e)}>
           <label>
             Logos
@@ -284,16 +284,16 @@ export function AppProjectEditorPage() {
             </Link>
           </div>
         </form>
-        {jobError ? <div className="error" style={{ marginTop: '0.75rem' }}>{jobError}</div> : null}
+        {jobError ? <div className="error">{jobError}</div> : null}
       </div>
 
       <div className="card">
-        <h3 style={{ marginTop: 0 }}>Статус задачи</h3>
+        <h3 className="card-title">Статус задачи</h3>
         {!job ? (
           <p className="muted">Активной задачи нет.</p>
         ) : (
           <>
-            <p style={{ marginTop: 0 }}>
+            <p className="text-mt-0">
               <strong>ID:</strong> <code>{job.id}</code>
             </p>
             <p>
