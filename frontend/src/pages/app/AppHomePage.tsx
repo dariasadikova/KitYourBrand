@@ -1,7 +1,6 @@
 import { type FormEvent, useCallback, useEffect, useState } from 'react';
 import { Link } from 'react-router-dom';
 import { createProject, fetchProjects } from '@/api/projects';
-import { legacyProjectResultsUrl } from '@/config/legacyApp';
 import type { Project } from '@/types/project';
 
 export function AppHomePage() {
@@ -103,9 +102,6 @@ export function AppHomePage() {
                 <Link className="btn btn-ghost" to={`/app/projects/${encodeURIComponent(project.slug)}/results`}>
                   Результаты (React)
                 </Link>
-                <a className="btn btn-ghost" href={legacyProjectResultsUrl(project.slug)}>
-                  Результаты (классический UI)
-                </a>
               </div>
             </article>
           ))}

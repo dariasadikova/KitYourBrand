@@ -15,6 +15,8 @@ from app.services.auth_service import AuthService
 from app.services.generation_jobs import generation_jobs
 from app.services.project_service import ProjectService
 
+# Legacy pages router (Jinja UI).
+# Transitional fallback during SPA migration; keep routes working until final cutover.
 router = APIRouter()
 templates = Jinja2Templates(directory=str(TEMPLATES_DIR))
 auth_service = AuthService(settings.data_dir / 'app.db')
