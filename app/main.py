@@ -1,4 +1,5 @@
 from fastapi import FastAPI, Request
+from fastapi.responses import FileResponse, RedirectResponse
 from fastapi.staticfiles import StaticFiles
 from starlette.middleware.sessions import SessionMiddleware
 
@@ -18,6 +19,9 @@ logging.basicConfig(
 )
 
 logger = logging.getLogger("kityourbrand")
+FRONTEND_DIST_DIR = settings.project_root / 'frontend' / 'dist'
+FRONTEND_INDEX_FILE = FRONTEND_DIST_DIR / 'index.html'
+FRONTEND_ASSETS_DIR = FRONTEND_DIST_DIR / 'assets'
 
 
 def create_app() -> FastAPI:
@@ -55,6 +59,17 @@ def create_app() -> FastAPI:
     )
 
     app.mount('/static', StaticFiles(directory=str(STATIC_DIR)), name='static')
+    if FRONTEND_ASSETS_DIR.exists():
+        app.mount('/app/assets', StaticFiles(directory=str(FRONTEND_ASSETS_DIR)), name='frontend_assets')
+
+    @app.get('/app', include_in_schema=False)
+    @app.get('/app/{path:path}', include_in_schema=False)
+    async def react_spa_entry(request: Request, path: str = ''):
+        if FRONTEND_INDEX_FILE.exists():
+            return FileResponse(FRONTEND_INDEX_FILE)
+        # Fallback keeps legacy cabinet working when frontend build is absent.
+        target = '/dashboard' if request.session.get('user_id') else '/login'
+        return RedirectResponse(url=target, status_code=302)
 
     app.include_router(pages.router)
     app.include_router(projects.router)

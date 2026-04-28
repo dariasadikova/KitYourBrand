@@ -361,7 +361,7 @@ async def profile_update(
 @router.get('/login', response_class=HTMLResponse)
 async def login_page(request: Request) -> HTMLResponse:
     if request.session.get('user_id'):
-        return RedirectResponse(url='/dashboard', status_code=status.HTTP_303_SEE_OTHER)
+        return RedirectResponse(url='/app/projects', status_code=status.HTTP_303_SEE_OTHER)
 
     context = landing_context()
     context.update(
@@ -397,7 +397,7 @@ async def login_submit(
     request.session['user_id'] = result.user_id
     request.session['user_name'] = result.user_name
     request.session['user_email'] = result.user_email
-    return RedirectResponse(url='/dashboard', status_code=status.HTTP_303_SEE_OTHER)
+    return RedirectResponse(url='/app/projects', status_code=status.HTTP_303_SEE_OTHER)
 
 
 @router.get('/logout')

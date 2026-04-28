@@ -7,8 +7,8 @@
 
         <nav class="header-actions">
             {% if request.session.get('user_id') %}
-            <a href="/dashboard" class="btn btn-primary">Мои проекты</a>
-            <a href="/profile" class="header-user-pill header-user-pill--link">{{ request.session.get('user_name')
+            <a href="/app/projects" class="btn btn-primary">Мои проекты</a>
+            <a href="/app/profile" class="header-user-pill header-user-pill--link">{{ request.session.get('user_name')
                 }}</a>
             <a href="/logout" class="btn btn-outline">Выйти</a>
             {% else %}
