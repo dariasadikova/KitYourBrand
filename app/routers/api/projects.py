@@ -65,3 +65,32 @@ def create_project(request: Request, payload: CreateProjectPayload) -> JSONRespo
         },
         status_code=201,
     )
+
+
+@router.put('/{project_slug}/tokens')
+async def save_project_tokens(request: Request, project_slug: str) -> JSONResponse:
+    user_id = _require_auth(request)
+    project = project_service.get_project(user_id, project_slug)
+    if project is None:
+        raise HTTPException(status_code=404, detail='Проект не найден.')
+    data = await request.json()
+    if not isinstance(data, dict):
+        return JSONResponse({'ok': False, 'error': 'Некорректный формат токенов.'}, status_code=400)
+    try:
+        saved = project_service.save_tokens(user_id, project_slug, data)
+    except Exception as exc:
+        return JSONResponse({'ok': False, 'error': str(exc)}, status_code=400)
+    return JSONResponse({'ok': True, 'tokens': saved})
+
+
+@router.post('/{project_slug}/tokens/reset')
+def reset_project_tokens(request: Request, project_slug: str) -> JSONResponse:
+    user_id = _require_auth(request)
+    project = project_service.get_project(user_id, project_slug)
+    if project is None:
+        raise HTTPException(status_code=404, detail='Проект не найден.')
+    try:
+        tokens = project_service.reset_tokens(user_id, project_slug)
+    except Exception as exc:
+        return JSONResponse({'ok': False, 'error': str(exc)}, status_code=400)
+    return JSONResponse({'ok': True, 'tokens': tokens})

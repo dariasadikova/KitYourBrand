@@ -1,6 +1,7 @@
 import { type FormEvent, useCallback, useEffect, useState } from 'react';
+import { Link } from 'react-router-dom';
 import { createProject, fetchProjects } from '@/api/projects';
-import { legacyProjectEditorUrl, legacyProjectResultsUrl } from '@/config/legacyApp';
+import { legacyProjectResultsUrl } from '@/config/legacyApp';
 import type { Project } from '@/types/project';
 
 export function AppHomePage() {
@@ -96,9 +97,9 @@ export function AppHomePage() {
                 <strong>brand_id:</strong> <code>{project.brand_id}</code>
               </p>
               <div className="project-actions">
-                <a className="btn btn-primary" href={legacyProjectEditorUrl(project.slug)}>
-                  Редактор (классический UI)
-                </a>
+                <Link className="btn btn-primary" to={`/app/projects/${encodeURIComponent(project.slug)}/editor`}>
+                  Редактор (React)
+                </Link>
                 <a className="btn btn-ghost" href={legacyProjectResultsUrl(project.slug)}>
                   Результаты (классический UI)
                 </a>

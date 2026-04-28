@@ -1,7 +1,7 @@
 from fastapi import APIRouter, HTTPException, Request
 from fastapi.responses import JSONResponse
 
-from app.routers.projects import _scan_asset_group, generation_jobs, project_service
+from app.routers.projects import _scan_asset_group, generation_jobs, generation_service, project_service
 from app.schemas.api_models import GenerationJobDto, GenerationResultDto
 
 router = APIRouter(prefix='/api/generations', tags=['api-generations'])
@@ -79,3 +79,45 @@ def get_generation_results(request: Request, project_slug: str) -> JSONResponse:
         illustrations=_scan_asset_group(brand_id, 'illustrations', ('.png', '.svg', '.jpg', '.jpeg')),
     )
     return JSONResponse({'ok': True, 'result': dto.model_dump()})
+
+
+@router.post('/projects/{project_slug}/start')
+async def start_generation(request: Request, project_slug: str) -> JSONResponse:
+    user_id = _require_auth(request)
+    project = project_service.get_project(user_id, project_slug)
+    if project is None:
+        raise HTTPException(status_code=404, detail='Проект не найден.')
+    active = generation_jobs.get_active_job_for_project(user_id=user_id, project_slug=project_slug)
+    if active is not None:
+        return JSONResponse(
+            {'ok': False, 'error': 'Генерация уже запущена для проекта.', 'job': _serialize_job(active)},
+            status_code=409,
+        )
+    try:
+        payload = await request.json()
+        if not isinstance(payload, dict):
+            payload = {}
+    except Exception:
+        payload = {}
+
+    job = generation_jobs.create_job(user_id=user_id, project_slug=project_slug)
+    project_service.record_generation_job(user_id=user_id, job_id=job['id'], project_slug=project_slug)
+    generation_jobs.start_generation(
+        job_id=job['id'],
+        generation_service=generation_service,
+        user_id=user_id,
+        project_slug=project_slug,
+        payload=payload,
+        base_host=str(request.base_url).rstrip('/'),
+        project_service=project_service,
+    )
+    return JSONResponse({'ok': True, 'job_id': str(job['id'])}, status_code=202)
+
+
+@router.post('/jobs/{job_id}/cancel')
+def cancel_generation(request: Request, job_id: str) -> JSONResponse:
+    user_id = _require_auth(request)
+    ok = generation_jobs.request_cancel(job_id, user_id)
+    if not ok:
+        return JSONResponse({'ok': False, 'error': 'Задача не найдена или уже завершена.'}, status_code=400)
+    return JSONResponse({'ok': True})
