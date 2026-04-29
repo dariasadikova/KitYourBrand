@@ -1,0 +1,12 @@
+/*
+  Базовый CSS для React SPA.
+
+  main.css из FastAPI static подключается через <link> в index.html.
+  Здесь только специфичные для SPA переопределения, если они понадобятся.
+*/
+
+*,
+*::before,
+*::after {
+  box-sizing: border-box;
+}

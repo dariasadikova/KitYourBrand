@@ -1,4 +1,7 @@
+from pathlib import Path
+
 from fastapi import FastAPI, Request
+from fastapi.responses import FileResponse
 from fastapi.staticfiles import StaticFiles
 from starlette.middleware.sessions import SessionMiddleware
 
@@ -7,6 +10,8 @@ from app.core.settings import settings
 from app.routers import pages, projects
 
 import logging
+
+FRONTEND_DIST = Path(__file__).parent.parent / 'frontend' / 'dist'
 
 logging.basicConfig(
     level=logging.INFO,
@@ -54,6 +59,22 @@ def create_app() -> FastAPI:
 
     app.include_router(pages.router)
     app.include_router(projects.router)
+
+    # React SPA: обслуживается под /app/ только если собранный dist существует.
+    # Во время разработки Vite dev server запускается отдельно (npm run dev).
+    if FRONTEND_DIST.exists():
+        assets_dir = FRONTEND_DIST / 'assets'
+        if assets_dir.exists():
+            app.mount('/app/assets', StaticFiles(directory=str(assets_dir)), name='spa-assets')
+
+        spa_index = FRONTEND_DIST / 'index.html'
+
+        @app.get('/app', include_in_schema=False)
+        @app.get('/app/{path:path}', include_in_schema=False)
+        async def react_spa_entry(path: str = ''):
+            if spa_index.exists():
+                return FileResponse(str(spa_index))
+            return FileResponse(str(FRONTEND_DIST / 'index.html'))
 
     return app
 
