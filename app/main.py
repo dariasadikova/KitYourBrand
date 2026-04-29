@@ -1,17 +1,14 @@
-from pathlib import Path
-
 from fastapi import FastAPI, Request
-from fastapi.responses import FileResponse
+from fastapi.responses import FileResponse, HTMLResponse
 from fastapi.staticfiles import StaticFiles
 from starlette.middleware.sessions import SessionMiddleware
 
 from app.core.paths import STATIC_DIR
 from app.core.settings import settings
 from app.routers import pages, projects
+from app.routers.api import auth as api_auth
 
 import logging
-
-FRONTEND_DIST = Path(__file__).parent.parent / 'frontend' / 'dist'
 
 logging.basicConfig(
     level=logging.INFO,
@@ -19,6 +16,10 @@ logging.basicConfig(
 )
 
 logger = logging.getLogger("kityourbrand")
+
+FRONTEND_DIST_DIR = settings.project_root / 'frontend' / 'dist'
+FRONTEND_INDEX_FILE = FRONTEND_DIST_DIR / 'index.html'
+FRONTEND_ASSETS_DIR = FRONTEND_DIST_DIR / 'assets'
 
 
 def create_app() -> FastAPI:
@@ -57,24 +58,25 @@ def create_app() -> FastAPI:
 
     app.mount('/static', StaticFiles(directory=str(STATIC_DIR)), name='static')
 
+    if FRONTEND_ASSETS_DIR.exists():
+        app.mount('/app/assets', StaticFiles(directory=str(FRONTEND_ASSETS_DIR)), name='frontend_assets')
+
+    app.include_router(api_auth.router)
     app.include_router(pages.router)
     app.include_router(projects.router)
 
-    # React SPA: обслуживается под /app/ только если собранный dist существует.
-    # Во время разработки Vite dev server запускается отдельно (npm run dev).
-    if FRONTEND_DIST.exists():
-        assets_dir = FRONTEND_DIST / 'assets'
-        if assets_dir.exists():
-            app.mount('/app/assets', StaticFiles(directory=str(assets_dir)), name='spa-assets')
-
-        spa_index = FRONTEND_DIST / 'index.html'
-
-        @app.get('/app', include_in_schema=False)
-        @app.get('/app/{path:path}', include_in_schema=False)
-        async def react_spa_entry(path: str = ''):
-            if spa_index.exists():
-                return FileResponse(str(spa_index))
-            return FileResponse(str(FRONTEND_DIST / 'index.html'))
+    @app.get('/app', include_in_schema=False)
+    @app.get('/app/{path:path}', include_in_schema=False)
+    async def react_spa_entry(request: Request, path: str = ''):
+        if FRONTEND_INDEX_FILE.exists():
+            return FileResponse(FRONTEND_INDEX_FILE)
+        return HTMLResponse(
+            '<!doctype html><html lang="ru"><head><meta charset="utf-8">'
+            '<title>KYBBY React app</title></head><body>'
+            '<p>React frontend build is not ready yet. Run <code>npm run build</code> in <code>frontend</code>.</p>'
+            '</body></html>',
+            status_code=503,
+        )
 
     return app
 
