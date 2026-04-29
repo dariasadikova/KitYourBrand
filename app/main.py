@@ -7,6 +7,8 @@ from app.core.paths import STATIC_DIR
 from app.core.settings import settings
 from app.routers import pages, projects
 from app.routers.api import auth as api_auth
+from app.routers.api import profile as api_profile
+from app.routers.api import projects as api_projects
 
 import logging
 
@@ -62,6 +64,8 @@ def create_app() -> FastAPI:
         app.mount('/app/assets', StaticFiles(directory=str(FRONTEND_ASSETS_DIR)), name='frontend_assets')
 
     app.include_router(api_auth.router)
+    app.include_router(api_profile.router)
+    app.include_router(api_projects.router)
     app.include_router(pages.router)
     app.include_router(projects.router)
 
