@@ -1,11 +1,21 @@
 import { type FormEvent, type ReactNode, useEffect, useState } from 'react'
-import { Link, Navigate, Route, Routes, useNavigate, useSearchParams } from 'react-router-dom'
+import { Link, Navigate, Route, Routes, useNavigate, useParams, useSearchParams } from 'react-router-dom'
+import { cancelGenerationJob, deleteGenerationHistorySelected, getGenerationHistory } from './services/generationHistoryApi'
 import { getCurrentSession, login, register } from './services/authApi'
 import { getProfile, updateProfile } from './services/profileApi'
 import { createProject, deleteProject, listProjects } from './services/projectsApi'
+import {
+  cancelGenerationJob as cancelResultsGenerationJob,
+  generateFigmaManifest,
+  getActiveGenerationJob,
+  getGenerationJob,
+  getProjectResults,
+} from './services/resultsApi'
 import type { AuthMeResponse } from './types/auth'
+import type { GenerationHistoryResponse, GenerationHistoryRow } from './types/generationHistory'
 import type { Profile } from './types/profile'
 import type { ProjectSummary } from './types/project'
+import type { GenerationJob, ProjectResultsResponse, ResultAsset } from './types/results'
 
 function App() {
   const [session, setSession] = useState<AuthMeResponse | null>(null)
@@ -33,6 +43,8 @@ function App() {
       <Route path="/register" element={<RegisterPage />} />
       <Route path="/dashboard" element={<ProtectedDashboard session={session} />} />
       <Route path="/profile" element={<ProtectedProfile session={session} />} />
+      <Route path="/generation-history" element={<ProtectedGenerationHistory session={session} />} />
+      <Route path="/projects/:projectSlug/results" element={<ProtectedResults session={session} />} />
     </Routes>
   )
 }
@@ -51,6 +63,30 @@ function ProtectedProfile({ session }: { session: AuthMeResponse | null }) {
   return (
     <MigrationShell session={session} activePath="/profile" mainClassName="profile-main">
       <ProfilePage />
+    </MigrationShell>
+  )
+}
+
+function ProtectedGenerationHistory({ session }: { session: AuthMeResponse | null }) {
+  if (session === null) return null
+  if (!session.authenticated) return <Navigate to="/login" replace />
+
+  return (
+    <MigrationShell session={session} activePath="/generation-history">
+      <GenerationHistoryPage />
+    </MigrationShell>
+  )
+}
+
+function ProtectedResults({ session }: { session: AuthMeResponse | null }) {
+  const { projectSlug = '' } = useParams()
+
+  if (session === null) return null
+  if (!session.authenticated) return <Navigate to="/login" replace />
+
+  return (
+    <MigrationShell session={session} activePath="/dashboard" mainClassName="results-main">
+      <ResultsPage projectSlug={projectSlug} />
     </MigrationShell>
   )
 }
@@ -318,7 +354,7 @@ function MigrationShell({
   children,
 }: {
   session: AuthMeResponse | null
-  activePath?: '/dashboard' | '/profile'
+  activePath?: '/dashboard' | '/profile' | '/generation-history'
   mainClassName?: string
   children?: ReactNode
 }) {
@@ -354,7 +390,7 @@ function MigrationShell({
       <div className="dashboard-shell">
         <aside className="dashboard-sidebar">
           <nav className="dashboard-nav" aria-label="Основная навигация">
-            <Link to="/dashboard" className={`dashboard-nav__item${activePath === '/dashboard' ? ' dashboard-nav__item--active' : ''}`}>
+            <Link to="/dashboard" className={`dashboard-nav__item${activePath === '/dashboard' || activePath === '/generation-history' ? ' dashboard-nav__item--active' : ''}`}>
               <span className="dashboard-nav__icon" aria-hidden="true">
                 <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.2" strokeLinecap="round" strokeLinejoin="round">
                   <path d="M3 7a2 2 0 0 1 2-2h4l2 2h8a2 2 0 0 1 2 2v8a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2Z" />
@@ -407,6 +443,549 @@ function MigrationShell({
       </footer>
     </div>
   )
+}
+
+function GenerationHistoryPage() {
+  const [searchParams, setSearchParams] = useSearchParams()
+  const initialPage = Number(searchParams.get('page') || '1')
+  const [history, setHistory] = useState<GenerationHistoryResponse | null>(null)
+  const [selectedJobIds, setSelectedJobIds] = useState<string[]>([])
+  const [statsOpen, setStatsOpen] = useState(false)
+  const [errorRow, setErrorRow] = useState<GenerationHistoryRow | null>(null)
+  const [error, setError] = useState('')
+  const [isLoading, setIsLoading] = useState(true)
+
+  async function loadHistory(page = initialPage) {
+    setIsLoading(true)
+    setError('')
+    try {
+      const payload = await getGenerationHistory(page)
+      setHistory(payload)
+      setSelectedJobIds([])
+      setSearchParams(page > 1 ? { page: String(page) } : {})
+    } catch (err) {
+      setError(err instanceof Error ? err.message : 'Не удалось загрузить историю генераций.')
+    } finally {
+      setIsLoading(false)
+    }
+  }
+
+  useEffect(() => {
+    loadHistory(initialPage)
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [])
+
+  const rows = history?.rows || []
+  const selectableRows = rows.filter((row) => row.status_key !== 'running')
+  const allSelected = selectableRows.length > 0 && selectedJobIds.length === selectableRows.length
+  const partiallySelected = selectedJobIds.length > 0 && selectedJobIds.length < selectableRows.length
+
+  function toggleSelectAll(checked: boolean) {
+    setSelectedJobIds(checked ? selectableRows.map((row) => row.job_id) : [])
+  }
+
+  function toggleRow(jobId: string, checked: boolean) {
+    setSelectedJobIds((items) => (
+      checked ? [...items, jobId] : items.filter((item) => item !== jobId)
+    ))
+  }
+
+  async function handleDeleteSelected() {
+    if (!selectedJobIds.length) return
+    if (!window.confirm(`Удалить выбранные записи (${selectedJobIds.length}) из истории генераций?`)) return
+
+    try {
+      await deleteGenerationHistorySelected(selectedJobIds)
+      await loadHistory(history?.page || 1)
+    } catch (err) {
+      setError(err instanceof Error ? err.message : 'Не удалось удалить выбранные записи.')
+    }
+  }
+
+  async function handleCancel(jobId: string) {
+    try {
+      await cancelGenerationJob(jobId)
+      window.setTimeout(() => loadHistory(history?.page || 1), 700)
+    } catch (err) {
+      setError(err instanceof Error ? err.message : 'Не удалось прервать генерацию.')
+    }
+  }
+
+  return (
+    <section className="dashboard-content generation-history-page">
+      <div className="dashboard-head generation-history-head">
+        <div>
+          <div className="generation-history-title-row">
+            <h1>История генераций</h1>
+            <button type="button" className="generation-history-info-btn" aria-label="Открыть статистику" onClick={() => setStatsOpen(true)}>i</button>
+          </div>
+          <p className="generation-history-subtitle">Просмотр всех запусков генерации бренд-комплектов</p>
+        </div>
+      </div>
+
+      <div className="generation-history-table-wrap">
+        <p className="generation-history-table-hint">Подсказка: нажмите на статус <strong>Ошибка</strong>, чтобы посмотреть подробности причины.</p>
+        {error ? <div className="profile-alert profile-alert--error">{error}</div> : null}
+
+        {isLoading ? (
+          <p className="generation-history-empty">Загружаем историю генераций...</p>
+        ) : rows.length > 0 ? (
+          <>
+            <div className="generation-history-bulk-actions">
+              <label className="generation-history-select-all">
+                <input
+                  type="checkbox"
+                  checked={allSelected}
+                  ref={(node) => {
+                    if (node) node.indeterminate = partiallySelected
+                  }}
+                  onChange={(event) => toggleSelectAll(event.target.checked)}
+                />
+                <span>Выбрать всё</span>
+              </label>
+              <div className="generation-history-bulk-actions__buttons">
+                <button type="button" className="btn btn-outline btn-inline" disabled={!selectedJobIds.length} onClick={handleDeleteSelected}>Удалить</button>
+              </div>
+            </div>
+            <div className="generation-history-table-scroll">
+              <table className="generation-history-table">
+                <thead>
+                  <tr>
+                    <th scope="col" className="generation-history-table__select-col"></th>
+                    <th scope="col">Дата</th>
+                    <th scope="col">Проект</th>
+                    <th scope="col">Статус</th>
+                    <th scope="col">Время выполнения</th>
+                    <th scope="col">Действия</th>
+                  </tr>
+                </thead>
+                <tbody>
+                  {rows.map((row) => (
+                    <tr key={row.job_id}>
+                      <td className="generation-history-table__select-col">
+                        <input
+                          type="checkbox"
+                          className="generation-history-row-select"
+                          value={row.job_id}
+                          disabled={row.status_key === 'running'}
+                          title={row.status_key === 'running' ? 'Нельзя удалять активную генерацию' : undefined}
+                          checked={selectedJobIds.includes(row.job_id)}
+                          onChange={(event) => toggleRow(row.job_id, event.target.checked)}
+                        />
+                      </td>
+                      <td className="generation-history-table__date">{row.started_display}</td>
+                      <td className="generation-history-table__project">
+                        <span className="generation-history-table__project-inner">
+                          <span className="generation-history-project-dot" aria-hidden="true"></span>
+                          {row.project_name}
+                        </span>
+                      </td>
+                      <td>{renderHistoryStatus(row, setErrorRow)}</td>
+                      <td className="generation-history-table__duration">{row.duration_display}</td>
+                      <td className="generation-history-table__actions">{renderHistoryAction(row, handleCancel)}</td>
+                    </tr>
+                  ))}
+                </tbody>
+              </table>
+            </div>
+            <div className="generation-history-footer">
+              <p className="generation-history-footer__meta">
+                Показано {history?.showing_from}–{history?.showing_to} из {history?.total} генераций
+              </p>
+              {(history?.total_pages || 1) > 1 ? (
+                <nav className="generation-history-pagination" aria-label="Страницы списка генераций">
+                  {history?.has_prev ? (
+                    <button type="button" className="btn btn-outline btn-inline generation-history-page-link" onClick={() => loadHistory(history.prev_page)}>Предыдущая</button>
+                  ) : (
+                    <span className="generation-history-page-link generation-history-page-link--disabled">Предыдущая</span>
+                  )}
+                  <span className="generation-history-page-current">{history?.page}</span>
+                  {history?.has_next ? (
+                    <button type="button" className="btn btn-outline btn-inline generation-history-page-link" onClick={() => loadHistory(history.next_page)}>Следующая</button>
+                  ) : (
+                    <span className="generation-history-page-link generation-history-page-link--disabled">Следующая</span>
+                  )}
+                </nav>
+              ) : null}
+            </div>
+          </>
+        ) : (
+          <p className="generation-history-empty">Пока нет записей о генерациях. Запустите генерацию в редакторе проекта.</p>
+        )}
+      </div>
+
+      {statsOpen && history ? (
+        <div className="generation-history-modal">
+          <div className="generation-history-modal__backdrop" onClick={() => setStatsOpen(false)}></div>
+          <div className="generation-history-modal__dialog" role="dialog" aria-modal="true" aria-labelledby="generation-history-stats-title">
+            <button type="button" className="generation-history-modal__close" aria-label="Закрыть статистику" onClick={() => setStatsOpen(false)}>×</button>
+            <h2 id="generation-history-stats-title">Статистика генераций</h2>
+            <div className="generation-history-stats generation-history-stats--modal">
+              <HistoryStatCard label="Генераций всего" value={String(history.stats.total)} />
+              <HistoryStatCard label="Успешных генераций" value={String(history.stats.successful)} />
+              <HistoryStatCard label="Среднее время" value={history.stats_avg_display} />
+              <HistoryStatCard label="Проектов" value={String(history.stats.projects_with_generations)} />
+            </div>
+          </div>
+        </div>
+      ) : null}
+
+      {errorRow ? (
+        <div className="generation-history-modal">
+          <div className="generation-history-modal__backdrop" onClick={() => setErrorRow(null)}></div>
+          <div className="generation-history-modal__dialog" role="alertdialog" aria-modal="true" aria-labelledby="generation-history-error-title">
+            <button type="button" className="generation-history-modal__close" aria-label="Закрыть" onClick={() => setErrorRow(null)}>×</button>
+            <h2 id="generation-history-error-title">Ошибка генерации</h2>
+            <p className="generation-history-error-body">{errorRow.error_message || 'Генерация завершилась с ошибкой.'}</p>
+            {errorRow.error_hint ? <p className="generation-history-error-hint">{errorRow.error_hint}</p> : null}
+            <div className="generation-history-modal__actions">
+              <button type="button" className="btn btn-primary btn-inline" onClick={() => setErrorRow(null)}>Ок</button>
+            </div>
+          </div>
+        </div>
+      ) : null}
+    </section>
+  )
+}
+
+function renderHistoryStatus(row: GenerationHistoryRow, openError: (row: GenerationHistoryRow) => void) {
+  if (row.status_key === 'success') {
+    return <span className="generation-history-pill generation-history-pill--success">Успешно</span>
+  }
+  if (row.status_key === 'running') {
+    return <span className="generation-history-pill generation-history-pill--running">В процессе</span>
+  }
+  return (
+    <button
+      type="button"
+      className="generation-history-pill generation-history-pill--error generation-history-pill-button"
+      title="Нажмите, чтобы открыть подробности ошибки"
+      onClick={() => openError(row)}
+    >
+      Ошибка
+    </button>
+  )
+}
+
+function renderHistoryAction(row: GenerationHistoryRow, cancel: (jobId: string) => void) {
+  if (row.action === 'cancel') {
+    return (
+      <button type="button" className="btn btn-outline btn-inline generation-history-action-btn generation-history-btn-cancel" onClick={() => cancel(row.job_id)}>
+        Прервать
+      </button>
+    )
+  }
+  if (row.action === 'open') {
+    return <Link className="btn btn-primary btn-inline generation-history-action-btn" to={`/projects/${row.project_slug}/results`}>Открыть</Link>
+  }
+  if (row.action === 'restore') {
+    return (
+      <form action={`/projects/${row.project_slug}/restore`} method="post" className="generation-history-action-form">
+        <button type="submit" className="btn btn-inline generation-history-btn-restore">Восстановить</button>
+      </form>
+    )
+  }
+  return <a className="btn btn-outline btn-inline generation-history-action-btn generation-history-btn-repeat" href={row.editor_url}>Повторить</a>
+}
+
+function HistoryStatCard({ label, value }: { label: string; value: string }) {
+  return (
+    <article className="generation-history-stat-card">
+      <div className="generation-history-stat-card__icon" aria-hidden="true">•</div>
+      <div className="generation-history-stat-card__body">
+        <span className="generation-history-stat-card__label">{label}</span>
+        <strong className="generation-history-stat-card__value">{value}</strong>
+      </div>
+    </article>
+  )
+}
+
+function ResultsPage({ projectSlug }: { projectSlug: string }) {
+  const [results, setResults] = useState<ProjectResultsResponse | null>(null)
+  const [job, setJob] = useState<GenerationJob | null>(null)
+  const [manifestUrl, setManifestUrl] = useState('')
+  const [exportStatus, setExportStatus] = useState('')
+  const [exportTone, setExportTone] = useState<'loading' | 'success' | 'error' | ''>('')
+  const [isExporting, setIsExporting] = useState(false)
+  const [isLoading, setIsLoading] = useState(true)
+  const [error, setError] = useState('')
+  const [cancelRequested, setCancelRequested] = useState(false)
+
+  useEffect(() => {
+    let alive = true
+
+    getProjectResults(projectSlug)
+      .then((payload) => {
+        if (!alive) return
+        setResults(payload)
+        setIsLoading(false)
+
+        const activeJobId = payload.active_generation_job_id
+        if (activeJobId) {
+          void pollResultsJob(activeJobId)
+          return
+        }
+
+        void getActiveGenerationJob(projectSlug)
+          .then((active) => {
+            if (alive && active?.job?.id) {
+              void pollResultsJob(active.job.id)
+            }
+          })
+          .catch(() => null)
+      })
+      .catch((err) => {
+        if (alive) setError(err instanceof Error ? err.message : 'Не удалось загрузить результаты генерации.')
+        if (alive) setIsLoading(false)
+      })
+
+    async function pollResultsJob(jobId: string) {
+      setCancelRequested(false)
+      while (alive) {
+        const payload = await getGenerationJob(jobId).catch(() => null)
+        if (!payload?.ok || !payload.job) break
+        setJob(payload.job)
+        const terminal = ['completed', 'failed', 'cancelled', 'completed_with_errors'].includes(String(payload.job.status || ''))
+        if (terminal) break
+        await new Promise((resolve) => setTimeout(resolve, 1000))
+      }
+    }
+
+    return () => {
+      alive = false
+    }
+  }, [projectSlug])
+
+  async function handleGenerateFigma() {
+    if (!results) return
+    setManifestUrl('')
+    setIsExporting(true)
+    setExportStatus('Подготовка manifest…')
+    setExportTone('loading')
+
+    try {
+      const payload = await generateFigmaManifest(projectSlug, results.project.brand_id)
+      setManifestUrl(payload.download_url || payload.manifest_url || '')
+      setExportStatus('Manifest готов. Теперь его можно скачать и использовать в Figma plugin.')
+      setExportTone('success')
+      window.setTimeout(() => setIsExporting(false), 1600)
+    } catch (err) {
+      setExportStatus(err instanceof Error ? err.message : 'Не удалось подготовить Figma manifest.')
+      setExportTone('error')
+      setIsExporting(false)
+    }
+  }
+
+  async function handleCancelGeneration() {
+    if (!job?.id || cancelRequested) return
+    setCancelRequested(true)
+    try {
+      await cancelResultsGenerationJob(job.id)
+      setJob({ ...job, message: 'Прерывание генерации...' })
+    } catch {
+      setCancelRequested(false)
+    }
+  }
+
+  if (isLoading) {
+    return (
+      <section className="results-page">
+        <div className="results-page__head">
+          <div>
+            <h1>Результаты генерации бренд-комплекта</h1>
+            <p>Загружаем результаты...</p>
+          </div>
+        </div>
+      </section>
+    )
+  }
+
+  if (error || !results) {
+    return (
+      <section className="results-page">
+        <div className="results-page__head">
+          <div>
+            <h1>Результаты генерации бренд-комплекта</h1>
+            <p>{error || 'Результаты пока недоступны.'}</p>
+          </div>
+        </div>
+      </section>
+    )
+  }
+
+  return (
+    <>
+      <section className="results-page" data-results-page data-project-slug={projectSlug} data-brand-id={results.project.brand_id} data-active-job-id={job?.id || ''}>
+        <div className="results-page__head">
+          <div>
+            <h1>Результаты генерации бренд-комплекта</h1>
+            <p>Ваш бренд-комплект готов к использованию</p>
+          </div>
+        </div>
+
+        <div className="results-stack">
+          <section className="results-card">
+            <div className="results-card__head">
+              <div className="results-card__title">
+                <h2>Цветовая палитра</h2>
+              </div>
+            </div>
+            {results.palette_items.length ? (
+              <div className="palette-results-grid">
+                {results.palette_items.map((item) => (
+                  <div className="palette-results-item" key={item.key}>
+                    <div className="palette-results-item__swatch" style={{ background: item.value }}></div>
+                    <div className="palette-results-item__label">{item.label}</div>
+                    <div className="palette-results-item__value">{item.value}</div>
+                  </div>
+                ))}
+              </div>
+            ) : (
+              <div className="results-empty">Палитра пока недоступна.</div>
+            )}
+          </section>
+
+          <ResultsAssetSection title="Логотипы" kind="logos" projectSlug={projectSlug} assets={results.assets.logos} gridClassName="results-icons-grid" cardClassName="results-icon-card" />
+          <ResultsAssetSection title="Иконки" kind="icons" projectSlug={projectSlug} assets={results.assets.icons} gridClassName="results-icons-grid" cardClassName="results-icon-card" />
+          <ResultsAssetSection title="Паттерны" kind="patterns" projectSlug={projectSlug} assets={results.assets.patterns} gridClassName="results-media-grid results-media-grid--patterns" cardClassName="results-media-card" />
+          <ResultsAssetSection title="Иллюстрации" kind="illustrations" projectSlug={projectSlug} assets={results.assets.illustrations} gridClassName="results-media-grid" cardClassName="results-media-card" />
+
+          <section className="results-card results-card--export" data-figma-export>
+            <div className="results-card__head results-card__head--stacked">
+              <div className="results-card__title">
+                <h2>Экспорт в Figma</h2>
+              </div>
+            </div>
+            <details className="results-manifest" id="results-manifest-panel" open={Boolean(manifestUrl)}>
+              <summary className="results-manifest__summary">
+                <span>Манифест</span>
+              </summary>
+              <div className="results-manifest__content">
+                <p className="results-export__subtitle">Dev-блок: ручная пересборка Figma manifest при отладке.</p>
+                {manifestUrl ? <a href={manifestUrl} className="btn btn-secondary">Скачать manifest</a> : null}
+              </div>
+            </details>
+            <div className="results-export__actions">
+              <button type="button" className="btn btn-primary" disabled={isExporting} onClick={handleGenerateFigma}>
+                {isExporting ? 'Генерируем Figma JSON…' : manifestUrl ? 'Manifest готов ✓' : 'Экспорт бренд-комплекта'}
+              </button>
+              <a href={`/projects/${projectSlug}/downloads/all`} className="btn btn-secondary">Скачать архив</a>
+            </div>
+            <p className={`results-export__status${exportTone ? ` results-export__status--${exportTone}` : ''}`} aria-live="polite">{exportStatus}</p>
+          </section>
+        </div>
+      </section>
+
+      {job ? <ResultsGenerationModal job={job} cancelRequested={cancelRequested} onCancel={handleCancelGeneration} onClose={() => setJob(null)} /> : null}
+    </>
+  )
+}
+
+function ResultsAssetSection({
+  title,
+  kind,
+  projectSlug,
+  assets,
+  gridClassName,
+  cardClassName,
+}: {
+  title: string
+  kind: 'logos' | 'icons' | 'patterns' | 'illustrations'
+  projectSlug: string
+  assets: ResultAsset[]
+  gridClassName: string
+  cardClassName: string
+}) {
+  return (
+    <section className="results-card">
+      <div className="results-card__head">
+        <div className="results-card__title">
+          <h2>{title}</h2>
+        </div>
+        <a href={`/projects/${projectSlug}/downloads/${kind}`} className="btn btn-primary btn-inline">Скачать</a>
+      </div>
+      {assets.length ? (
+        <div className={gridClassName}>
+          {assets.map((asset) => (
+            <a href={asset.url} target="_blank" rel="noopener" className={cardClassName} title={`${asset.provider} / ${asset.name}`} key={`${asset.provider}-${asset.filename}`}>
+              <img src={asset.url} alt={asset.name} />
+            </a>
+          ))}
+        </div>
+      ) : (
+        <div className="results-empty">{title} пока не найдены.</div>
+      )}
+    </section>
+  )
+}
+
+function ResultsGenerationModal({
+  job,
+  cancelRequested,
+  onCancel,
+  onClose,
+}: {
+  job: GenerationJob
+  cancelRequested: boolean
+  onCancel: () => void
+  onClose: () => void
+}) {
+  const terminal = ['completed', 'failed', 'cancelled', 'completed_with_errors'].includes(String(job.status || ''))
+  const statuses = job.provider_statuses || job.providers || {}
+
+  useEffect(() => {
+    document.body.classList.add('modal-open')
+    return () => document.body.classList.remove('modal-open')
+  }, [])
+
+  return (
+    <div className="generation-modal">
+      <div className="generation-modal__backdrop"></div>
+      <div className="generation-modal__dialog" role="dialog" aria-modal="true" aria-labelledby="results-generation-modal-title">
+        <button type="button" className="generation-modal__close" hidden={!terminal} onClick={onClose}>×</button>
+        <h2 id="results-generation-modal-title">Генерация бренд-комплекта</h2>
+        <div className="generation-progress">
+          <div className="generation-progress__bar" style={{ width: `${Number(job.progress || 0)}%` }}></div>
+        </div>
+        <div className="generation-status-row">
+          <strong>{Number(job.progress || 0)}%</strong>
+          <span className="generation-status-text">{terminal && job.status === 'cancelled' ? 'Генерация прервана' : job.message || 'Выполняется'}</span>
+        </div>
+        <div className="generation-providers">
+          {(['recraft', 'seedream', 'flux'] as const).map((provider) => (
+            <div className="generation-provider" key={provider}>
+              <span>{provider === 'recraft' ? 'Recraft' : provider === 'seedream' ? 'Seedream' : 'Flux'}</span>
+              <span className={`provider-pill provider-pill--${normalizeProviderStatus(statuses[provider])}`}>
+                {providerStatusLabel(statuses[provider])}
+              </span>
+            </div>
+          ))}
+        </div>
+        <label className="generation-log-label">Лог операций</label>
+        <pre className="generation-log">{Array.isArray(job.logs) ? job.logs.join('\n') : ''}</pre>
+        <div className="generation-modal__actions">
+          {!terminal ? (
+            <button type="button" className="btn btn-outline btn-inline" disabled={cancelRequested} onClick={onCancel}>
+              {cancelRequested ? 'Прерываем...' : 'Прервать генерацию'}
+            </button>
+          ) : null}
+        </div>
+      </div>
+    </div>
+  )
+}
+
+function normalizeProviderStatus(status: string | undefined): string {
+  const normalized = String(status || '')
+  return ['pending', 'running', 'success', 'error'].includes(normalized) ? normalized : 'pending'
+}
+
+function providerStatusLabel(status: string | undefined) {
+  const normalized = normalizeProviderStatus(status)
+  if (normalized === 'running') return 'выполняется'
+  if (normalized === 'success') return 'успех'
+  if (normalized === 'error') return 'ошибка'
+  return 'ожидание'
 }
 
 function ProfilePage() {
@@ -635,7 +1214,7 @@ function ProjectsDashboard() {
         <h1>Мои проекты</h1>
         <div className="dashboard-head__actions">
           {showGenerationHistory ? (
-            <a href="/generation-history" className="btn btn-outline dashboard-history-btn">Посмотреть историю генераций</a>
+            <Link to="/generation-history" className="btn btn-outline dashboard-history-btn">Посмотреть историю генераций</Link>
           ) : null}
           <form className="dashboard-create-form" onSubmit={(event) => event.preventDefault()}>
             <input type="hidden" name="name" value="Новый проект" />
@@ -656,7 +1235,7 @@ function ProjectsDashboard() {
         <div className="project-grid">
           {projects.map((project) => (
             <article className="project-card" key={project.slug}>
-              <a href={project.results_url} className="project-card__main-link" aria-label={`Открыть результаты генерации ${project.name}`}></a>
+              <Link to={`/projects/${project.slug}/results`} className="project-card__main-link" aria-label={`Открыть результаты генерации ${project.name}`}></Link>
               <div className="project-card__icon">
                 <span>✦</span>
                 <span>✦</span>

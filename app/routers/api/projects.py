@@ -34,7 +34,7 @@ def _project_payload(project: ProjectRecord) -> dict:
         'brand_id': project.brand_id,
         'created_at': project.created_at,
         'updated_at': project.updated_at,
-        'results_url': f'/projects/{project.slug}/results',
+        'results_url': f'/app/projects/{project.slug}/results',
         'editor_url': f'/projects/{project.slug}',
     }
 
