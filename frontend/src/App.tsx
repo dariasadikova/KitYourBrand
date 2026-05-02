@@ -5,6 +5,15 @@ import { getCurrentSession, login, register } from './services/authApi'
 import { getProfile, updateProfile } from './services/profileApi'
 import { createProject, deleteProject, listProjects } from './services/projectsApi'
 import {
+  deleteProjectEditorRef,
+  getProjectEditor,
+  resetProjectEditor,
+  saveProjectEditor,
+  startProjectGeneration,
+  suggestProjectPalette,
+  uploadProjectEditorRefs,
+} from './services/editorApi'
+import {
   cancelGenerationJob as cancelResultsGenerationJob,
   generateFigmaManifest,
   getActiveGenerationJob,
@@ -16,6 +25,7 @@ import type { GenerationHistoryResponse, GenerationHistoryRow } from './types/ge
 import type { Profile } from './types/profile'
 import type { ProjectSummary } from './types/project'
 import type { GenerationJob, ProjectResultsResponse, ResultAsset } from './types/results'
+import type { PaletteVariant, PaletteVariantName, ProjectEditorResponse, ProjectTokens } from './types/editor'
 
 function App() {
   const [session, setSession] = useState<AuthMeResponse | null>(null)
@@ -44,6 +54,7 @@ function App() {
       <Route path="/dashboard" element={<ProtectedDashboard session={session} />} />
       <Route path="/profile" element={<ProtectedProfile session={session} />} />
       <Route path="/generation-history" element={<ProtectedGenerationHistory session={session} />} />
+      <Route path="/projects/:projectSlug" element={<ProtectedEditor session={session} />} />
       <Route path="/projects/:projectSlug/results" element={<ProtectedResults session={session} />} />
     </Routes>
   )
@@ -87,6 +98,20 @@ function ProtectedResults({ session }: { session: AuthMeResponse | null }) {
   return (
     <MigrationShell session={session} activePath="/dashboard" mainClassName="results-main">
       <ResultsPage projectSlug={projectSlug} />
+    </MigrationShell>
+  )
+}
+
+function ProtectedEditor({ session }: { session: AuthMeResponse | null }) {
+  const { projectSlug = '' } = useParams()
+  const [searchParams] = useSearchParams()
+
+  if (session === null) return null
+  if (!session.authenticated) return <Navigate to="/login" replace />
+
+  return (
+    <MigrationShell session={session} activePath="/dashboard" mainClassName="project-main">
+      <ProjectEditorPage projectSlug={projectSlug} isNewProjectFlow={searchParams.get('new') === '1'} />
     </MigrationShell>
   )
 }
@@ -685,7 +710,7 @@ function renderHistoryAction(row: GenerationHistoryRow, cancel: (jobId: string) 
       </form>
     )
   }
-  return <a className="btn btn-outline btn-inline generation-history-action-btn generation-history-btn-repeat" href={row.editor_url}>Повторить</a>
+  return <Link className="btn btn-outline btn-inline generation-history-action-btn generation-history-btn-repeat" to={`/projects/${row.project_slug}`}>Повторить</Link>
 }
 
 function HistoryStatCard({ label, value }: { label: string; value: string }) {
@@ -988,6 +1013,1054 @@ function providerStatusLabel(status: string | undefined) {
   return 'ожидание'
 }
 
+const PALETTE_KEYS = ['primary', 'secondary', 'accent', 'tertiary', 'neutral', 'extra'] as const
+type PaletteKey = (typeof PALETTE_KEYS)[number]
+
+const PALETTE_LABELS: Record<PaletteKey, string> = {
+  primary: 'Primary',
+  secondary: 'Secondary',
+  accent: 'Accent',
+  tertiary: 'Tertiary',
+  neutral: 'Neutral',
+  extra: 'Extra',
+}
+
+const DEFAULT_PALETTE: Record<PaletteKey, string> = {
+  primary: '#E5A50A',
+  secondary: '#C64600',
+  accent: '#613583',
+  tertiary: '#5E81AC',
+  neutral: '#D8DEE9',
+  extra: '#2E3440',
+}
+
+const ASSET_TYPES = ['logos', 'icons', 'patterns', 'illustrations'] as const
+type AssetType = (typeof ASSET_TYPES)[number]
+
+type StyleRef = {
+  path: string
+  name: string
+  url: string
+}
+
+const ASSET_LABELS: Record<AssetType, string> = {
+  logos: 'Логотипы',
+  icons: 'Иконки',
+  patterns: 'Паттерны',
+  illustrations: 'Иллюстрации',
+}
+
+const ASSET_PLACEHOLDERS: Record<AssetType, string> = {
+  logos: 'wordmark, monogram, emblem...',
+  icons: 'camera, chat...',
+  patterns: 'geometric, monogram, organic...',
+  illustrations: 'friendly mascot for...',
+}
+
+const DEFAULT_ASSET_COUNTS: Record<AssetType, number> = {
+  logos: 4,
+  icons: 8,
+  patterns: 4,
+  illustrations: 4,
+}
+
+function ProjectEditorPage({ projectSlug, isNewProjectFlow }: { projectSlug: string; isNewProjectFlow: boolean }) {
+  const [editor, setEditor] = useState<ProjectEditorResponse | null>(null)
+  const [tokens, setTokens] = useState<ProjectTokens>({})
+  const [name, setName] = useState('')
+  const [brandId, setBrandId] = useState('')
+  const [styleId, setStyleId] = useState('')
+  const [paletteSlots, setPaletteSlots] = useState<Record<PaletteKey, string>>(DEFAULT_PALETTE)
+  const [activePaletteKeys, setActivePaletteKeys] = useState<PaletteKey[]>(['primary', 'secondary', 'accent'])
+  const [paletteSeedRole, setPaletteSeedRole] = useState<PaletteKey>('primary')
+  const [paletteSeedColor, setPaletteSeedColor] = useState(DEFAULT_PALETTE.primary)
+  const [paletteSuggestions, setPaletteSuggestions] = useState<Record<PaletteVariantName, PaletteVariant> | null>(null)
+  const [activePaletteVariant, setActivePaletteVariant] = useState<PaletteVariantName>('balanced')
+  const [isPaletteLoading, setIsPaletteLoading] = useState(false)
+  const [activeAssetType, setActiveAssetType] = useState<AssetType>('logos')
+  const [promptChips, setPromptChips] = useState<Record<AssetType, string[]>>({
+    logos: [],
+    icons: [],
+    patterns: [],
+    illustrations: [],
+  })
+  const [chipInputs, setChipInputs] = useState<Record<AssetType, string>>({
+    logos: '',
+    icons: '',
+    patterns: '',
+    illustrations: '',
+  })
+  const [assetCounts, setAssetCounts] = useState<Record<AssetType, number>>(DEFAULT_ASSET_COUNTS)
+  const [iconStrokeWidth, setIconStrokeWidth] = useState(2)
+  const [iconCorner, setIconCorner] = useState('rounded')
+  const [iconFill, setIconFill] = useState('outline')
+  const [illustrationVector, setIllustrationVector] = useState(false)
+  const [illustrationRaster, setIllustrationRaster] = useState(true)
+  const [styleRefs, setStyleRefs] = useState<StyleRef[]>([])
+  const [isRefsLoading, setIsRefsLoading] = useState(false)
+  const [buildStyle, setBuildStyle] = useState(true)
+  const [generationJob, setGenerationJob] = useState<GenerationJob | null>(null)
+  const [isGenerationModalOpen, setIsGenerationModalOpen] = useState(false)
+  const [generationError, setGenerationError] = useState('')
+  const [generationErrorHint, setGenerationErrorHint] = useState('')
+  const [isGenerationStarting, setIsGenerationStarting] = useState(false)
+  const [cancelRequested, setCancelRequested] = useState(false)
+  const [isLoading, setIsLoading] = useState(true)
+  const [isSaving, setIsSaving] = useState(false)
+  const [status, setStatus] = useState('')
+  const [error, setError] = useState('')
+
+  useEffect(() => {
+    let alive = true
+    setIsLoading(true)
+    setError('')
+
+    getProjectEditor(projectSlug, isNewProjectFlow)
+      .then((payload) => {
+        if (!alive) return
+        setEditor(payload)
+        hydrateEditorState(payload.tokens)
+      })
+      .catch((err) => {
+        if (alive) setError(err instanceof Error ? err.message : 'Не удалось загрузить проект.')
+      })
+      .finally(() => {
+        if (alive) setIsLoading(false)
+      })
+
+    function hydrateEditorState(nextTokens: ProjectTokens) {
+      setTokens(nextTokens)
+      setName(getTokenString(nextTokens, 'name'))
+      setBrandId(getTokenString(nextTokens, 'brand_id'))
+      setStyleId(getTokenString(nextTokens, 'style_id'))
+      const nextPaletteSlots = getPaletteSlots(nextTokens)
+      setPaletteSlots(nextPaletteSlots)
+      setActivePaletteKeys(getActivePaletteKeys(nextTokens))
+      setPaletteSeedRole('primary')
+      setPaletteSeedColor(normalizeHexColor(nextPaletteSlots.primary) || DEFAULT_PALETTE.primary)
+      void fetchPaletteSuggestions('primary', normalizeHexColor(nextPaletteSlots.primary) || DEFAULT_PALETTE.primary)
+      setPromptChips(getPromptChips(nextTokens))
+      setAssetCounts(getAssetCounts(nextTokens))
+      setIconStrokeWidth(getNestedTokenNumber(nextTokens, 'icon', 'strokeWidth', 2))
+      setIconCorner(getNestedTokenString(nextTokens, 'icon', 'corner', 'rounded'))
+      setIconFill(getNestedTokenString(nextTokens, 'icon', 'fill', 'outline'))
+      setIllustrationVector(getNestedTokenBoolean(nextTokens, 'illustration', 'vector', false))
+      setIllustrationRaster(getNestedTokenBoolean(nextTokens, 'illustration', 'raster', true))
+      setStyleRefs(normalizeStyleRefs(getNestedTokenArray(nextTokens, 'references', 'style_images'), projectSlug))
+      setBuildStyle(getNestedTokenBoolean(nextTokens, 'generation', 'build_style', true))
+    }
+
+    return () => {
+      alive = false
+    }
+  }, [projectSlug, isNewProjectFlow])
+
+  function setPaletteValue(key: PaletteKey, value: string) {
+    const nextColor = value.toUpperCase()
+    setPaletteSlots((current) => ({ ...current, [key]: nextColor }))
+    const normalized = normalizeHexColor(nextColor)
+    if (normalized) {
+      setPaletteSeedRole(key)
+      setPaletteSeedColor(normalized)
+      void fetchPaletteSuggestions(key, normalized)
+    }
+  }
+
+  async function fetchPaletteSuggestions(seedRole = paletteSeedRole, seedColor = paletteSeedColor) {
+    const normalized = normalizeHexColor(seedColor)
+    if (!normalized) return
+    setIsPaletteLoading(true)
+    try {
+      const payload = await suggestProjectPalette(projectSlug, normalized, seedRole)
+      setPaletteSuggestions(payload.variants)
+      setPaletteSeedRole(payload.seed_role)
+      setPaletteSeedColor(payload.seed_color)
+      setActivePaletteVariant(payload.variants.balanced ? 'balanced' : 'soft')
+    } catch (err) {
+      setError(err instanceof Error ? err.message : 'Не удалось подобрать палитру.')
+    } finally {
+      setIsPaletteLoading(false)
+    }
+  }
+
+  async function applySuggestedPalette(variantName: PaletteVariantName) {
+    let suggestions = paletteSuggestions
+    if (!suggestions) {
+      const normalized = normalizeHexColor(paletteSeedColor)
+      if (!normalized) return
+      const payload = await suggestProjectPalette(projectSlug, normalized, paletteSeedRole)
+      suggestions = payload.variants
+      setPaletteSuggestions(payload.variants)
+      setPaletteSeedRole(payload.seed_role)
+      setPaletteSeedColor(payload.seed_color)
+    }
+
+    const variant = suggestions[variantName]
+    if (!variant) return
+    setActivePaletteVariant(variantName)
+    setPaletteSlots(PALETTE_KEYS.reduce<Record<PaletteKey, string>>((acc, key) => {
+      acc[key] = normalizeHexColor(variant[key]) || DEFAULT_PALETTE[key]
+      return acc
+    }, { ...DEFAULT_PALETTE }))
+    setActivePaletteKeys((current) => current.includes(paletteSeedRole) ? current : [...current, paletteSeedRole].slice(0, 6))
+  }
+
+  function togglePaletteKey(key: PaletteKey, checked: boolean) {
+    setActivePaletteKeys((current) => {
+      if (checked) return current.includes(key) ? current : [...current, key].slice(0, 6)
+      if (current.length <= 2) return current
+      return current.filter((item) => item !== key)
+    })
+  }
+
+  function addPromptChips(type: AssetType) {
+    const parts = chipInputs[type].split(/[,;\n]+/).map((item) => item.trim()).filter(Boolean)
+    if (!parts.length) return
+    setPromptChips((current) => ({ ...current, [type]: [...current[type], ...parts] }))
+    setChipInputs((current) => ({ ...current, [type]: '' }))
+  }
+
+  function removePromptChip(type: AssetType, index: number) {
+    setPromptChips((current) => ({
+      ...current,
+      [type]: current[type].filter((_, currentIndex) => currentIndex !== index),
+    }))
+  }
+
+  function setAssetCount(type: AssetType, value: string) {
+    setAssetCounts((current) => ({ ...current, [type]: clampAssetCount(value, DEFAULT_ASSET_COUNTS[type]) }))
+  }
+
+  function syncStyleRefs(nextRefs: StyleRef[]) {
+    setStyleRefs(nextRefs)
+    setTokens((current) => ({
+      ...current,
+      references: {
+        ...getTokenRecord(current, 'references'),
+        style_images: nextRefs.map((ref) => ref.path),
+      },
+    }))
+  }
+
+  async function handleUploadRefs(files: FileList | null) {
+    if (!files?.length) return
+    setIsRefsLoading(true)
+    setStatus('')
+    setError('')
+
+    try {
+      const payload = await uploadProjectEditorRefs(projectSlug, files)
+      syncStyleRefs(normalizeStyleRefs(payload.images, projectSlug))
+      setStatus('Референсы загружены.')
+    } catch (err) {
+      setError(err instanceof Error ? err.message : 'Не удалось загрузить референсы.')
+    } finally {
+      setIsRefsLoading(false)
+    }
+  }
+
+  async function handleDeleteRef(path: string) {
+    setIsRefsLoading(true)
+    setStatus('')
+    setError('')
+
+    try {
+      const payload = await deleteProjectEditorRef(projectSlug, path)
+      syncStyleRefs(normalizeStyleRefs(payload.images, projectSlug))
+      setStatus('Референс удалён.')
+    } catch (err) {
+      setError(err instanceof Error ? err.message : 'Не удалось удалить референс.')
+    } finally {
+      setIsRefsLoading(false)
+    }
+  }
+
+  function buildEditorPayload(): ProjectTokens {
+    const next = structuredClone(tokens) as ProjectTokens
+    next.name = name.trim()
+    next.brand_id = brandId.trim()
+    next.style_id = styleId.trim()
+
+    const palette = activePaletteKeys.reduce<Record<string, string>>((acc, key) => {
+      acc[key] = normalizeHexColor(paletteSlots[key]) || DEFAULT_PALETTE[key]
+      return acc
+    }, {})
+
+    next.palette_slots = PALETTE_KEYS.reduce<Record<string, string>>((acc, key) => {
+      acc[key] = normalizeHexColor(paletteSlots[key]) || DEFAULT_PALETTE[key]
+      return acc
+    }, {})
+    next.palette = palette
+    next.generation = {
+      ...getTokenRecord(next, 'generation'),
+      active_palette_keys: activePaletteKeys,
+      logos_count: assetCounts.logos,
+      icons_count: assetCounts.icons,
+      patterns_count: assetCounts.patterns,
+      illustrations_count: assetCounts.illustrations,
+      build_style: buildStyle,
+    }
+    next.icon = {
+      ...getTokenRecord(next, 'icon'),
+      strokeWidth: iconStrokeWidth,
+      corner: iconCorner,
+      fill: iconFill,
+    }
+    next.illustration = {
+      ...getTokenRecord(next, 'illustration'),
+      vector: illustrationVector,
+      raster: illustrationRaster,
+    }
+    next.prompts = {
+      ...getTokenRecord(next, 'prompts'),
+      logos: promptChips.logos,
+      icons: promptChips.icons,
+      patterns: promptChips.patterns,
+      illustrations: promptChips.illustrations,
+    }
+    next.references = {
+      ...getTokenRecord(next, 'references'),
+      style_images: styleRefs.map((ref) => ref.path),
+    }
+
+    return next
+  }
+
+  async function handleSave() {
+    setIsSaving(true)
+    setStatus('')
+    setError('')
+
+    try {
+      const payload = await saveProjectEditor(projectSlug, buildEditorPayload())
+      setTokens(payload.tokens)
+      setStatus('Проект сохранён.')
+    } catch (err) {
+      setError(err instanceof Error ? err.message : 'Не удалось сохранить проект.')
+    } finally {
+      setIsSaving(false)
+    }
+  }
+
+  async function handleGenerate() {
+    setIsGenerationStarting(true)
+    setIsGenerationModalOpen(true)
+    setGenerationError('')
+    setGenerationErrorHint('')
+    setCancelRequested(false)
+    setGenerationJob({
+      id: '',
+      status: 'running',
+      progress: 0,
+      message: 'Автосохранение проекта',
+      logs: ['Инициализация генерации...'],
+      provider_statuses: { recraft: 'pending', seedream: 'pending', flux: 'pending' },
+    })
+
+    try {
+      const editorPayload = buildEditorPayload()
+      const saved = await saveProjectEditor(projectSlug, editorPayload)
+      setTokens(saved.tokens)
+
+      const started = await startProjectGeneration(projectSlug, {
+        style_id: styleId.trim(),
+        brand_id: brandId.trim(),
+        logos_count: assetCounts.logos,
+        icons_count: assetCounts.icons,
+        patterns_count: assetCounts.patterns,
+        illustrations_count: assetCounts.illustrations,
+        build_style: buildStyle,
+      })
+
+      if (!started.job_id) {
+        throw new Error('Сервер не вернул job_id')
+      }
+
+      await pollEditorGenerationJob(started.job_id)
+    } catch (err) {
+      setGenerationError(err instanceof Error ? err.message : 'Ошибка запуска генерации.')
+      setGenerationJob((current) => ({
+        id: current?.id || '',
+        status: 'failed',
+        progress: current?.progress || 0,
+        message: 'Ошибка генерации',
+        logs: [...(current?.logs || []), err instanceof Error ? err.message : 'Ошибка запуска генерации.'],
+        provider_statuses: current?.provider_statuses || { recraft: 'pending', seedream: 'pending', flux: 'pending' },
+      }))
+    } finally {
+      setIsGenerationStarting(false)
+    }
+  }
+
+  async function pollEditorGenerationJob(jobId: string) {
+    for (let attempt = 0; attempt < 600; attempt += 1) {
+      const payload = await getGenerationJob(jobId)
+      const job = payload.job
+      setGenerationJob(job)
+
+      if (job.style_id) {
+        setStyleId(job.style_id)
+      }
+
+      if (job.status === 'failed') {
+        setGenerationError(job.error || job.message || 'Генерация не удалась.')
+        setGenerationErrorHint(job.error_hint || '')
+      }
+
+      if (['completed', 'completed_with_errors', 'failed', 'cancelled'].includes(job.status)) {
+        return job
+      }
+
+      await new Promise((resolve) => setTimeout(resolve, 1000))
+    }
+
+    throw new Error('Не удалось получить актуальный статус генерации (таймаут опроса)')
+  }
+
+  async function handleCancelGeneration() {
+    if (!generationJob?.id || cancelRequested) return
+    setCancelRequested(true)
+    try {
+      await cancelResultsGenerationJob(generationJob.id)
+      setGenerationJob({ ...generationJob, message: 'Прерывание генерации...' })
+    } catch (err) {
+      setCancelRequested(false)
+      setGenerationError(err instanceof Error ? err.message : 'Не удалось прервать генерацию.')
+    }
+  }
+
+  async function handleReset() {
+    if (!window.confirm('Сбросить проект к значениям по умолчанию?')) return
+    setIsSaving(true)
+    setStatus('')
+    setError('')
+
+    try {
+      const payload = await resetProjectEditor(projectSlug)
+      setTokens(payload.tokens)
+      setName(getTokenString(payload.tokens, 'name'))
+      setBrandId(getTokenString(payload.tokens, 'brand_id'))
+      setStyleId(getTokenString(payload.tokens, 'style_id'))
+      const nextPaletteSlots = getPaletteSlots(payload.tokens)
+      setPaletteSlots(nextPaletteSlots)
+      setActivePaletteKeys(getActivePaletteKeys(payload.tokens))
+      setPaletteSeedRole('primary')
+      setPaletteSeedColor(normalizeHexColor(nextPaletteSlots.primary) || DEFAULT_PALETTE.primary)
+      setPaletteSuggestions(null)
+      setPromptChips(getPromptChips(payload.tokens))
+      setAssetCounts(getAssetCounts(payload.tokens))
+      setIconStrokeWidth(getNestedTokenNumber(payload.tokens, 'icon', 'strokeWidth', 2))
+      setIconCorner(getNestedTokenString(payload.tokens, 'icon', 'corner', 'rounded'))
+      setIconFill(getNestedTokenString(payload.tokens, 'icon', 'fill', 'outline'))
+      setIllustrationVector(getNestedTokenBoolean(payload.tokens, 'illustration', 'vector', false))
+      setIllustrationRaster(getNestedTokenBoolean(payload.tokens, 'illustration', 'raster', true))
+      setStyleRefs(normalizeStyleRefs(getNestedTokenArray(payload.tokens, 'references', 'style_images'), projectSlug))
+      setBuildStyle(getNestedTokenBoolean(payload.tokens, 'generation', 'build_style', true))
+      setStatus('Проект сброшен.')
+    } catch (err) {
+      setError(err instanceof Error ? err.message : 'Не удалось сбросить проект.')
+    } finally {
+      setIsSaving(false)
+    }
+  }
+
+  if (isLoading) {
+    return (
+      <section className="project-editor">
+        <div className="project-page-head">
+          <div>
+            <h1>Генерация бренд-комплекта</h1>
+            <p>Загружаем проект...</p>
+          </div>
+        </div>
+      </section>
+    )
+  }
+
+  if (error && !editor) {
+    return (
+      <section className="project-editor">
+        <div className="project-page-head">
+          <div>
+            <h1>Генерация бренд-комплекта</h1>
+            <p>{error}</p>
+          </div>
+        </div>
+      </section>
+    )
+  }
+
+  return (
+    <section className="project-editor">
+      <div className="project-page-head">
+        <div>
+          <h1>Генерация бренд-комплекта</h1>
+          <p>Настрой стиль бренда и сгенерируй логотипы, иконки, паттерны и иллюстрации</p>
+        </div>
+      </div>
+
+      <form className="editor-sections" onSubmit={(event) => event.preventDefault()}>
+        <section className="editor-card editor-card--progressive" data-progress-step="1">
+          <div className="editor-card__head">
+            <span className="step-badge">1</span>
+            <div>
+              <div className="step-progress-caption">Шаг 1 из 6</div>
+              <h2>Бренд</h2>
+              <p>Основные параметры вашего бренда</p>
+            </div>
+          </div>
+          <div className="editor-grid editor-grid--single">
+            <label className="editor-field">
+              <span>Название бренда</span>
+              <input type="text" value={name} onChange={(event) => setName(event.target.value)} />
+            </label>
+          </div>
+          <div className="editor-grid">
+            <label className="editor-field">
+              <span>Style ID</span>
+              <input type="text" value={styleId} placeholder={styleId ? '' : 'Будет заполнен после генерации стиля'} disabled={!styleId} onChange={(event) => setStyleId(event.target.value)} />
+            </label>
+            <label className="editor-field">
+              <span>Brand ID</span>
+              <input type="text" value={brandId} onChange={(event) => setBrandId(event.target.value)} />
+            </label>
+          </div>
+          <div className="editor-note">Brand ID будет использоваться как идентификатор набора ассетов в структуре папок и путях для интеграции с Figma-плагином.</div>
+        </section>
+
+        <section className="editor-card editor-card--progressive" data-progress-step="2">
+          <div className="editor-card__head">
+            <span className="step-badge">2</span>
+            <div>
+              <div className="step-progress-caption">Шаг 2 из 6</div>
+              <h2>Визуальный стиль</h2>
+              <p>Цветовая палитра</p>
+            </div>
+          </div>
+
+          <div className="palette-grid palette-grid--six">
+            {PALETTE_KEYS.map((key) => (
+              <div className="palette-item" key={key}>
+                <label className="palette-item__label">
+                  <input type="checkbox" checked={activePaletteKeys.includes(key)} onChange={(event) => togglePaletteKey(key, event.target.checked)} /> <span>{PALETTE_LABELS[key]}</span>
+                </label>
+                <input type="color" className="palette-swatch" value={normalizeHexColor(paletteSlots[key]) || DEFAULT_PALETTE[key]} onChange={(event) => setPaletteValue(key, event.target.value)} />
+                <input type="text" className="editor-field__compact" value={paletteSlots[key]} onChange={(event) => setPaletteValue(key, event.target.value)} />
+              </div>
+            ))}
+          </div>
+          <div className="editor-note editor-note--compact" hidden={activePaletteKeys.length >= 2}>Выберите минимум 2 цвета палитры. Они будут использоваться в текущей генерации.</div>
+
+          <div className="palette-autofill" hidden={!normalizeHexColor(paletteSeedColor)}>
+            <div className="palette-autofill__head">
+              <div>
+                <h3>Автоподбор палитры</h3>
+                <p>Основа палитры: {capitalizePaletteLabel(paletteSeedRole)} {paletteSeedColor}. Выберите один из готовых вариантов.</p>
+              </div>
+              <button
+                type="button"
+                className="btn btn-outline btn-inline palette-autofill__refresh"
+                disabled={isPaletteLoading}
+                onClick={() => void fetchPaletteSuggestions(paletteSeedRole, paletteSeedColor)}
+              >
+                {isPaletteLoading ? 'Обновляем...' : 'Обновить варианты'}
+              </button>
+            </div>
+            <div className="palette-autofill__meta">
+              <span className="palette-autofill__chip">Основа: {capitalizePaletteLabel(paletteSeedRole)} · {paletteSeedColor}</span>
+              <span className="palette-autofill__chip palette-autofill__chip--muted">Палитра обновится только после выбора варианта</span>
+            </div>
+            <div className="palette-autofill__actions">
+              {(['soft', 'balanced', 'contrast'] as const).map((variantName) => (
+                <button
+                  type="button"
+                  className={`small-action palette-variant-btn${activePaletteVariant === variantName ? ' is-active' : ''}`}
+                  key={variantName}
+                  onClick={() => void applySuggestedPalette(variantName)}
+                >
+                  {variantName === 'soft' ? 'Soft' : variantName === 'balanced' ? 'Balanced' : 'Contrast'}
+                </button>
+              ))}
+            </div>
+            <div className="palette-autofill__preview">
+              {paletteSuggestions?.[activePaletteVariant]
+                ? PALETTE_KEYS.map((key) => (
+                  <div className="palette-preview-swatch" key={key}>
+                    <div className="palette-preview-swatch__color" style={{ background: paletteSuggestions[activePaletteVariant][key] }}></div>
+                    <div className="palette-preview-swatch__meta">
+                      <span className="palette-preview-swatch__label">{PALETTE_LABELS[key]}</span>
+                      <strong className="palette-preview-swatch__value">{paletteSuggestions[activePaletteVariant][key]}</strong>
+                    </div>
+                  </div>
+                ))
+                : null}
+            </div>
+          </div>
+        </section>
+
+        <section className="editor-card editor-card--progressive" data-progress-step="3">
+          <div className="editor-card__head">
+            <span className="step-badge">3</span>
+            <div>
+              <div className="step-progress-caption">Шаг 3 из 6</div>
+              <h2>Генерируемые ассеты</h2>
+              <p>Настройте параметры для логотипов, иконок, паттернов и иллюстраций</p>
+            </div>
+          </div>
+          <div className="asset-tabs" role="tablist" aria-label="Тип ассетов">
+            {ASSET_TYPES.map((type) => (
+              <button
+                type="button"
+                className={`asset-tab${activeAssetType === type ? ' asset-tab--active' : ''}`}
+                role="tab"
+                aria-selected={activeAssetType === type ? 'true' : 'false'}
+                aria-controls={`asset-panel-${type}`}
+                id={`asset-tab-${type}`}
+                key={type}
+                onClick={() => setActiveAssetType(type)}
+              >
+                {ASSET_LABELS[type]}
+              </button>
+            ))}
+          </div>
+
+          {ASSET_TYPES.map((type) => (
+            <div
+              id={`asset-panel-${type}`}
+              className={`asset-panel${activeAssetType === type ? ' asset-panel--active' : ''}`}
+              role="tabpanel"
+              aria-labelledby={`asset-tab-${type}`}
+              hidden={activeAssetType !== type}
+              key={type}
+            >
+              <div className="editor-list-field">
+                <span className="editor-field-title">Темы генерации</span>
+                <div className="chip-list" role="list">
+                  {promptChips[type].map((text, index) => (
+                    <span className="chip" role="listitem" key={`${text}-${index}`}>
+                      <span className="chip__text">{text}</span>
+                      <button type="button" className="chip__remove" aria-label="Удалить" onClick={() => removePromptChip(type, index)}>✕</button>
+                    </span>
+                  ))}
+                </div>
+                <div className="chip-add-row">
+                  <input
+                    type="text"
+                    placeholder={ASSET_PLACEHOLDERS[type]}
+                    className="editor-grow-input"
+                    autoComplete="off"
+                    value={chipInputs[type]}
+                    onChange={(event) => setChipInputs((current) => ({ ...current, [type]: event.target.value }))}
+                    onKeyDown={(event) => {
+                      if (event.key === 'Enter') {
+                        event.preventDefault()
+                        addPromptChips(type)
+                      }
+                    }}
+                  />
+                  <button type="button" className="small-action" onClick={() => addPromptChips(type)}>Добавить</button>
+                </div>
+              </div>
+
+              {type === 'icons' ? (
+                <div className="editor-grid">
+                  <label className="editor-field">
+                    <span>Stroke Width (px)</span>
+                    <input type="number" min="0" step="0.5" value={iconStrokeWidth} onChange={(event) => setIconStrokeWidth(Number(event.target.value || 0))} />
+                  </label>
+                  <label className="editor-field">
+                    <span>Corner</span>
+                    <select value={iconCorner} onChange={(event) => setIconCorner(event.target.value)}>
+                      <option value="rounded">Rounded</option>
+                      <option value="square">Square</option>
+                      <option value="butt">Butt</option>
+                    </select>
+                  </label>
+                  <label className="editor-field">
+                    <span>Fill</span>
+                    <select value={iconFill} onChange={(event) => setIconFill(event.target.value)}>
+                      <option value="outline">Outline</option>
+                      <option value="filled">Filled</option>
+                      <option value="duotone">Duotone</option>
+                    </select>
+                  </label>
+                </div>
+              ) : null}
+
+              {type === 'illustrations' ? (
+                <div className="illustration-format-row">
+                  <label className="illustration-format-check">
+                    <input type="checkbox" checked={illustrationVector} onChange={(event) => setIllustrationVector(event.target.checked)} />
+                    <span>Вектор</span>
+                  </label>
+                  <label className="illustration-format-check">
+                    <input type="checkbox" checked={illustrationRaster} onChange={(event) => setIllustrationRaster(event.target.checked)} />
+                    <span>Растр</span>
+                  </label>
+                </div>
+              ) : null}
+
+              <div className="editor-grid editor-grid--narrow asset-panel-counts">
+                <label className="editor-field">
+                  <span>{assetCountLabel(type)}</span>
+                  <input type="number" min="1" max="20" value={assetCounts[type]} onChange={(event) => setAssetCount(type, event.target.value)} />
+                </label>
+              </div>
+            </div>
+          ))}
+        </section>
+
+        <section className="editor-card editor-card--progressive" data-progress-step="4">
+          <div className="editor-card__head">
+            <span className="step-badge">4</span>
+            <div>
+              <div className="step-progress-caption">Шаг 4 из 6</div>
+              <h2>Референсы стиля</h2>
+              <p>Загружайте изображения, которые отражают желаемую эстетику вашего бренда.</p>
+            </div>
+          </div>
+          <div className="refs-upload-row">
+            <label className="btn btn-primary btn-upload">
+              <input
+                type="file"
+                multiple
+                accept=".png,.jpg,.jpeg,.webp,.gif,.bmp"
+                hidden
+                disabled={isRefsLoading}
+                onChange={(event) => {
+                  void handleUploadRefs(event.target.files)
+                  event.currentTarget.value = ''
+                }}
+              />
+              <svg className="btn-upload__icon" xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round" aria-hidden="true">
+                <path d="M21 15v4a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2v-4" />
+                <polyline points="17 8 12 3 7 8" />
+                <line x1="12" y1="3" x2="12" y2="15" />
+              </svg>
+              <span>{isRefsLoading ? 'Загружаем...' : 'Загрузить изображения'}</span>
+            </label>
+          </div>
+          <div className="refs-grid">
+            {isRefsLoading && !styleRefs.length ? <div className="refs-empty">Загрузка...</div> : null}
+            {!isRefsLoading && !styleRefs.length ? <div className="refs-empty">Референсы пока не загружены</div> : null}
+            {styleRefs.map((ref) => (
+              <div className="ref-card" key={ref.path}>
+                <a href={ref.url} target="_blank" rel="noopener" className="ref-card__preview">
+                  <img src={ref.url} alt={ref.name} className="ref-card__image" />
+                </a>
+                <button type="button" className="ref-delete" disabled={isRefsLoading} onClick={() => void handleDeleteRef(ref.path)}>Удалить</button>
+              </div>
+            ))}
+          </div>
+        </section>
+
+        <section className="editor-card editor-card--progressive" data-progress-step="5">
+          <div className="editor-card__head">
+            <span className="step-badge">5</span>
+            <div>
+              <div className="step-progress-caption">Шаг 5 из 6</div>
+              <h2>Параметры генерации</h2>
+              <p>Финальные настройки перед запуском генерации бренд-комплекта</p>
+            </div>
+          </div>
+          <label className="build-style-box">
+            <input type="checkbox" checked={buildStyle} onChange={(event) => setBuildStyle(event.target.checked)} />
+            <div>
+              <strong>Создать новый стиль по текущим референсам</strong>
+              <span>Если включено, система проанализирует загруженные референсные изображения и создаст новый Style ID.</span>
+            </div>
+          </label>
+
+          <div className="generated-summary">
+            <h3>Что будет сгенерировано:</h3>
+            <ul>
+              <li>Иконки в заданном стиле и цветовой палитре</li>
+              <li>Варианты логотипов в едином стиле бренда</li>
+              <li>Seamless паттерны с заданными мотивами</li>
+              <li>Иллюстрации в едином визуальном стиле</li>
+              <li>JSON-токены для интеграции с Figma</li>
+            </ul>
+          </div>
+        </section>
+
+        <section className="editor-card editor-card--cta editor-card--progressive" data-progress-step="6">
+          <div className="step-progress-caption step-progress-caption--center">Шаг 6 из 6</div>
+          <div className="cta-icon">✧</div>
+          <h2>Готово к генерации?</h2>
+          <p>Все параметры настроены. Нажмите кнопку ниже, чтобы запустить генерацию бренд-комплекта.</p>
+          <button type="button" className="btn btn-primary editor-generate-btn" disabled={isGenerationStarting} onClick={() => void handleGenerate()}>
+            {isGenerationStarting ? 'Запускаем генерацию...' : 'Собрать бренд-комплект'}
+          </button>
+          <div className="cta-stats">
+            <span><strong>{assetCounts.logos}</strong> логотипов</span>
+            <span><strong>{assetCounts.icons}</strong> иконок</span>
+            <span><strong>{assetCounts.patterns}</strong> паттернов</span>
+            <span><strong>{assetCounts.illustrations}</strong> иллюстраций</span>
+          </div>
+          <div className="editor-status">
+            {generationJob
+              ? generationJob.status === 'completed'
+                ? 'Бренд-комплект успешно сгенерирован ✅'
+                : generationJob.status === 'completed_with_errors'
+                  ? 'Генерация завершена с ошибками'
+                  : generationJob.status === 'failed'
+                    ? 'Ошибка генерации'
+                    : generationJob.status === 'cancelled'
+                      ? 'Генерация прервана'
+                      : 'Идёт генерация...'
+              : ''}
+          </div>
+        </section>
+
+        <div className="editor-actions-row">
+          <button type="button" className="btn btn-outline btn-inline" disabled={isSaving} onClick={handleSave}>
+            {isSaving ? 'Сохраняем...' : 'Сохранить'}
+          </button>
+          <a href={`/projects/${projectSlug}/download`} className="btn btn-outline btn-inline">Скачать конфигурацию проекта</a>
+          <button type="button" className="btn btn-inline btn-reset-light" disabled={isSaving} onClick={handleReset}>Сброс</button>
+          <a href={`/projects/${projectSlug}`} className="btn btn-outline btn-inline">Открыть старый редактор</a>
+        </div>
+        {status ? <div className="editor-status">{status}</div> : null}
+        {error ? <div className="editor-status">{error}</div> : null}
+      </form>
+      {isGenerationModalOpen && generationJob ? (
+        <ProjectGenerationModal
+          job={generationJob}
+          projectSlug={projectSlug}
+          cancelRequested={cancelRequested}
+          errorMessage={generationError}
+          errorHint={generationErrorHint}
+          onCancel={handleCancelGeneration}
+          onClose={() => setIsGenerationModalOpen(false)}
+          onDismissError={() => {
+            setGenerationError('')
+            setGenerationErrorHint('')
+          }}
+        />
+      ) : null}
+    </section>
+  )
+}
+
+function ProjectGenerationModal({
+  job,
+  projectSlug,
+  cancelRequested,
+  errorMessage,
+  errorHint,
+  onCancel,
+  onClose,
+  onDismissError,
+}: {
+  job: GenerationJob
+  projectSlug: string
+  cancelRequested: boolean
+  errorMessage: string
+  errorHint: string
+  onCancel: () => void
+  onClose: () => void
+  onDismissError: () => void
+}) {
+  const terminal = ['completed', 'completed_with_errors', 'failed', 'cancelled'].includes(String(job.status || ''))
+  const canOpenResult = job.status === 'completed' || job.status === 'completed_with_errors'
+  const statuses = job.provider_statuses || job.providers || {}
+
+  useEffect(() => {
+    document.body.classList.add('modal-open')
+    return () => document.body.classList.remove('modal-open')
+  }, [])
+
+  return (
+    <>
+      <div className="generation-modal">
+        <div className="generation-modal__backdrop" onClick={onClose}></div>
+        <div className="generation-modal__dialog" role="dialog" aria-modal="true" aria-labelledby="generation-modal-title">
+          <button type="button" className="generation-modal__close" onClick={onClose}>×</button>
+          <h2 id="generation-modal-title">Генерация бренд-комплекта</h2>
+          <div className="generation-progress">
+            <div className="generation-progress__bar" style={{ width: `${Number(job.progress || 0)}%` }}></div>
+          </div>
+          <div className="generation-status-row">
+            <strong>{Number(job.progress || 0)}%</strong>
+            <span className="generation-status-text">
+              {job.status === 'cancelled'
+                ? 'Генерация прервана'
+                : job.status === 'failed'
+                  ? 'Ошибка генерации'
+                  : job.status === 'completed'
+                    ? 'Завершено'
+                    : job.status === 'completed_with_errors'
+                      ? 'Завершено с ошибками'
+                      : job.message || job.status_text || 'Выполняется'}
+            </span>
+          </div>
+          <div className="generation-providers">
+            {(['recraft', 'seedream', 'flux'] as const).map((provider) => (
+              <div className="generation-provider" key={provider}>
+                <span>{provider === 'recraft' ? 'Recraft' : provider === 'seedream' ? 'Seedream' : 'Flux'}</span>
+                <span className={`provider-pill provider-pill--${normalizeProviderStatus(statuses[provider])}`}>
+                  {providerStatusLabel(statuses[provider])}
+                </span>
+              </div>
+            ))}
+          </div>
+          <label className="generation-log-label">Лог операций</label>
+          <pre className="generation-log">{Array.isArray(job.logs) ? job.logs.join('\n') : ''}</pre>
+          <div className="generation-modal__actions">
+            {!terminal ? (
+              <button type="button" className="btn btn-outline btn-inline" disabled={cancelRequested} onClick={onCancel}>
+                {cancelRequested ? 'Прерываем...' : 'Прервать генерацию'}
+              </button>
+            ) : null}
+            {canOpenResult ? (
+              <Link className="btn btn-primary btn-inline" to={`/projects/${projectSlug}/results`}>Посмотреть результат</Link>
+            ) : null}
+          </div>
+        </div>
+      </div>
+
+      {errorMessage ? (
+        <div className="generation-error-modal">
+          <div className="generation-error-modal__backdrop" onClick={onDismissError}></div>
+          <div className="generation-error-modal__dialog" role="alertdialog" aria-modal="true" aria-labelledby="generation-error-title" aria-describedby="generation-error-body">
+            <button type="button" className="generation-modal__close" onClick={onDismissError}>×</button>
+            <h2 id="generation-error-title">Ошибка генерации</h2>
+            <p id="generation-error-body" className="generation-error-modal__message">{errorMessage}</p>
+            {errorHint ? <p className="generation-error-modal__hint">{errorHint}</p> : null}
+            <div className="generation-error-modal__actions">
+              <button type="button" className="btn btn-primary btn-inline" onClick={onDismissError}>Ок</button>
+            </div>
+          </div>
+        </div>
+      ) : null}
+    </>
+  )
+}
+
+function getTokenRecord(tokens: ProjectTokens, key: string): Record<string, unknown> {
+  const value = tokens[key]
+  return value && typeof value === 'object' && !Array.isArray(value) ? value as Record<string, unknown> : {}
+}
+
+function getTokenString(tokens: ProjectTokens, key: string): string {
+  const value = tokens[key]
+  return typeof value === 'string' ? value : ''
+}
+
+function getNestedTokenString(tokens: ProjectTokens, group: string, key: string, fallback: string): string {
+  const record = getTokenRecord(tokens, group)
+  const value = record[key]
+  return typeof value === 'string' ? value : fallback
+}
+
+function getNestedTokenNumber(tokens: ProjectTokens, group: string, key: string, fallback: number): number {
+  const record = getTokenRecord(tokens, group)
+  const value = record[key]
+  return typeof value === 'number' && Number.isFinite(value) ? value : fallback
+}
+
+function getNestedTokenBoolean(tokens: ProjectTokens, group: string, key: string, fallback: boolean): boolean {
+  const record = getTokenRecord(tokens, group)
+  const value = record[key]
+  return typeof value === 'boolean' ? value : fallback
+}
+
+function getNestedTokenArray(tokens: ProjectTokens, group: string, key: string): unknown[] {
+  const record = getTokenRecord(tokens, group)
+  const value = record[key]
+  return Array.isArray(value) ? value : []
+}
+
+function getPaletteSlots(tokens: ProjectTokens): Record<PaletteKey, string> {
+  const paletteSlots = getTokenRecord(tokens, 'palette_slots')
+  const palette = getTokenRecord(tokens, 'palette')
+
+  return PALETTE_KEYS.reduce<Record<PaletteKey, string>>((acc, key) => {
+    const raw = paletteSlots[key] || palette[key]
+    acc[key] = typeof raw === 'string' ? raw.toUpperCase() : DEFAULT_PALETTE[key]
+    return acc
+  }, { ...DEFAULT_PALETTE })
+}
+
+function getActivePaletteKeys(tokens: ProjectTokens): PaletteKey[] {
+  const generation = getTokenRecord(tokens, 'generation')
+  const raw = generation.active_palette_keys
+  if (!Array.isArray(raw)) return ['primary', 'secondary', 'accent']
+  const normalized = raw.filter((key): key is PaletteKey => typeof key === 'string' && PALETTE_KEYS.includes(key as PaletteKey))
+  return normalized.length >= 2 ? normalized.slice(0, 6) : ['primary', 'secondary', 'accent']
+}
+
+function getPromptChips(tokens: ProjectTokens): Record<AssetType, string[]> {
+  const prompts = getTokenRecord(tokens, 'prompts')
+  return ASSET_TYPES.reduce<Record<AssetType, string[]>>((acc, type) => {
+    acc[type] = normalizePromptArray(prompts[type])
+    return acc
+  }, { logos: [], icons: [], patterns: [], illustrations: [] })
+}
+
+function getAssetCounts(tokens: ProjectTokens): Record<AssetType, number> {
+  const generation = getTokenRecord(tokens, 'generation')
+  return ASSET_TYPES.reduce<Record<AssetType, number>>((acc, type) => {
+    acc[type] = clampAssetCount(generation[`${type}_count`], DEFAULT_ASSET_COUNTS[type])
+    return acc
+  }, { ...DEFAULT_ASSET_COUNTS })
+}
+
+function normalizePromptArray(raw: unknown): string[] {
+  if (Array.isArray(raw)) {
+    return raw.map((item) => String(item).trim()).filter(Boolean)
+  }
+  if (typeof raw === 'string') {
+    return raw.split(/[,;\n]+/).map((item) => item.trim()).filter(Boolean)
+  }
+  return []
+}
+
+function clampAssetCount(value: unknown, fallback: number): number {
+  const parsed = typeof value === 'number' ? value : Number.parseInt(String(value || ''), 10)
+  if (!Number.isFinite(parsed)) return fallback
+  return Math.max(1, Math.min(20, parsed))
+}
+
+function assetCountLabel(type: AssetType): string {
+  if (type === 'logos') return 'Количество логотипов'
+  if (type === 'icons') return 'Количество иконок'
+  if (type === 'patterns') return 'Количество паттернов'
+  return 'Количество иллюстраций'
+}
+
+function normalizeStyleRefs(raw: unknown, projectSlug: string): StyleRef[] {
+  if (!Array.isArray(raw)) return []
+  return raw
+    .map((item) => {
+      const path = typeof item === 'string'
+        ? item
+        : item && typeof item === 'object' && 'path' in item && typeof item.path === 'string'
+          ? item.path
+          : ''
+      if (!path) return null
+      const name = path.split('/').pop() || 'ref'
+      const url = item && typeof item === 'object' && 'url' in item && typeof item.url === 'string'
+        ? item.url
+        : `/projects/${projectSlug}/refs/${encodeURIComponent(name)}`
+      return { path, name, url }
+    })
+    .filter((item): item is StyleRef => Boolean(item))
+}
+
+function capitalizePaletteLabel(key: PaletteKey): string {
+  return PALETTE_LABELS[key] || key[0].toUpperCase() + key.slice(1)
+}
+
+function normalizeHexColor(value: string): string {
+  const trimmed = value.trim()
+  if (/^#[0-9a-fA-F]{6}$/.test(trimmed)) return trimmed.toUpperCase()
+  if (/^#[0-9a-fA-F]{3}$/.test(trimmed)) {
+    return `#${trimmed.slice(1).split('').map((char) => char + char).join('')}`.toUpperCase()
+  }
+  return ''
+}
+
 function ProfilePage() {
   const [profile, setProfile] = useState<Profile | null>(null)
   const [name, setName] = useState('')
@@ -1256,7 +2329,7 @@ function ProjectsDashboard() {
                     🗑
                   </button>
                 </form>
-                <a href={project.editor_url} className="project-card__action" aria-label="Открыть редактор проекта">✎</a>
+                <Link to={`/projects/${project.slug}`} className="project-card__action" aria-label="Открыть редактор проекта">✎</Link>
               </div>
             </article>
           ))}

@@ -45,6 +45,11 @@ export type GenerationJob = {
   status: string
   progress: number
   message: string
+  status_text?: string
+  result_url?: string
+  style_id?: string
+  error?: string
+  error_hint?: string
   logs?: string[]
   providers?: Record<string, string>
   provider_statuses?: Record<string, string>

@@ -29,11 +29,13 @@ class GenerationCancelledError(RuntimeError):
 class ProviderExecutionTimeoutError(RuntimeError):
     """Raised when provider process exceeds allowed execution time."""
 
-    def __init__(self, provider: str, timeout_seconds: int) -> None:
+    def __init__(self, provider: str, timeout_seconds: int, stdout: str = '', stderr: str = '') -> None:
         provider_name = str(provider or '').strip() or 'provider'
         super().__init__(f'Таймаут выполнения провайдера {provider_name}: {timeout_seconds} сек.')
         self.provider = provider_name
         self.timeout_seconds = int(timeout_seconds)
+        self.stdout = stdout
+        self.stderr = stderr
 
 
 class GenerationService:
@@ -290,7 +292,35 @@ class GenerationService:
             stdout=subprocess.PIPE,
             stderr=subprocess.PIPE,
             text=True,
+            bufsize=1,
         )
+        stdout_lines: list[str] = []
+        stderr_lines: list[str] = []
+
+        def collect_stream(stream, sink: list[str]) -> None:
+            if stream is None:
+                return
+            try:
+                for line in iter(stream.readline, ''):
+                    if not line:
+                        break
+                    sink.append(line)
+            finally:
+                try:
+                    stream.close()
+                except Exception:
+                    pass
+
+        stdout_thread = threading.Thread(target=collect_stream, args=(proc.stdout, stdout_lines), daemon=True)
+        stderr_thread = threading.Thread(target=collect_stream, args=(proc.stderr, stderr_lines), daemon=True)
+        stdout_thread.start()
+        stderr_thread.start()
+
+        def collected_output() -> tuple[str, str]:
+            stdout_thread.join(timeout=2)
+            stderr_thread.join(timeout=2)
+            return ''.join(stdout_lines), ''.join(stderr_lines)
+
         started_monotonic = time.monotonic()
         while True:
             if should_cancel and should_cancel():
@@ -300,6 +330,7 @@ class GenerationService:
                 except subprocess.TimeoutExpired:
                     proc.kill()
                     proc.wait(timeout=5)
+                collected_output()
                 raise GenerationCancelledError('Генерация прервана пользователем.')
             if timeout_seconds:
                 elapsed = time.monotonic() - started_monotonic
@@ -310,15 +341,18 @@ class GenerationService:
                     except subprocess.TimeoutExpired:
                         proc.kill()
                         proc.wait(timeout=5)
+                    stdout, stderr = collected_output()
                     raise ProviderExecutionTimeoutError(
                         provider=provider or label,
                         timeout_seconds=int(timeout_seconds),
+                        stdout=stdout or '',
+                        stderr=stderr or '',
                     )
             if proc.poll() is not None:
                 break
             threading.Event().wait(0.2)
 
-        stdout, stderr = proc.communicate()
+        stdout, stderr = collected_output()
         if proc.returncode != 0:
             err = subprocess.CalledProcessError(proc.returncode, cmd, output=stdout, stderr=stderr)
             self._emit_cli_output(label, stdout, stderr)
@@ -360,7 +394,8 @@ class GenerationService:
                 provider=provider,
                 timeout_seconds=PROVIDER_TIMEOUT_SECONDS,
             )
-        except ProviderExecutionTimeoutError:
+        except ProviderExecutionTimeoutError as exc:
+            self._emit_cli_output(cli_label, exc.stdout, exc.stderr)
             provider_label = provider[:1].upper() + provider[1:]
             raise ProviderGenerationError(
                 provider=provider,

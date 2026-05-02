@@ -273,14 +273,16 @@ class RecraftClient:
         Скачивает ассет и сохраняет с правильным расширением.
 
         Логика:
-        1. Пытаемся скачать первый кусок через Range bytes=0-20479
+        1. Пытаемся скачать первый кусок через Range.
         2. Если сервер корректно отвечает 206 Partial Content и присылает Content-Range,
-           переходим в кусочную загрузку по 20 KB
+           переходим в кусочную загрузку крупными блоками.
         3. Если нет — откатываемся на обычную stream-загрузку
         """
         info("download_asset: GET %s", url[:200] + ("…" if len(url) > 200 else ""))
 
-        chunk_size = 20 * 1024
+        # Small 20 KB chunks were too slow on some local/VPN connections and could
+        # make Recraft hit the 5-minute provider timeout after successful generation.
+        chunk_size = 512 * 1024
         max_retries_per_chunk = 3
         retry_sleep_sec = 1.5
 
