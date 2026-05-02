@@ -1,7 +1,7 @@
-import { type FormEvent, type ReactNode, useEffect, useState } from 'react'
+import { type FormEvent, type MouseEvent, type ReactNode, useEffect, useState } from 'react'
 import { Link, Navigate, Route, Routes, useNavigate, useParams, useSearchParams } from 'react-router-dom'
 import { cancelGenerationJob, deleteGenerationHistorySelected, getGenerationHistory } from './services/generationHistoryApi'
-import { getCurrentSession, login, register } from './services/authApi'
+import { getCurrentSession, login, logout, register } from './services/authApi'
 import { getProfile, updateProfile } from './services/profileApi'
 import { createProject, deleteProject, listProjects } from './services/projectsApi'
 import {
@@ -46,63 +46,80 @@ function App() {
     }
   }, [])
 
+  async function handleLogout() {
+    try {
+      const payload = await logout()
+      setSession(payload)
+    } catch {
+      setSession({ ok: false, authenticated: false, user: null })
+    }
+  }
+
+  async function refreshSession() {
+    try {
+      setSession(await getCurrentSession())
+    } catch {
+      /* не сбрасываем сессию при сетевой ошибке */
+    }
+  }
+
   return (
     <Routes>
-      <Route path="/" element={<LandingPage session={session} />} />
+      <Route path="/" element={<LandingPage session={session} onLogout={handleLogout} />} />
       <Route path="/login" element={<LoginPage session={session} onSessionChange={setSession} />} />
       <Route path="/register" element={<RegisterPage />} />
-      <Route path="/dashboard" element={<ProtectedDashboard session={session} />} />
-      <Route path="/profile" element={<ProtectedProfile session={session} />} />
-      <Route path="/generation-history" element={<ProtectedGenerationHistory session={session} />} />
-      <Route path="/projects/:projectSlug" element={<ProtectedEditor session={session} />} />
-      <Route path="/projects/:projectSlug/results" element={<ProtectedResults session={session} />} />
+      <Route path="/dashboard" element={<ProtectedDashboard session={session} onLogout={handleLogout} />} />
+      <Route path="/profile" element={<ProtectedProfile session={session} onLogout={handleLogout} onSessionRefresh={refreshSession} />} />
+      <Route path="/generation-history" element={<ProtectedGenerationHistory session={session} onLogout={handleLogout} />} />
+      <Route path="/projects/:projectSlug" element={<ProtectedEditor session={session} onLogout={handleLogout} />} />
+      <Route path="/projects/:projectSlug/results" element={<ProtectedResults session={session} onLogout={handleLogout} />} />
     </Routes>
   )
 }
 
-function ProtectedDashboard({ session }: { session: AuthMeResponse | null }) {
+function ProtectedDashboard({ session, onLogout }: { session: AuthMeResponse | null; onLogout: () => Promise<void> }) {
   if (session === null) return null
   if (!session.authenticated) return <Navigate to="/login" replace />
 
-  return <MigrationShell session={session} />
+  return <MigrationShell session={session} onLogout={onLogout} />
 }
 
-function ProtectedProfile({ session }: { session: AuthMeResponse | null }) {
+function ProtectedProfile({ session, onLogout, onSessionRefresh }: { session: AuthMeResponse | null; onLogout: () => Promise<void>; onSessionRefresh: () => Promise<void> }) {
   if (session === null) return null
   if (!session.authenticated) return <Navigate to="/login" replace />
 
   return (
-    <MigrationShell session={session} activePath="/profile" mainClassName="profile-main">
-      <ProfilePage />
+    <MigrationShell session={session} activePath="/profile" mainClassName="profile-main" onLogout={onLogout}>
+      <ProfilePage onSessionRefresh={onSessionRefresh} />
     </MigrationShell>
   )
 }
 
-function ProtectedGenerationHistory({ session }: { session: AuthMeResponse | null }) {
+function ProtectedGenerationHistory({ session, onLogout }: { session: AuthMeResponse | null; onLogout: () => Promise<void> }) {
   if (session === null) return null
   if (!session.authenticated) return <Navigate to="/login" replace />
 
   return (
-    <MigrationShell session={session} activePath="/generation-history">
+    <MigrationShell session={session} activePath="/generation-history" onLogout={onLogout}>
       <GenerationHistoryPage />
     </MigrationShell>
   )
 }
 
-function ProtectedResults({ session }: { session: AuthMeResponse | null }) {
+function ProtectedResults({ session, onLogout }: { session: AuthMeResponse | null; onLogout: () => Promise<void> }) {
   const { projectSlug = '' } = useParams()
 
   if (session === null) return null
   if (!session.authenticated) return <Navigate to="/login" replace />
 
   return (
-    <MigrationShell session={session} activePath="/dashboard" mainClassName="results-main">
+    <MigrationShell session={session} activePath="/dashboard" mainClassName="results-main" onLogout={onLogout}>
       <ResultsPage projectSlug={projectSlug} />
     </MigrationShell>
   )
 }
 
-function ProtectedEditor({ session }: { session: AuthMeResponse | null }) {
+function ProtectedEditor({ session, onLogout }: { session: AuthMeResponse | null; onLogout: () => Promise<void> }) {
   const { projectSlug = '' } = useParams()
   const [searchParams] = useSearchParams()
 
@@ -110,18 +127,27 @@ function ProtectedEditor({ session }: { session: AuthMeResponse | null }) {
   if (!session.authenticated) return <Navigate to="/login" replace />
 
   return (
-    <MigrationShell session={session} activePath="/dashboard" mainClassName="project-main">
+    <MigrationShell session={session} activePath="/dashboard" mainClassName="project-main" onLogout={onLogout}>
       <ProjectEditorPage projectSlug={projectSlug} isNewProjectFlow={searchParams.get('new') === '1'} />
     </MigrationShell>
   )
 }
 
-function LandingHeader({ session }: { session: AuthMeResponse | null }) {
+function LandingHeader({ session, onLogout }: { session: AuthMeResponse | null; onLogout?: () => Promise<void> }) {
+  const navigate = useNavigate()
+
+  async function handleLogoutClick(event: MouseEvent<HTMLAnchorElement>) {
+    event.preventDefault()
+    if (!onLogout) return
+    await onLogout()
+    navigate('/')
+  }
+
   return (
     <header className="site-header">
       <div className="container header-inner">
         <Link to="/" className="brand-mark" aria-label="KYBBY home">
-          <img className="brand-mark__logo" src="/static/img/kybby-whale.svg" alt="KYBBY" />
+          <img className="brand-mark__logo" src="/app/static/img/kybby-logo.png" alt="KYBBY" />
           <span className="brand-mark__text">KYBBY</span>
         </Link>
 
@@ -129,8 +155,8 @@ function LandingHeader({ session }: { session: AuthMeResponse | null }) {
           {session?.authenticated ? (
             <>
               <Link to="/dashboard" className="btn btn-primary">Мои проекты</Link>
-              <a href="/profile" className="header-user-pill header-user-pill--link">{session.user?.name || 'Пользователь'}</a>
-              <a href="/logout" className="btn btn-outline">Выйти</a>
+              <Link to="/profile" className="header-user-pill header-user-pill--link">{session.user?.name || 'Пользователь'}</Link>
+              <a href="/logout" className="btn btn-outline" onClick={handleLogoutClick}>Выйти</a>
             </>
           ) : (
             <>
@@ -144,21 +170,93 @@ function LandingHeader({ session }: { session: AuthMeResponse | null }) {
   )
 }
 
-function LandingPage({ session }: { session: AuthMeResponse | null }) {
+function LandingPage({ session, onLogout }: { session: AuthMeResponse | null; onLogout: () => Promise<void> }) {
   return (
     <div className="landing-shell">
-      <LandingHeader session={session} />
+      <LandingHeader session={session} onLogout={onLogout} />
       <LandingBackdrop />
       <footer className="site-footer">
         <div className="container footer-inner">
           <div className="brand-mark brand-mark--footer">
-            <img className="brand-mark__logo brand-mark__logo--footer" src="/static/img/kybby-whale.svg" alt="KYBBY" />
+            <img className="brand-mark__logo brand-mark__logo--footer" src="/app/static/img/kybby-logo.png" alt="KYBBY" />
             <span className="brand-mark__text">KYBBY</span>
           </div>
           <p>© 2026 KYBBY. Генерация бренд-комплектов с помощью ИИ.</p>
         </div>
       </footer>
     </div>
+  )
+}
+
+type Feature = {
+  title: string
+  description: string
+  icon: 'sparkles' | 'grid3x3' | 'image' | 'download'
+}
+
+const LANDING_FEATURES: readonly Feature[] = [
+  {
+    title: 'Генерация иконок',
+    description: 'Создавайте уникальные иконки в едином стиле с настраиваемой цветовой палитрой и параметрами.',
+    icon: 'sparkles',
+  },
+  {
+    title: 'Создание паттернов',
+    description: 'Бесшовные паттерны и фоны с заданными мотивами и плотностью для любых дизайн-задач.',
+    icon: 'grid3x3',
+  },
+  {
+    title: 'Иллюстрации',
+    description: 'Векторные иллюстрации, созданные ИИ в соответствии с вашим брендом и референсами.',
+    icon: 'image',
+  },
+  {
+    title: 'Экспорт в Figma',
+    description: 'Прямая интеграция с Figma через плагин — все ассеты доступны сразу в вашем проекте.',
+    icon: 'download',
+  },
+]
+
+function FeatureIcon({ name }: { name: Feature['icon'] }) {
+  if (name === 'sparkles') {
+    return (
+      <svg className="feature-icon__svg" xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round" aria-hidden="true">
+        <path d="m12 3-1.912 5.813a2 2 0 0 1-1.275 1.275L3 12l5.813 1.912a2 2 0 0 1 1.275 1.275L12 21l1.912-5.813a2 2 0 0 1 1.275-1.275L21 12l-5.813-1.912a2 2 0 0 1-1.275-1.275L12 3Z" />
+        <path d="M5 3v4" />
+        <path d="M19 17v4" />
+        <path d="M3 5h4" />
+        <path d="M17 19h4" />
+      </svg>
+    )
+  }
+
+  if (name === 'grid3x3') {
+    return (
+      <svg className="feature-icon__svg" xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round" aria-hidden="true">
+        <rect width="7" height="7" x="3" y="3" rx="1" />
+        <rect width="7" height="7" x="14" y="3" rx="1" />
+        <rect width="7" height="7" x="14" y="14" rx="1" />
+        <rect width="7" height="7" x="3" y="14" rx="1" />
+      </svg>
+    )
+  }
+
+  if (name === 'image') {
+    return (
+      <svg className="feature-icon__svg" xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round" aria-hidden="true">
+        <rect width="18" height="18" x="3" y="3" rx="2" ry="2" />
+        <circle cx="9" cy="9" r="2" />
+        <path d="m21 15-3.086-3.086a2 2 0 0 0-2.828 0L6 21" />
+      </svg>
+    )
+  }
+
+  return (
+    <svg className="feature-icon__svg" xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round" aria-hidden="true">
+      <path d="M21 15v4a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2v-4" />
+      <polyline points="7 10 12 15 17 10" />
+      <line x1="12" x2="12" y1="15" y2="3" />
+    </svg>
   )
 }
 
@@ -169,6 +267,8 @@ function LandingBackdrop() {
         <div className="hero-bg" aria-hidden="true">
           <div className="hero-bg__orb hero-bg__orb--1"></div>
           <div className="hero-bg__orb hero-bg__orb--2"></div>
+          <div className="hero-bg__dots hero-bg__dots--left"></div>
+          <div className="hero-bg__dots hero-bg__dots--right"></div>
         </div>
         <div className="container hero-content">
           <h1 className="hero-title">
@@ -176,8 +276,13 @@ function LandingBackdrop() {
             <span className="hero-title__line hero-title__line--accent">за минуты</span>
           </h1>
           <p className="hero-subtitle">Логотипы, иконки, паттерны, иллюстрации — всё в одном месте.</p>
-          <a href="#features" className="btn btn-primary btn-hero btn-hero--demo">Посмотреть демо</a>
+          <a href="#features" className="btn btn-hero--demo">Посмотреть демо</a>
         </div>
+        <a href="#features" className="hero-scroll" aria-label="Прокрутить к возможностям">
+          <span className="hero-scroll__mouse">
+            <span className="hero-scroll__dot"></span>
+          </span>
+        </a>
       </section>
       <section className="features-section section-block" id="features">
         <div className="container section-head section-head-center">
@@ -186,26 +291,15 @@ function LandingBackdrop() {
         </div>
 
         <div className="container feature-grid">
-          <article className="feature-card">
-            <div className="feature-icon" aria-hidden="true">✦</div>
-            <h3>Генерация иконок</h3>
-            <p>Создавайте уникальные иконки в едином стиле с настраиваемой цветовой палитрой и параметрами.</p>
-          </article>
-          <article className="feature-card">
-            <div className="feature-icon" aria-hidden="true">▦</div>
-            <h3>Создание паттернов</h3>
-            <p>Бесшовные паттерны и фоны с заданными мотивами и плотностью для любых дизайн-задач.</p>
-          </article>
-          <article className="feature-card">
-            <div className="feature-icon" aria-hidden="true">□</div>
-            <h3>Иллюстрации</h3>
-            <p>Векторные иллюстрации, созданные ИИ в соответствии с вашим брендом и референсами.</p>
-          </article>
-          <article className="feature-card">
-            <div className="feature-icon" aria-hidden="true">↓</div>
-            <h3>Экспорт в Figma</h3>
-            <p>Прямая интеграция с Figma через плагин — все ассеты доступны сразу в вашем проекте.</p>
-          </article>
+          {LANDING_FEATURES.map((item) => (
+            <article className="feature-card" key={item.title}>
+              <div className="feature-icon" aria-hidden="true">
+                <FeatureIcon name={item.icon} />
+              </div>
+              <h3>{item.title}</h3>
+              <p>{item.description}</p>
+            </article>
+          ))}
         </div>
       </section>
     </main>
@@ -225,6 +319,7 @@ function LoginPage({
   const [password, setPassword] = useState('')
   const [error, setError] = useState('')
   const [isSubmitting, setIsSubmitting] = useState(false)
+  const queryError = searchParams.get('error') || ''
 
   if (session?.authenticated) return <Navigate to="/dashboard" replace />
 
@@ -245,51 +340,50 @@ function LoginPage({
   }
 
   return (
-    <div className="landing-shell register-shell">
-      <LandingHeader session={session} />
-      <div className="page-blur-layer" aria-hidden="true">
-        <LandingBackdrop />
+    <div className="auth-screen">
+      <div className="auth-backdrop-content" aria-hidden="true">
+        <h1 className="auth-backdrop-title">
+          <span>Создайте бренд-стиль</span>
+          <span className="auth-backdrop-title-accent">за минуты</span>
+        </h1>
       </div>
-      <main className="register-page">
-        <section className="register-modal auth-modal" role="dialog" aria-modal="true" aria-labelledby="login-title">
-          <Link to="/" className="register-close" aria-label="Закрыть окно входа">✕</Link>
-          <Link to="/" className="register-brand" aria-label="На главную">
-            <img className="brand-mark__logo brand-mark__logo--small" src="/static/img/kybby-whale.svg" alt="KYBBY" />
-            <span className="register-brand__text">KYBBY</span>
-          </Link>
-          <h1 className="register-title" id="login-title">Войти</h1>
-
-          {error ? <div className="form-alert form-alert--error">{error}</div> : null}
-          {searchParams.get('registered') === '1' ? (
-            <div className="form-alert form-alert--success">Аккаунт создан. Теперь можно войти, используя email и пароль.</div>
-          ) : null}
-
-          <form className="register-form" onSubmit={handleSubmit}>
-            <label className="field-wrap">
-              <span className="field-icon" aria-hidden="true">
-                <EmailIcon />
-              </span>
-              <input type="email" name="email" placeholder="Почта" value={email} autoComplete="email" required onChange={(event) => setEmail(event.target.value)} />
-            </label>
-            <label className="field-wrap">
-              <span className="field-icon" aria-hidden="true">
-                <LockIcon />
-              </span>
-              <input type="password" name="password" placeholder="Пароль" autoComplete="current-password" required onChange={(event) => setPassword(event.target.value)} />
-            </label>
-            <button type="submit" className="btn btn-primary btn-full" disabled={isSubmitting}>
-              {isSubmitting ? 'Входим...' : 'Войти'}
-            </button>
-          </form>
-
-          <p className="register-switch">Нет аккаунта? <Link to="/register">Регистрация</Link></p>
-        </section>
-      </main>
+      <div className="auth-backdrop-blur"></div>
+      <div className="auth-modal" role="dialog" aria-modal="true" aria-labelledby="login-title">
+        <Link className="auth-modal-close" to="/" aria-label="Закрыть">×</Link>
+        <div className="auth-modal-brand">
+          <img className="auth-modal-brand-logo" src="/app/static/img/kybby-logo.png" alt="" />
+          <span>KYBBY</span>
+        </div>
+        <h1 className="auth-modal-title" id="login-title">Вход</h1>
+        {searchParams.get('registered') === '1' ? (
+          <div className="callout callout-success" role="status">Регистрация прошла успешно. Войдите, используя email и пароль.</div>
+        ) : null}
+        {error || queryError ? <div className="error">{error || queryError}</div> : null}
+        <form className="auth-modal-form" onSubmit={handleSubmit}>
+          <label className="auth-input-wrap" htmlFor="email">
+            <span className="auth-input-icon" aria-hidden="true">
+              <EmailIcon />
+            </span>
+            <input id="email" type="email" name="email" placeholder="Почта" value={email} autoComplete="email" required onChange={(event) => setEmail(event.target.value)} />
+          </label>
+          <label className="auth-input-wrap" htmlFor="password">
+            <span className="auth-input-icon" aria-hidden="true">
+              <LockIcon />
+            </span>
+            <input id="password" type="password" name="password" placeholder="Пароль" value={password} autoComplete="current-password" required onChange={(event) => setPassword(event.target.value)} />
+          </label>
+          <button type="submit" className="btn auth-submit-btn" disabled={isSubmitting}>
+            {isSubmitting ? 'Вход...' : 'Войти'}
+          </button>
+        </form>
+        <p className="auth-switch">Нет аккаунта? <Link to="/register">Зарегистрироваться</Link></p>
+      </div>
     </div>
   )
 }
 
 function RegisterPage() {
+  const [searchParams] = useSearchParams()
   const navigate = useNavigate()
   const [name, setName] = useState('')
   const [email, setEmail] = useState('')
@@ -297,6 +391,7 @@ function RegisterPage() {
   const [passwordConfirm, setPasswordConfirm] = useState('')
   const [error, setError] = useState('')
   const [isSubmitting, setIsSubmitting] = useState(false)
+  const queryError = searchParams.get('error') || ''
 
   async function handleSubmit(event: FormEvent<HTMLFormElement>) {
     event.preventDefault()
@@ -319,55 +414,56 @@ function RegisterPage() {
   }
 
   return (
-    <div className="landing-shell register-shell">
-      <LandingHeader session={null} />
-      <div className="page-blur-layer" aria-hidden="true">
-        <LandingBackdrop />
+    <div className="auth-screen">
+      <div className="auth-backdrop-content" aria-hidden="true">
+        <h1 className="auth-backdrop-title">
+          <span>Создайте бренд-стиль</span>
+          <span className="auth-backdrop-title-accent">за минуты</span>
+        </h1>
       </div>
-      <main className="register-page">
-        <section className="register-modal" role="dialog" aria-modal="true" aria-labelledby="register-title">
-          <Link to="/" className="register-close" aria-label="Закрыть окно регистрации">✕</Link>
-          <Link to="/" className="register-brand" aria-label="На главную">
-            <img className="brand-mark__logo brand-mark__logo--small" src="/static/img/kybby-whale.svg" alt="KYBBY" />
-            <span className="register-brand__text">KYBBY</span>
-          </Link>
-          <h1 className="register-title" id="register-title">Регистрация</h1>
+      <div className="auth-backdrop-blur"></div>
+      <div className="auth-modal" role="dialog" aria-modal="true" aria-labelledby="register-title">
+        <Link className="auth-modal-close" to="/" aria-label="Закрыть">×</Link>
+        <div className="auth-modal-brand">
+          <img className="auth-modal-brand-logo" src="/app/static/img/kybby-logo.png" alt="" />
+          <span>KYBBY</span>
+        </div>
+        <h1 className="auth-modal-title" id="register-title">Регистрация</h1>
 
-          {error ? <div className="form-alert form-alert--error">{error}</div> : null}
+        {error || queryError ? <div className="error">{error || queryError}</div> : null}
 
-          <form className="register-form" onSubmit={handleSubmit}>
-            <label className="field-wrap">
-              <span className="field-icon" aria-hidden="true">
-                <UserIcon />
-              </span>
-              <input type="text" name="name" placeholder="Имя" value={name} autoComplete="name" required onChange={(event) => setName(event.target.value)} />
-            </label>
-            <label className="field-wrap">
-              <span className="field-icon" aria-hidden="true">
-                <EmailIcon />
-              </span>
-              <input type="email" name="email" placeholder="Почта" value={email} autoComplete="email" required onChange={(event) => setEmail(event.target.value)} />
-            </label>
-            <label className="field-wrap">
-              <span className="field-icon" aria-hidden="true">
-                <LockIcon />
-              </span>
-              <input type="password" name="password" placeholder="Пароль" autoComplete="new-password" required onChange={(event) => setPassword(event.target.value)} />
-            </label>
-            <label className="field-wrap">
-              <span className="field-icon" aria-hidden="true">
-                <LockIcon />
-              </span>
-              <input type="password" name="password_confirm" placeholder="Подтверждение пароля" autoComplete="new-password" required onChange={(event) => setPasswordConfirm(event.target.value)} />
-            </label>
-            <button type="submit" className="btn btn-primary btn-full" disabled={isSubmitting}>
-              {isSubmitting ? 'Регистрируем...' : 'Зарегистрироваться'}
-            </button>
-          </form>
+        <form className="auth-modal-form" onSubmit={handleSubmit}>
+          <label className="auth-input-wrap" htmlFor="name">
+            <span className="auth-input-icon" aria-hidden="true">
+              <UserIcon />
+            </span>
+            <input id="name" type="text" name="name" placeholder="Имя" value={name} autoComplete="name" minLength={2} required onChange={(event) => setName(event.target.value)} />
+          </label>
+          <label className="auth-input-wrap" htmlFor="register-email">
+            <span className="auth-input-icon" aria-hidden="true">
+              <EmailIcon />
+            </span>
+            <input id="register-email" type="email" name="email" placeholder="Почта" value={email} autoComplete="email" required onChange={(event) => setEmail(event.target.value)} />
+          </label>
+          <label className="auth-input-wrap" htmlFor="register-password">
+            <span className="auth-input-icon" aria-hidden="true">
+              <LockIcon />
+            </span>
+            <input id="register-password" type="password" name="password" placeholder="Пароль" value={password} autoComplete="new-password" minLength={8} required onChange={(event) => setPassword(event.target.value)} />
+          </label>
+          <label className="auth-input-wrap" htmlFor="password_confirm">
+            <span className="auth-input-icon" aria-hidden="true">
+              <LockIcon />
+            </span>
+            <input id="password_confirm" type="password" name="password_confirm" placeholder="Подтверждение пароля" value={passwordConfirm} autoComplete="new-password" minLength={8} required onChange={(event) => setPasswordConfirm(event.target.value)} />
+          </label>
+          <button type="submit" className="btn auth-submit-btn" disabled={isSubmitting}>
+            {isSubmitting ? 'Регистрация...' : 'Зарегистрироваться'}
+          </button>
+        </form>
 
-          <p className="register-switch">Уже есть аккаунт? <Link to="/login">Войти</Link></p>
-        </section>
-      </main>
+        <p className="auth-switch">Уже есть аккаунт? <Link to="/login">Войти</Link></p>
+      </div>
     </div>
   )
 }
@@ -376,25 +472,40 @@ function MigrationShell({
   session,
   activePath = '/dashboard',
   mainClassName = '',
+  onLogout,
   children,
 }: {
   session: AuthMeResponse | null
   activePath?: '/dashboard' | '/profile' | '/generation-history'
   mainClassName?: string
+  onLogout: () => Promise<void>
   children?: ReactNode
 }) {
+  const navigate = useNavigate()
   const userName = session?.user?.name || 'Пользователь'
   const userEmail = session?.user?.email || ''
+  const avatarUrl = (session?.user?.avatar_url || '').trim()
   const userInitial = userName.slice(0, 1).toUpperCase() || '?'
 
+  async function handleLogoutClick(event: MouseEvent<HTMLAnchorElement>) {
+    event.preventDefault()
+    await onLogout()
+    navigate('/login')
+  }
+
+  useEffect(() => {
+    document.body.classList.add('page-dashboard')
+    return () => document.body.classList.remove('page-dashboard')
+  }, [])
+
   return (
-    <div className="dashboard-page">
+    <div className="dashboard-page page-dashboard">
       <header className="dashboard-page-header">
         <div className="dashboard-page-header__brand">
-          <a href="/dashboard" className="dashboard-brand dashboard-brand--header" aria-label="KYBBY dashboard">
-            <img className="brand-mark__logo" src="/static/img/kybby-whale.svg" alt="KYBBY" />
+          <Link to="/dashboard" className="dashboard-brand dashboard-brand--header" aria-label="KYBBY dashboard">
+            <img className="brand-mark__logo" src="/app/static/img/kybby-logo.png" alt="KYBBY" />
             <span className="brand-mark__text">KYBBY</span>
-          </a>
+          </Link>
         </div>
         <div className="dashboard-page-header__actions">
           <div className="dashboard-userbar">
@@ -407,7 +518,13 @@ function MigrationShell({
             </button>
             <div className="dashboard-userpill">
               <span className="dashboard-userpill__email">{userEmail}</span>
-              <span className="dashboard-userpill__avatar">{userInitial}</span>
+              <span className="dashboard-userpill__avatar">
+                {avatarUrl ? (
+                  <img src={avatarUrl} alt="" className="dashboard-userpill__avatar-img" width={28} height={28} />
+                ) : (
+                  <span className="dashboard-userpill__initial">{userInitial}</span>
+                )}
+              </span>
             </div>
           </div>
         </div>
@@ -441,7 +558,7 @@ function MigrationShell({
               </span>
               <span>Настройки</span>
             </a>
-            <a href="/logout" className="dashboard-nav__item">
+            <a href="/logout" className="dashboard-nav__item" onClick={handleLogoutClick}>
               <span className="dashboard-nav__icon" aria-hidden="true">
                 <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.2" strokeLinecap="round" strokeLinejoin="round">
                   <path d="M9 4H5a2 2 0 0 0-2 2v12a2 2 0 0 0 2 2h4" />
@@ -460,7 +577,7 @@ function MigrationShell({
       <footer className="dashboard-site-footer">
         <div className="dashboard-site-footer__inner">
           <div className="brand-mark brand-mark--dashboard-footer">
-            <img className="brand-mark__logo" src="/static/img/kybby-whale.svg" alt="KYBBY" />
+            <img className="brand-mark__logo" src="/app/static/img/kybby-logo.png" alt="KYBBY" />
             <span className="brand-mark__text">KYBBY</span>
           </div>
           <p>© 2026 KYBBY. Генерация бренд-комплектов с помощью ИИ.</p>
@@ -1818,7 +1935,6 @@ function ProjectEditorPage({ projectSlug, isNewProjectFlow }: { projectSlug: str
           </button>
           <a href={`/projects/${projectSlug}/download`} className="btn btn-outline btn-inline">Скачать конфигурацию проекта</a>
           <button type="button" className="btn btn-inline btn-reset-light" disabled={isSaving} onClick={handleReset}>Сброс</button>
-          <a href={`/projects/${projectSlug}`} className="btn btn-outline btn-inline">Открыть старый редактор</a>
         </div>
         {status ? <div className="editor-status">{status}</div> : null}
         {error ? <div className="editor-status">{error}</div> : null}
@@ -2061,7 +2177,7 @@ function normalizeHexColor(value: string): string {
   return ''
 }
 
-function ProfilePage() {
+function ProfilePage({ onSessionRefresh }: { onSessionRefresh: () => Promise<void> }) {
   const [profile, setProfile] = useState<Profile | null>(null)
   const [name, setName] = useState('')
   const [newPassword, setNewPassword] = useState('')
@@ -2111,6 +2227,7 @@ function ProfilePage() {
       setNewPassword('')
       setAvatar(null)
       setSuccess('Изменения сохранены')
+      await onSessionRefresh()
     } catch (err) {
       setError(err instanceof Error ? err.message : 'Не удалось сохранить профиль.')
     } finally {
@@ -2131,6 +2248,7 @@ function ProfilePage() {
       const payload = await updateProfile(formData)
       setProfile(payload.profile)
       setSuccess('Изменения сохранены')
+      await onSessionRefresh()
     } catch (err) {
       setError(err instanceof Error ? err.message : 'Не удалось удалить фото профиля.')
     }
@@ -2228,6 +2346,7 @@ function ProfilePage() {
 }
 
 function ProjectsDashboard() {
+  const navigate = useNavigate()
   const [projects, setProjects] = useState<ProjectSummary[]>([])
   const [showGenerationHistory, setShowGenerationHistory] = useState(false)
   const [isLoading, setIsLoading] = useState(true)
@@ -2261,7 +2380,7 @@ function ProjectsDashboard() {
 
     try {
       const payload = await createProject()
-      window.location.href = payload.redirect_url
+      navigate(payload.redirect_url.replace(/^\/app/, ''))
     } catch (err) {
       setError(err instanceof Error ? err.message : 'Не удалось создать проект.')
       setIsCreating(false)

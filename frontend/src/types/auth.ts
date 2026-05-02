@@ -2,6 +2,8 @@ export type SessionUser = {
   id: number
   name: string
   email: string
+  /** Present when user has a custom avatar (path /profile/avatar/...) */
+  avatar_url?: string
 }
 
 export type AuthMeResponse = {

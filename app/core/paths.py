@@ -4,8 +4,6 @@ from app.core.settings import settings
 
 
 APP_DIR = Path(__file__).resolve().parents[1]
-TEMPLATES_DIR = APP_DIR / 'templates'
-STATIC_DIR = APP_DIR / 'static'
 DATA_DIR = APP_DIR.parent / 'data'
 PROJECT_ROOT = settings.project_root
 PROVIDERS_DIR = settings.providers_dir

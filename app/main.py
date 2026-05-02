@@ -3,7 +3,6 @@ from fastapi.responses import FileResponse, HTMLResponse
 from fastapi.staticfiles import StaticFiles
 from starlette.middleware.sessions import SessionMiddleware
 
-from app.core.paths import STATIC_DIR
 from app.core.settings import settings
 from app.routers import pages, projects
 from app.routers.api import auth as api_auth
@@ -24,6 +23,7 @@ logger = logging.getLogger("kityourbrand")
 FRONTEND_DIST_DIR = settings.project_root / 'frontend' / 'dist'
 FRONTEND_INDEX_FILE = FRONTEND_DIST_DIR / 'index.html'
 FRONTEND_ASSETS_DIR = FRONTEND_DIST_DIR / 'assets'
+FRONTEND_STATIC_DIR = FRONTEND_DIST_DIR / 'static'
 
 
 def create_app() -> FastAPI:
@@ -60,10 +60,11 @@ def create_app() -> FastAPI:
         https_only=False,
     )
 
-    app.mount('/static', StaticFiles(directory=str(STATIC_DIR)), name='static')
-
     if FRONTEND_ASSETS_DIR.exists():
         app.mount('/app/assets', StaticFiles(directory=str(FRONTEND_ASSETS_DIR)), name='frontend_assets')
+
+    if FRONTEND_STATIC_DIR.exists():
+        app.mount('/app/static', StaticFiles(directory=str(FRONTEND_STATIC_DIR)), name='frontend_static')
 
     app.include_router(api_auth.router)
     app.include_router(api_generation_history.router)
@@ -77,7 +78,13 @@ def create_app() -> FastAPI:
     @app.get('/app/{path:path}', include_in_schema=False)
     async def react_spa_entry(request: Request, path: str = ''):
         if FRONTEND_INDEX_FILE.exists():
-            return FileResponse(FRONTEND_INDEX_FILE)
+            # Avoid stale index.html during local dev (browser/CDN cache); hashed /app/assets/* still cache OK.
+            spa_headers = (
+                {'Cache-Control': 'no-store, max-age=0, must-revalidate'}
+                if settings.debug
+                else {}
+            )
+            return FileResponse(FRONTEND_INDEX_FILE, headers=spa_headers)
         return HTMLResponse(
             '<!doctype html><html lang="ru"><head><meta charset="utf-8">'
             '<title>KYBBY React app</title></head><body>'

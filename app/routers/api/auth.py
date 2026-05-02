@@ -24,11 +24,16 @@ class RegisterPayload(BaseModel):
     password_confirm: str
 
 
-def _user_payload(user_id: int, name: str, email: str) -> dict:
+def _user_dict_from_row(row) -> dict | None:
+    if row is None:
+        return None
+    avatar_path = str(row['avatar_path']) if row['avatar_path'] else ''
+    avatar_url = f'/profile/avatar/{avatar_path}' if avatar_path else ''
     return {
-        'id': int(user_id),
-        'name': name or '',
-        'email': email or '',
+        'id': int(row['id']),
+        'name': str(row['name'] or ''),
+        'email': str(row['email'] or ''),
+        'avatar_url': avatar_url,
     }
 
 
@@ -38,17 +43,12 @@ def current_session(request: Request) -> JSONResponse:
     if not user_id:
         return JSONResponse({'ok': True, 'authenticated': False, 'user': None})
 
-    return JSONResponse(
-        {
-            'ok': True,
-            'authenticated': True,
-            'user': {
-                'id': int(user_id),
-                'name': request.session.get('user_name') or '',
-                'email': request.session.get('user_email') or '',
-            },
-        }
-    )
+    row = auth_service.get_user_by_id(int(user_id))
+    user = _user_dict_from_row(row)
+    if user is None:
+        return JSONResponse({'ok': True, 'authenticated': False, 'user': None})
+
+    return JSONResponse({'ok': True, 'authenticated': True, 'user': user})
 
 
 @router.post('/login')
@@ -61,17 +61,12 @@ def login(payload: LoginPayload, request: Request) -> JSONResponse:
     request.session['user_name'] = result.user_name
     request.session['user_email'] = result.user_email
 
-    return JSONResponse(
-        {
-            'ok': True,
-            'authenticated': True,
-            'user': _user_payload(
-                int(result.user_id or 0),
-                result.user_name or '',
-                result.user_email or '',
-            ),
-        }
-    )
+    row = auth_service.get_user_by_id(int(result.user_id or 0))
+    user = _user_dict_from_row(row)
+    if user is None:
+        return JSONResponse({'ok': False, 'error': 'Пользователь не найден.'}, status_code=400)
+
+    return JSONResponse({'ok': True, 'authenticated': True, 'user': user})
 
 
 @router.post('/register')

@@ -1,15 +1,13 @@
 from __future__ import annotations
 
-import json
 import zipfile
 from pathlib import Path
 
 from fastapi import APIRouter, File, Form, HTTPException, Request, Response, UploadFile, status
-from fastapi.responses import FileResponse, HTMLResponse, JSONResponse, RedirectResponse
-from fastapi.templating import Jinja2Templates
+from fastapi.responses import FileResponse, JSONResponse, RedirectResponse
 
 from app.schemas.palette import PaletteSuggestRequest, PaletteSuggestResponse
-from app.core.paths import OUT_DIR, TEMPLATES_DIR
+from app.core.paths import OUT_DIR
 from app.core.settings import settings
 from app.services.generation_service import GenerationService
 from app.services.generation_jobs import generation_jobs
@@ -17,7 +15,6 @@ from app.services.palette_service import PaletteService
 from app.services.project_service import ProjectService
 
 router = APIRouter()
-templates = Jinja2Templates(directory=str(TEMPLATES_DIR))
 project_service = ProjectService(settings.data_dir / 'app.db', settings.data_dir / 'projects')
 project_service.init_db()
 generation_service = GenerationService(project_service)
@@ -33,8 +30,16 @@ def require_auth(request: Request) -> int:
 
 def redirect_auth(request: Request):
     if not request.session.get('user_id'):
-        return RedirectResponse(url='/login', status_code=status.HTTP_303_SEE_OTHER)
+        return RedirectResponse(url='/app/login', status_code=status.HTTP_303_SEE_OTHER)
     return None
+
+
+def redirect_to_react(request: Request, path: str) -> RedirectResponse:
+    query = request.url.query
+    url = f'/app{path}'
+    if query:
+        url = f'{url}?{query}'
+    return RedirectResponse(url=url, status_code=status.HTTP_303_SEE_OTHER)
 
 
 def project_or_404(user_id: int, project_slug: str):
@@ -137,7 +142,7 @@ async def create_project(request: Request, name: str = Form('Новый прое
         return auth_redirect
     user_id = int(request.session['user_id'])
     project = project_service.create_project(user_id, name)
-    return RedirectResponse(url=f'/projects/{project.slug}?new=1', status_code=status.HTTP_303_SEE_OTHER)
+    return RedirectResponse(url=f'/app/projects/{project.slug}?new=1', status_code=status.HTTP_303_SEE_OTHER)
 
 
 @router.post('/projects/{project_slug}/delete')
@@ -145,7 +150,7 @@ async def delete_project(request: Request, project_slug: str):
     user_id = require_auth(request)
     project_or_404(user_id, project_slug)
     project_service.delete_project(user_id, project_slug)
-    return RedirectResponse(url='/dashboard', status_code=status.HTTP_303_SEE_OTHER)
+    return RedirectResponse(url='/app/dashboard', status_code=status.HTTP_303_SEE_OTHER)
 
 
 @router.post('/projects/{project_slug}/restore')
@@ -156,28 +161,16 @@ async def restore_project(request: Request, project_slug: str):
     user_id = int(request.session['user_id'])
     if not project_service.restore_project(user_id, project_slug):
         raise HTTPException(status_code=404, detail='Проект не найден или уже активен.')
-    return RedirectResponse(url='/generation-history', status_code=status.HTTP_303_SEE_OTHER)
+    return RedirectResponse(url='/app/generation-history', status_code=status.HTTP_303_SEE_OTHER)
 
 
-@router.get('/projects/{project_slug}', response_class=HTMLResponse)
-async def project_editor_page(request: Request, project_slug: str) -> HTMLResponse:
+@router.get('/projects/{project_slug}')
+async def project_editor_page(request: Request, project_slug: str) -> RedirectResponse:
     auth_redirect = redirect_auth(request)
     if auth_redirect:
         return auth_redirect
-    user_id = int(request.session['user_id'])
-    project = project_or_404(user_id, project_slug)
-    tokens = project_service.load_tokens(user_id, project_slug)
-    is_new_project_flow = request.query_params.get('new') == '1'
-    context = {
-        'request': request,
-        'project': project,
-        'is_new_project_flow': is_new_project_flow,
-        'tokens_json': json.dumps(tokens, ensure_ascii=False),
-        'user_email': request.session.get('user_email') or '',
-        'user_initial': ((request.session.get('user_name') or '?')[:1]).upper(),
-        'project_refs': tokens.get('references', {}).get('style_images', []),
-    }
-    return templates.TemplateResponse('pages/project_editor.html', context)
+    project_or_404(int(request.session['user_id']), project_slug)
+    return redirect_to_react(request, f'/projects/{project_slug}')
 
 
 @router.post('/projects/{project_slug}/save')
@@ -404,33 +397,14 @@ async def serve_assets(brand_id: str, relpath: str):
         raise HTTPException(status_code=404, detail='Файл не найден.')
     return FileResponse(file_path, headers=headers)
 
-@router.get('/projects/{project_slug}/results', response_class=HTMLResponse)
-async def project_results_page(request: Request, project_slug: str) -> HTMLResponse:
+@router.get('/projects/{project_slug}/results')
+async def project_results_page(request: Request, project_slug: str) -> RedirectResponse:
     auth_redirect = redirect_auth(request)
     if auth_redirect:
         return auth_redirect
 
-    user_id = int(request.session['user_id'])
-    project = project_or_404(user_id, project_slug)
-    tokens = project_service.load_tokens(user_id, project_slug)
-    brand_id = (tokens.get('brand_id') or project.brand_id or '').strip()
-    if not brand_id:
-        raise HTTPException(status_code=400, detail='У проекта не указан brand_id.')
-    active_job = generation_jobs.get_active_job_for_project(user_id=user_id, project_slug=project_slug)
-
-    context = {
-        'request': request,
-        'project': project,
-        'user_email': request.session.get('user_email') or '',
-        'user_initial': ((request.session.get('user_name') or '?')[:1]).upper(),
-        'palette_items': _palette_items_from_tokens(tokens),
-        'logos': _scan_asset_group(brand_id, 'logos', ('.png', '.svg', '.jpg', '.jpeg')),
-        'icons': _scan_asset_group(brand_id, 'icons', ('.png', '.svg', '.jpg', '.jpeg')),
-        'patterns': _scan_asset_group(brand_id, 'patterns', ('.png', '.svg', '.jpg', '.jpeg')),
-        'illustrations': _scan_asset_group(brand_id, 'illustrations', ('.png', '.svg', '.jpg', '.jpeg')),
-        'active_generation_job_id': (active_job or {}).get('id') if active_job else '',
-    }
-    return templates.TemplateResponse(request, 'pages/generation_results.html', context)
+    project_or_404(int(request.session['user_id']), project_slug)
+    return redirect_to_react(request, f'/projects/{project_slug}/results')
 
 
 @router.get('/projects/{project_slug}/downloads/{kind}')

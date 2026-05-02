@@ -4,7 +4,7 @@
 
 На текущем этапе уже реализованы:
 
-- многостраничный веб-интерфейс на **FastAPI + Jinja2 + StaticFiles**
+- веб-интерфейс на **React + TypeScript** с backend на **FastAPI**
 - регистрация, вход и выход пользователей
 - хранение пользователей и проектов в локальной **SQLite** базе
 - личный кабинет пользователя с разделом **«Мои проекты»**
@@ -60,13 +60,11 @@ kityourbrand_web/
 │   │   ├── manifest_service.py
 │   │   ├── project_service.py
 │   │   └── user_service.py
-│   ├── static/
-│   │   ├── css/
-│   │   └── js/
-│   ├── templates/
-│   │   ├── partials/
-│   │   └── pages/
 │   └── data/
+├── frontend/
+│   ├── public/
+│   ├── src/
+│   └── dist/
 ├── providers/
 │   ├── brandkit_recraft/
 │   ├── brandkit_seedream/
@@ -240,12 +238,12 @@ out/
 ## Используемые технологии
 
 - **FastAPI**
-- **Jinja2**
+- **React**
+- **TypeScript**
 - **SQLite**
 - **passlib + bcrypt**
 - **Pillow**
 - **subprocess** для оркестрации CLI-провайдеров
-- **vanilla JavaScript** для фронтенд-логики
 
 ## Краткое резюме
 

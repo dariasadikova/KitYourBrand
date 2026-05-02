@@ -86,21 +86,21 @@ img {
 .brand-mark {
     display: inline-flex;
     align-items: center;
-    gap: 14px;
+    gap: 12px;
     font-weight: 600;
     letter-spacing: -0.02em;
 }
 
 .brand-mark__logo {
     width: auto;
-    height: 28px;
+    height: 24px;
     display: block;
     object-fit: contain;
     flex-shrink: 0;
 }
 
 .brand-mark__text {
-    font-size: 24px;
+    font-size: 21px;
     line-height: 1;
 }
 
@@ -332,7 +332,7 @@ img {
     color: #fff;
     font-weight: 600;
     letter-spacing: -0.025em;
-    font-size: 24px;
+    font-size: 21px;
 }
 
 .landing-shell .btn-outline {
@@ -405,6 +405,29 @@ img {
     right: -140px;
     top: 16%;
     background: rgba(81, 112, 120, 0.42);
+}
+
+.landing-shell .hero-bg__dots {
+    position: absolute;
+    width: 350px;
+    height: 350px;
+    border-radius: 50%;
+    opacity: 0.4;
+    background-image: radial-gradient(circle, rgba(176, 184, 197, 0.72) 1.2px, transparent 1.2px);
+    background-size: 8px 8px;
+    -webkit-mask-image: radial-gradient(circle, rgba(0, 0, 0, 1) 30%, rgba(0, 0, 0, 0) 78%);
+    mask-image: radial-gradient(circle, rgba(0, 0, 0, 1) 30%, rgba(0, 0, 0, 0) 78%);
+    filter: blur(0.2px);
+}
+
+.landing-shell .hero-bg__dots--left {
+    left: -130px;
+    top: 10%;
+}
+
+.landing-shell .hero-bg__dots--right {
+    right: -70px;
+    top: 27%;
 }
 
 @keyframes hero-orb-pulse {
@@ -626,14 +649,14 @@ img {
 
 .landing-shell .site-footer .brand-mark__text {
     color: #fff;
-    font-size: 24px;
+    font-size: 21px;
     font-weight: 600;
     letter-spacing: -0.025em;
 }
 
 .brand-mark__logo--footer {
     width: auto;
-    height: 28px;
+    height: 24px;
 }
 
 .stub-page {
@@ -752,11 +775,11 @@ img {
 
 .register-brand .brand-mark__logo--small {
     width: auto;
-    height: 20px;
+    height: 18px;
 }
 
 .register-brand__text {
-    font-size: 13px;
+    font-size: 12px;
     line-height: 1;
 }
 
@@ -928,16 +951,16 @@ img {
     }
 
     .page-dashboard .dashboard-main {
-        padding: 10px 16px 28px;
+        padding: 0 16px 28px;
     }
 
     .page-dashboard .dashboard-main.project-main,
     .page-dashboard .dashboard-main.results-main {
-        padding: 20px 16px 28px;
+        padding: 0 16px 28px;
     }
 
     .page-dashboard .dashboard-content {
-        padding-top: 6px;
+        padding-top: 0;
     }
 
     .page-dashboard .dashboard-head {
@@ -1092,12 +1115,12 @@ img {
 }
 
 .dashboard-brand--header .brand-mark__logo {
-    height: 28px;
+    height: 24px;
     width: auto;
 }
 
 .dashboard-brand--header .brand-mark__text {
-    font-size: 24px;
+    font-size: 21px;
 }
 
 .dashboard-page-header__actions {
@@ -1135,7 +1158,7 @@ img {
 .dashboard-brand {
     display: inline-flex;
     align-items: center;
-    gap: 14px;
+    gap: 12px;
     font-weight: 600;
     letter-spacing: 0.02em;
     margin-left: 8px;
@@ -1195,25 +1218,37 @@ img {
 }
 
 .page-dashboard .dashboard-main {
-    padding: 12px 48px 32px 36px;
+    padding: 36px 48px 32px 36px;
 }
 
 .page-dashboard .dashboard-main.project-main,
 .page-dashboard .dashboard-main.results-main {
-    padding: 24px 48px 32px 36px;
+    padding: 36px 48px 32px 36px;
 }
 
 .page-dashboard .dashboard-content {
-    padding-top: 8px;
+    padding-top: 0;
 }
 
 .page-dashboard .dashboard-head {
     margin-bottom: 32px;
+    /* flex-start: large h1 + 48px buttons otherwise “meet” at wrong optical height */
+    align-items: flex-start;
 }
 
-.page-dashboard .dashboard-head h1 {
-    transform: translateY(-4px);
+.page-dashboard .dashboard-head h1,
+.page-dashboard .profile-page__head h1,
+.page-dashboard .results-page__head h1,
+.page-dashboard .project-page-head h1,
+.page-dashboard .generation-history-head h1 {
+    margin: 0;
+    font-size: clamp(2rem, 3vw, 3rem);
+    line-height: 1.06;
+    letter-spacing: -0.04em;
+    font-weight: 700;
+    margin-top: -0.1em;
 }
+
 
 .dashboard-topbar {
     min-height: 54px;
@@ -1279,14 +1314,40 @@ img {
 .dashboard-userpill__avatar {
     width: 28px;
     height: 28px;
-    display: inline-flex;
-    align-items: center;
-    justify-content: center;
+    min-width: 28px;
+    display: inline-grid;
+    place-items: center;
     border-radius: 999px;
     background: var(--primary);
     color: white;
-    font-size: 0.85rem;
+    padding: 0;
+    box-sizing: border-box;
+    overflow: hidden;
+    flex-shrink: 0;
+}
+
+/* Initial letter: inner box + optical nudge — Cyrillic caps often sit low/right in circular UI fonts */
+.dashboard-userpill__initial {
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    width: 100%;
+    height: 100%;
+    margin: 0;
+    padding: 0;
+    font-size: 0.8rem;
     font-weight: 700;
+    line-height: 1;
+    letter-spacing: 0;
+    font-kerning: normal;
+    transform: translate(-0.01em, -0.15em);
+}
+
+.dashboard-userpill__avatar-img {
+    width: 100%;
+    height: 100%;
+    object-fit: cover;
+    display: block;
 }
 
 .dashboard-content {
@@ -1383,17 +1444,17 @@ img {
 .brand-mark--dashboard-footer {
     display: inline-flex;
     align-items: center;
-    gap: 12px;
+    gap: 10px;
     font-weight: 600;
 }
 
 .brand-mark--dashboard-footer .brand-mark__text {
     color: #fff;
-    font-size: 24px;
+    font-size: 21px;
 }
 
 .brand-mark--dashboard-footer .brand-mark__logo {
-    height: 28px;
+    height: 24px;
     width: auto;
 }
 
@@ -1528,14 +1589,7 @@ img {
     font-weight: 700;
 }
 .project-main { padding-bottom: 80px; }
-.project-editor { padding: 8px 30px 52px; }
-.page-dashboard .project-page-head h1 {
-    margin: 0;
-    font-size: clamp(2rem, 3vw, 3rem);
-    line-height: 1.08;
-    letter-spacing: -0.04em;
-    font-weight: 700;
-}
+.project-editor { padding: 2px 30px 52px; }
 
 .page-dashboard .project-page-head p {
     margin: 14px 0 0;
@@ -2138,15 +2192,7 @@ img {
 }
 
 .results-page {
-    padding: 8px 30px 52px;
-}
-
-.page-dashboard .results-page__head h1 {
-    margin: 0;
-    font-size: clamp(2rem, 3vw, 3rem);
-    line-height: 1.08;
-    letter-spacing: -0.04em;
-    font-weight: 700;
+    padding: 2px 30px 52px;
 }
 
 .page-dashboard .results-page__head p {
@@ -2161,7 +2207,7 @@ img {
 }
 
 .profile-page {
-    padding: 8px 30px 52px;
+    padding: 2px 30px 52px;
     display: flex;
     flex-direction: column;
     gap: 20px;
@@ -2191,14 +2237,6 @@ img {
     border-color: transparent;
     color: #22c55e;
     padding: 0;
-}
-
-.page-dashboard .profile-page__head h1 {
-    margin: 0;
-    font-size: clamp(2rem, 3vw, 3rem);
-    line-height: 1.08;
-    letter-spacing: -0.04em;
-    font-weight: 700;
 }
 
 .page-dashboard .profile-page__head p {
@@ -2554,14 +2592,6 @@ img {
     display: inline-flex;
     align-items: center;
     gap: 16px;
-}
-
-.page-dashboard .generation-history-head h1 {
-    margin: 0;
-    font-size: clamp(2rem, 3vw, 3rem);
-    line-height: 1.08;
-    letter-spacing: -0.04em;
-    font-weight: 700;
 }
 
 .generation-history-info-btn {
@@ -3119,5 +3149,205 @@ body.generation-history-modal-open {
     .results-export__actions .btn {
         width: 100%;
         justify-content: center;
+    }
+}
+
+/* Auth screens from the React UI draft. Scoped to login/register only. */
+.auth-screen {
+    position: relative;
+    min-height: 100vh;
+    overflow: hidden;
+    background: #2e3439;
+}
+
+.auth-backdrop-content {
+    position: absolute;
+    inset: 0;
+    display: flex;
+    align-items: flex-start;
+    justify-content: center;
+    padding-top: 180px;
+}
+
+.auth-backdrop-title {
+    margin: 0;
+    display: flex;
+    flex-direction: column;
+    align-items: center;
+    gap: 0;
+    font-size: clamp(2.8rem, 6vw, 4.2rem);
+    line-height: 1.08;
+    letter-spacing: -0.025em;
+}
+
+.auth-backdrop-title-accent {
+    background: linear-gradient(90deg, #67ccff, #00aeff 40%, #0097dd);
+    -webkit-background-clip: text;
+    background-clip: text;
+    color: transparent;
+}
+
+.auth-backdrop-blur {
+    position: absolute;
+    inset: 0;
+    background: rgba(0, 0, 0, 0.5);
+    backdrop-filter: blur(10px);
+}
+
+.auth-modal {
+    position: relative;
+    z-index: 1;
+    width: min(448px, calc(100vw - 2rem));
+    margin: 50vh auto 0;
+    transform: translateY(-50%);
+    border-radius: 24px;
+    background: #fff;
+    padding: 40px;
+    color: #1a0e32;
+}
+
+.auth-modal-close {
+    position: absolute;
+    top: 14px;
+    right: 14px;
+    width: 40px;
+    height: 40px;
+    display: inline-flex;
+    align-items: center;
+    justify-content: center;
+    color: #6d7282;
+    background: transparent;
+    font-size: 1.8rem;
+    line-height: 1;
+    transition: color 0.18s ease;
+}
+
+.auth-modal-close:hover {
+    color: #1a1433;
+}
+
+.auth-modal-brand {
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    gap: 4px;
+    margin-bottom: 10px;
+    color: #000;
+    font-size: 14px;
+    font-weight: 600;
+}
+
+.auth-modal-brand-logo {
+    width: 37px;
+    height: 18px;
+    object-fit: contain;
+}
+
+.auth-modal-title {
+    margin: 0 0 24px;
+    text-align: center;
+    color: #1a0e32;
+    font-size: 32px;
+    line-height: 1.1;
+}
+
+.auth-modal-form {
+    display: flex;
+    flex-direction: column;
+    gap: 16px;
+}
+
+.auth-input-wrap {
+    display: flex;
+    align-items: center;
+    gap: 12px;
+    min-height: 52px;
+    padding: 0 16px;
+    border-radius: 14px;
+    border: 1px solid rgba(0, 0, 0, 0.1);
+    background: rgba(0, 0, 0, 0.05);
+}
+
+.auth-input-icon {
+    width: 20px;
+    height: 20px;
+    color: #99a1af;
+    flex-shrink: 0;
+}
+
+.auth-input-icon svg {
+    width: 100%;
+    height: 100%;
+}
+
+.auth-input-wrap input {
+    flex: 1;
+    min-width: 0;
+    border: 0;
+    outline: none;
+    background: transparent;
+    color: #1a0e32;
+    font-size: 16px;
+}
+
+.auth-input-wrap input::placeholder {
+    color: #99a1af;
+}
+
+.auth-submit-btn {
+    width: 100%;
+    min-height: 44px;
+    border-radius: 8px;
+    margin-top: 4px;
+    background: #00aeff;
+    color: #000;
+    border: 0;
+    font-size: 1rem;
+}
+
+.auth-submit-btn:hover {
+    background: #0097dd;
+}
+
+.auth-switch {
+    margin: 28px 0 0;
+    text-align: center;
+    color: #000;
+    font-size: 16px;
+}
+
+.auth-switch a {
+    color: #00aeff;
+    font-weight: 600;
+}
+
+.auth-modal .error {
+    color: #ff0000;
+    font-size: 0.9rem;
+    margin-bottom: 0.75rem;
+}
+
+.auth-modal .callout {
+    border-radius: 8px;
+    padding: 0.65rem 0.85rem;
+    font-size: 0.9rem;
+    margin-bottom: 0.85rem;
+    line-height: 1.4;
+}
+
+.auth-modal .callout-success {
+    color: #0b3d1f;
+    background: #d1fae5;
+    border: 1px solid #34d399;
+}
+
+@media (max-width: 760px) {
+    .auth-modal {
+        width: min(420px, calc(100vw - 1.5rem));
+        padding: 36px 24px 28px;
+    }
+
+    .auth-backdrop-title {
+        font-size: clamp(2.4rem, 12vw, 3.6rem);
     }
 }
