@@ -6,13 +6,10 @@ from fastapi import APIRouter, HTTPException, Query, Request, status
 from fastapi.responses import JSONResponse
 from pydantic import BaseModel
 
-from app.core.settings import settings
+from app.db import project_service
 from app.services.generation_jobs import generation_jobs
-from app.services.project_service import ProjectService
 
 router = APIRouter(prefix='/api/generation-history', tags=['api-generation-history'])
-project_service = ProjectService(settings.data_dir / 'app.db', settings.data_dir / 'projects')
-project_service.init_db()
 
 GENERATION_HISTORY_PER_PAGE = 10
 MSK_TZ = timezone(timedelta(hours=3))

@@ -1,11 +1,22 @@
 import os
 import re
+import sys
 import time
-import requests
+from pathlib import Path
 from typing import Optional, List, Tuple
 import json as _json
 
+import httpx
+import requests
 from cli_log import info, warn, error, debug
+
+_KIT = (os.environ.get('KITYOURBRAND_PROJECT_ROOT') or '').strip()
+if not _KIT:
+    _KIT = str(Path(__file__).resolve().parents[4])
+if _KIT not in sys.path:
+    sys.path.insert(0, _KIT)
+
+from app.integrations.provider_http import request_with_retries
 
 
 class RecraftClient:
@@ -37,7 +48,15 @@ class RecraftClient:
 
         data = {"style": style}
         try:
-            r = requests.post(url, headers=self.headers, files=mfiles, data=data, timeout=60)
+            r = request_with_retries(
+                'POST',
+                url,
+                headers=self.headers,
+                files=mfiles,
+                data=data,
+                timeout=60.0,
+                label='recraft.create_style',
+            )
             try:
                 r.raise_for_status()
             except Exception:
@@ -94,11 +113,13 @@ class RecraftClient:
         )
         debug("generate: prompt (preview): %s", prompt_preview)
 
-        r = requests.post(
+        r = request_with_retries(
+            'POST',
             url,
             headers={**self.headers, "Content-Type": "application/json"},
             json=body,
-            timeout=120,
+            timeout=120.0,
+            label='recraft.generate',
         )
         try:
             r.raise_for_status()
@@ -289,10 +310,12 @@ class RecraftClient:
         # Стартовый range-запрос: получаем первые байты и общий размер файла
         first_end = chunk_size - 1
         try:
-            r0 = requests.get(
+            r0 = request_with_retries(
+                'GET',
                 url,
                 headers={"Range": f"bytes=0-{first_end}"},
-                timeout=(10, 60),
+                timeout=httpx.Timeout(60.0, connect=10.0),
+                label='recraft.download.range_init',
             )
         except Exception as e:
             warn("download_asset: стартовый range-запрос не удался, fallback: %s", e)
@@ -350,10 +373,13 @@ class RecraftClient:
                 last_exc = None
                 for attempt in range(1, max_retries_per_chunk + 1):
                     try:
-                        rr = requests.get(
+                        rr = request_with_retries(
+                            'GET',
                             url,
                             headers={"Range": f"bytes={start}-{end}"},
-                            timeout=(10, 60),
+                            timeout=httpx.Timeout(60.0, connect=10.0),
+                            label='recraft.download.chunk',
+                            max_retries=0,
                         )
                         rr.raise_for_status()
 

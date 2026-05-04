@@ -169,6 +169,7 @@ class GenerationJobStore:
                     base_host,
                     progress_callback=report,
                     should_cancel=lambda: self.is_cancel_requested(job_id),
+                    generation_job_id=job_id,
                 )
                 if self.is_cancel_requested(job_id):
                     raise GenerationCancelledError('Генерация прервана пользователем.')
@@ -193,6 +194,18 @@ class GenerationJobStore:
                         error_message=(result.get('error') or None) if has_errors else None,
                         error_hint=(result.get('error_hint') or None) if has_errors else None,
                     )
+                    if has_errors:
+                        project_service.record_error_log(
+                            user_id=int(user_id),
+                            project_slug=str(project_slug),
+                            job_id=job_id,
+                            source='generation:partial',
+                            message=str(result.get('error') or 'Часть провайдеров завершилась с ошибкой'),
+                            detail={
+                                'hint': result.get('error_hint'),
+                                'provider_errors': result.get('provider_errors'),
+                            },
+                        )
             except Exception as exc:
                 if isinstance(exc, GenerationCancelledError):
                     self.update(
@@ -211,6 +224,16 @@ class GenerationJobStore:
                             'failed',
                             error_message='Генерация прервана пользователем.',
                             error_hint='Откройте проект, исправьте параметры и запустите генерацию снова.',
+                        )
+                        project_service.record_error_log(
+                            user_id=int(user_id),
+                            project_slug=str(project_slug),
+                            job_id=job_id,
+                            source='generation:cancel',
+                            message='Генерация прервана пользователем.',
+                            detail={
+                                'hint': 'Откройте проект, исправьте параметры и запустите генерацию снова.',
+                            },
                         )
                     return
                 tb = traceback.format_exc()
@@ -258,6 +281,15 @@ class GenerationJobStore:
                         'failed',
                         error_message=user_msg or 'Ошибка генерации',
                         error_hint=hint,
+                    )
+                    fp = str(failed_provider).strip() if failed_provider else 'unknown'
+                    project_service.record_error_log(
+                        user_id=int(user_id),
+                        project_slug=str(project_slug),
+                        job_id=job_id,
+                        source=f'generation:{fp}',
+                        message=user_msg or 'Ошибка генерации',
+                        detail={'hint': hint, 'traceback': tb[-4000:]},
                     )
 
         thread = threading.Thread(target=runner, daemon=True)

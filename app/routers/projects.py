@@ -3,20 +3,18 @@ from __future__ import annotations
 import zipfile
 from pathlib import Path
 
-from fastapi import APIRouter, File, Form, HTTPException, Request, Response, UploadFile, status
+from fastapi import APIRouter, File, HTTPException, Request, Response, UploadFile, status
 from fastapi.responses import FileResponse, JSONResponse, RedirectResponse
 
 from app.schemas.palette import PaletteSuggestRequest, PaletteSuggestResponse
 from app.core.paths import OUT_DIR
 from app.core.settings import settings
+from app.db import project_service
 from app.services.generation_service import GenerationService
 from app.services.generation_jobs import generation_jobs
 from app.services.palette_service import PaletteService
-from app.services.project_service import ProjectService
 
 router = APIRouter()
-project_service = ProjectService(settings.data_dir / 'app.db', settings.data_dir / 'projects')
-project_service.init_db()
 generation_service = GenerationService(project_service)
 palette_service = PaletteService()
 
@@ -134,34 +132,6 @@ def _build_download_zip(user_id: int, project_slug: str, brand_id: str, kind: st
                 zf.write(tokens_path, arcname='tokens.json')
 
     return zip_path
-
-@router.post('/projects/create')
-async def create_project(request: Request, name: str = Form('Новый проект')):
-    auth_redirect = redirect_auth(request)
-    if auth_redirect:
-        return auth_redirect
-    user_id = int(request.session['user_id'])
-    project = project_service.create_project(user_id, name)
-    return RedirectResponse(url=f'/app/projects/{project.slug}?new=1', status_code=status.HTTP_303_SEE_OTHER)
-
-
-@router.post('/projects/{project_slug}/delete')
-async def delete_project(request: Request, project_slug: str):
-    user_id = require_auth(request)
-    project_or_404(user_id, project_slug)
-    project_service.delete_project(user_id, project_slug)
-    return RedirectResponse(url='/app/dashboard', status_code=status.HTTP_303_SEE_OTHER)
-
-
-@router.post('/projects/{project_slug}/restore')
-async def restore_project(request: Request, project_slug: str):
-    auth_redirect = redirect_auth(request)
-    if auth_redirect:
-        return auth_redirect
-    user_id = int(request.session['user_id'])
-    if not project_service.restore_project(user_id, project_slug):
-        raise HTTPException(status_code=404, detail='Проект не найден или уже активен.')
-    return RedirectResponse(url='/app/generation-history', status_code=status.HTTP_303_SEE_OTHER)
 
 
 @router.get('/projects/{project_slug}')
@@ -293,11 +263,22 @@ async def generate_figma(request: Request, project_slug: str) -> JSONResponse:
 
     base_host = str(request.base_url).rstrip('/').replace('127.0.0.1', 'localhost')
     try:
-        _, counts, export_path = generation_service.build_and_save_figma_manifest(
+        manifest, counts, export_path = generation_service.build_and_save_figma_manifest(
             user_id,
             project_slug,
             brand_id,
             base_host,
+        )
+        try:
+            export_rel = str(export_path.relative_to(project_service.project_dir(user_id, project_slug)))
+        except ValueError:
+            export_rel = export_path.name
+        project_service.record_figma_asset_manifest(
+            user_id,
+            project_slug,
+            manifest=manifest,
+            export_rel_path=export_rel,
+            job_id=None,
         )
     except Exception as exc:
         return JSONResponse({'ok': False, 'error': str(exc)}, status_code=400)

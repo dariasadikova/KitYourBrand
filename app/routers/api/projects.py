@@ -4,15 +4,10 @@ from fastapi import APIRouter, File, HTTPException, Request, UploadFile, status
 from fastapi.responses import JSONResponse
 from pydantic import BaseModel
 
-from app.core.settings import settings
-from app.services.auth_service import AuthService
-from app.services.project_service import ProjectRecord, ProjectService
+from app.db import auth_service, project_service
+from app.services.project_service import ProjectRecord
 
 router = APIRouter(prefix='/api/projects', tags=['api-projects'])
-auth_service = AuthService(settings.data_dir / 'app.db')
-auth_service.init_db()
-project_service = ProjectService(settings.data_dir / 'app.db', settings.data_dir / 'projects')
-project_service.init_db()
 
 
 class CreateProjectPayload(BaseModel):

@@ -3,7 +3,7 @@ import { Link, Navigate, Route, Routes, useNavigate, useParams, useSearchParams 
 import { cancelGenerationJob, deleteGenerationHistorySelected, getGenerationHistory } from './services/generationHistoryApi'
 import { getCurrentSession, login, logout, register } from './services/authApi'
 import { getProfile, updateProfile } from './services/profileApi'
-import { createProject, deleteProject, listProjects } from './services/projectsApi'
+import { createProject, deleteProject, listProjects, restoreProject } from './services/projectsApi'
 import {
   deleteProjectEditorRef,
   getProjectEditor,
@@ -653,6 +653,16 @@ function GenerationHistoryPage() {
     }
   }
 
+  async function handleRestoreProject(projectSlug: string) {
+    setError('')
+    try {
+      await restoreProject(projectSlug)
+      await loadHistory(history?.page || 1)
+    } catch (err) {
+      setError(err instanceof Error ? err.message : 'Не удалось восстановить проект.')
+    }
+  }
+
   return (
     <section className="dashboard-content generation-history-page">
       <div className="dashboard-head generation-history-head">
@@ -724,7 +734,7 @@ function GenerationHistoryPage() {
                       </td>
                       <td>{renderHistoryStatus(row, setErrorRow)}</td>
                       <td className="generation-history-table__duration">{row.duration_display}</td>
-                      <td className="generation-history-table__actions">{renderHistoryAction(row, handleCancel)}</td>
+                      <td className="generation-history-table__actions">{renderHistoryAction(row, handleCancel, handleRestoreProject)}</td>
                     </tr>
                   ))}
                 </tbody>
@@ -809,7 +819,11 @@ function renderHistoryStatus(row: GenerationHistoryRow, openError: (row: Generat
   )
 }
 
-function renderHistoryAction(row: GenerationHistoryRow, cancel: (jobId: string) => void) {
+function renderHistoryAction(
+  row: GenerationHistoryRow,
+  cancel: (jobId: string) => void,
+  restoreProjectSlug: (slug: string) => void,
+) {
   if (row.action === 'cancel') {
     return (
       <button type="button" className="btn btn-outline btn-inline generation-history-action-btn generation-history-btn-cancel" onClick={() => cancel(row.job_id)}>
@@ -822,9 +836,13 @@ function renderHistoryAction(row: GenerationHistoryRow, cancel: (jobId: string) 
   }
   if (row.action === 'restore') {
     return (
-      <form action={`/projects/${row.project_slug}/restore`} method="post" className="generation-history-action-form">
-        <button type="submit" className="btn btn-inline generation-history-btn-restore">Восстановить</button>
-      </form>
+      <button
+        type="button"
+        className="btn btn-inline generation-history-btn-restore"
+        onClick={() => restoreProjectSlug(row.project_slug)}
+      >
+        Восстановить
+      </button>
     )
   }
   return <Link className="btn btn-outline btn-inline generation-history-action-btn generation-history-btn-repeat" to={`/projects/${row.project_slug}`}>Повторить</Link>
@@ -1004,7 +1022,7 @@ function ResultsPage({ projectSlug }: { projectSlug: string }) {
               </summary>
               <div className="results-manifest__content">
                 <p className="results-export__subtitle">Dev-блок: ручная пересборка Figma manifest при отладке.</p>
-                {manifestUrl ? <a href={manifestUrl} className="btn btn-secondary">Скачать manifest</a> : null}
+                {manifestUrl ? <a href={manifestUrl} className="btn results-manifest__download-link">Скачать manifest</a> : null}
               </div>
             </details>
             <div className="results-export__actions">

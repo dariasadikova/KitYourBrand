@@ -4,13 +4,10 @@ from fastapi import APIRouter, HTTPException, Request, status
 from fastapi.responses import JSONResponse
 
 from app.core.paths import OUT_DIR
-from app.core.settings import settings
+from app.db import project_service
 from app.services.generation_jobs import generation_jobs
-from app.services.project_service import ProjectService
 
 router = APIRouter(prefix='/api/projects', tags=['api-results'])
-project_service = ProjectService(settings.data_dir / 'app.db', settings.data_dir / 'projects')
-project_service.init_db()
 
 
 def _require_user_id(request: Request) -> int:

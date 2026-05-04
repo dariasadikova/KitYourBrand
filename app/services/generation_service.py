@@ -66,6 +66,23 @@ class GenerationService:
         ]:
             path.mkdir(parents=True, exist_ok=True)
 
+    @staticmethod
+    def _provider_subprocess_env() -> dict[str, str]:
+        """Переменные для CLI провайдеров: корень проекта и ключи из настроек / .env."""
+        from app.core.settings import settings
+
+        env = dict(os.environ)
+        env['KITYOURBRAND_PROJECT_ROOT'] = str(settings.project_root.resolve())
+        if settings.recraft_api_key:
+            env['RECRAFT_API_KEY'] = settings.recraft_api_key
+        if settings.openrouter_api_key:
+            env['OPENROUTER_API_KEY'] = settings.openrouter_api_key
+        if settings.openrouter_referer:
+            env['OPENROUTER_REFERER'] = settings.openrouter_referer
+        if settings.openrouter_title:
+            env['OPENROUTER_TITLE'] = settings.openrouter_title
+        return env
+
     def convert_webp_to_png_in_dir(self, dir_path: Path) -> int:
         if not dir_path.exists():
             return 0
@@ -289,6 +306,7 @@ class GenerationService:
         proc = subprocess.Popen(
             cmd,
             cwd=str(cwd),
+            env=self._provider_subprocess_env(),
             stdout=subprocess.PIPE,
             stderr=subprocess.PIPE,
             text=True,
@@ -475,6 +493,7 @@ class GenerationService:
         base_host: str,
         progress_callback: Callable[[int, str, str | None, str | None, dict[str, Any] | None], None] | None = None,
         should_cancel: Callable[[], bool] | None = None,
+        generation_job_id: str | None = None,
     ) -> dict[str, Any]:
         def report(
             progress: int,
@@ -702,12 +721,31 @@ class GenerationService:
         report(90, 'Постобработка изображений WEBP → PNG')
         webp_converted = self.convert_webp_to_png_for_brand(brand_id)
 
-        _, counts, _ = self.build_and_save_figma_manifest(
+        manifest, counts, export_path = self.build_and_save_figma_manifest(
             user_id,
             project_slug,
             brand_id,
             base_host,
             progress_callback=progress_callback,
+        )
+
+        try:
+            export_rel = str(export_path.relative_to(self.project_service.project_dir(user_id, project_slug)))
+        except ValueError:
+            export_rel = export_path.name
+        self.project_service.record_figma_asset_manifest(
+            user_id,
+            project_slug,
+            manifest=manifest,
+            export_rel_path=export_rel,
+            job_id=generation_job_id,
+        )
+        self.project_service.record_generated_assets_for_brand(
+            user_id,
+            project_slug,
+            brand_id,
+            self.out_root,
+            job_id=generation_job_id,
         )
 
         report(100, 'Генерация завершена')

@@ -2898,11 +2898,6 @@ body.generation-history-modal-open {
     font-size: 0.92rem;
 }
 
-.generation-history-action-form {
-    display: inline;
-    margin: 0;
-}
-
 .generation-history-action-btn {
     display: inline-flex;
     align-items: center;
@@ -3081,23 +3076,24 @@ body.generation-history-modal-open {
 
 .results-manifest__content {
     padding: 0 14px 14px;
-    display: grid;
-    gap: 10px;
+    display: flex;
+    flex-direction: column;
+    align-items: flex-start;
+    gap: 16px;
 }
 
-#results-figma-download-link {
-    justify-self: start;
-    width: auto;
-    min-height: 44px;
-    padding: 0 16px;
-    border-radius: 12px;
+.results-manifest__content .results-export__subtitle {
+    width: 100%;
+}
+
+.results-manifest__download-link {
+    flex-shrink: 0;
     background: #ffffff;
     color: #0a0a0a;
     border: 1px solid #ffffff;
-    margin-top: 12px;
 }
 
-#results-figma-download-link:hover {
+.results-manifest__download-link:hover {
     background: #f3f4f6;
     color: #0a0a0a;
     border-color: #f3f4f6;

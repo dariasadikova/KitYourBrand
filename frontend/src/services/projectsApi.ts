@@ -16,3 +16,7 @@ export function createProject(name = 'Новый проект'): Promise<CreateP
 export function deleteProject(projectSlug: string): Promise<{ ok: boolean }> {
   return apiClient<{ ok: boolean }>(`/api/projects/${projectSlug}/delete`, { method: 'POST' })
 }
+
+export function restoreProject(projectSlug: string): Promise<{ ok: boolean }> {
+  return apiClient<{ ok: boolean }>(`/api/projects/${projectSlug}/restore`, { method: 'POST' })
+}

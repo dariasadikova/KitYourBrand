@@ -7,11 +7,9 @@ from fastapi import APIRouter, File, Form, HTTPException, Request, UploadFile, s
 from fastapi.responses import JSONResponse
 
 from app.core.settings import settings
-from app.services.auth_service import AuthService
+from app.db import auth_service
 
 router = APIRouter(prefix='/api/profile', tags=['api-profile'])
-auth_service = AuthService(settings.data_dir / 'app.db')
-auth_service.init_db()
 
 PROFILE_AVATARS_DIR = settings.data_dir / 'profile_avatars'
 PROFILE_AVATARS_DIR.mkdir(parents=True, exist_ok=True)

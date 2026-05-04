@@ -4,6 +4,7 @@ from fastapi.staticfiles import StaticFiles
 from starlette.middleware.sessions import SessionMiddleware
 
 from app.core.settings import settings
+from app.db import project_service
 from app.routers import pages, projects
 from app.routers.api import auth as api_auth
 from app.routers.api import generation_history as api_generation_history
@@ -41,7 +42,7 @@ def create_app() -> FastAPI:
 
     @app.on_event("startup")
     async def mark_stale_generation_jobs():
-        pages.project_service.mark_abandoned_generation_jobs()
+        project_service.mark_abandoned_generation_jobs()
 
     @app.on_event("startup")
     async def debug_routes():

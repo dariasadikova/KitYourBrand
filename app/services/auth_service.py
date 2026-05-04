@@ -40,27 +40,14 @@ class AuthService:
 
     def init_db(self) -> None:
         with self._connect() as conn:
-            conn.execute(
-                """
-                CREATE TABLE IF NOT EXISTS users (
-                    id INTEGER PRIMARY KEY AUTOINCREMENT,
-                    name TEXT NOT NULL,
-                    email TEXT NOT NULL UNIQUE,
-                    password_hash TEXT NOT NULL,
-                    avatar_path TEXT,
-                    had_projects INTEGER NOT NULL DEFAULT 0,
-                    auth_provider TEXT NOT NULL DEFAULT 'local',
-                    is_active INTEGER NOT NULL DEFAULT 1,
-                    created_at TEXT NOT NULL
-                )
-                """
-            )
-            cols = conn.execute("PRAGMA table_info(users)").fetchall()
-            col_names = {str(col["name"]) for col in cols}
-            if "avatar_path" not in col_names:
-                conn.execute("ALTER TABLE users ADD COLUMN avatar_path TEXT")
-            if "had_projects" not in col_names:
-                conn.execute("ALTER TABLE users ADD COLUMN had_projects INTEGER NOT NULL DEFAULT 0")
+            cols = conn.execute('PRAGMA table_info(users)').fetchall()
+            if not cols:
+                return
+            col_names = {str(col['name']) for col in cols}
+            if 'avatar_path' not in col_names:
+                conn.execute('ALTER TABLE users ADD COLUMN avatar_path TEXT')
+            if 'had_projects' not in col_names:
+                conn.execute('ALTER TABLE users ADD COLUMN had_projects INTEGER NOT NULL DEFAULT 0')
             conn.commit()
 
     def email_exists(self, email: str) -> bool:

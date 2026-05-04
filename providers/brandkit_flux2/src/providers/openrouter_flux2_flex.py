@@ -1,9 +1,18 @@
 import base64
 import json
+import os
+import sys
 from dataclasses import dataclass
+from pathlib import Path
 from typing import Dict, List, Optional, Tuple
 
-import requests
+_KIT = (os.environ.get('KITYOURBRAND_PROJECT_ROOT') or '').strip()
+if not _KIT:
+    _KIT = str(Path(__file__).resolve().parents[4])
+if _KIT not in sys.path:
+    sys.path.insert(0, _KIT)
+
+from app.integrations.provider_http import request_with_retries
 
 
 @dataclass
@@ -90,11 +99,13 @@ class OpenRouterFluxFlexClient:
         if image_config:
             payload["image_config"] = image_config
 
-        r = requests.post(
+        r = request_with_retries(
+            'POST',
             self.base_url,
             headers=self._headers(req.referer, req.title),
-            data=json.dumps(payload),
-            timeout=req.timeout_secs,
+            json=payload,
+            timeout=float(req.timeout_secs),
+            label='openrouter.flux_flex',
         )
         if r.status_code >= 400:
             raise RuntimeError(f"OpenRouter error ({r.status_code}): {r.text[:1000]}")

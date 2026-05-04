@@ -4,12 +4,9 @@ from pydantic import BaseModel
 from fastapi import APIRouter, Request
 from fastapi.responses import JSONResponse
 
-from app.core.settings import settings
-from app.services.auth_service import AuthService
+from app.db import auth_service
 
 router = APIRouter(prefix='/api/auth', tags=['api-auth'])
-auth_service = AuthService(settings.data_dir / 'app.db')
-auth_service.init_db()
 
 
 class LoginPayload(BaseModel):

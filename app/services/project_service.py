@@ -1,6 +1,7 @@
 from __future__ import annotations
 
 import json
+import logging
 import re
 import shutil
 import sqlite3
@@ -48,6 +49,8 @@ DEFAULT_TOKENS = {
 
 ALLOWED_EXT = {".png", ".jpg", ".jpeg", ".webp", ".gif", ".bmp"}
 
+logger = logging.getLogger('kityourbrand.project')
+
 
 @dataclass(slots=True)
 class ProjectRecord:
@@ -78,45 +81,15 @@ class ProjectService:
 
     def init_db(self) -> None:
         with self._connect() as conn:
-            conn.execute(
-                """
-                CREATE TABLE IF NOT EXISTS projects (
-                    id INTEGER PRIMARY KEY AUTOINCREMENT,
-                    user_id INTEGER NOT NULL,
-                    slug TEXT NOT NULL UNIQUE,
-                    name TEXT NOT NULL,
-                    brand_id TEXT NOT NULL,
-                    created_at TEXT NOT NULL,
-                    updated_at TEXT NOT NULL
-                )
-                """
-            )
             cols = self._table_columns(conn, 'projects')
-            if 'deleted_at' not in cols:
+            if cols and 'deleted_at' not in cols:
                 conn.execute('ALTER TABLE projects ADD COLUMN deleted_at TEXT')
-            conn.execute(
-                """
-                CREATE TABLE IF NOT EXISTS generation_jobs_history (
-                    id INTEGER PRIMARY KEY AUTOINCREMENT,
-                    user_id INTEGER NOT NULL,
-                    job_id TEXT NOT NULL UNIQUE,
-                    project_id INTEGER,
-                    project_slug TEXT NOT NULL,
-                    project_name TEXT NOT NULL,
-                    status TEXT NOT NULL,
-                    started_at TEXT NOT NULL,
-                    finished_at TEXT,
-                    duration_seconds REAL,
-                    error_message TEXT,
-                    error_hint TEXT
-                )
-                """
-            )
             hist_cols = self._table_columns(conn, 'generation_jobs_history')
-            if 'error_message' not in hist_cols:
-                conn.execute('ALTER TABLE generation_jobs_history ADD COLUMN error_message TEXT')
-            if 'error_hint' not in hist_cols:
-                conn.execute('ALTER TABLE generation_jobs_history ADD COLUMN error_hint TEXT')
+            if hist_cols:
+                if 'error_message' not in hist_cols:
+                    conn.execute('ALTER TABLE generation_jobs_history ADD COLUMN error_message TEXT')
+                if 'error_hint' not in hist_cols:
+                    conn.execute('ALTER TABLE generation_jobs_history ADD COLUMN error_hint TEXT')
             conn.commit()
 
     def _slugify(self, value: str) -> str:
@@ -488,6 +461,146 @@ class ProjectService:
         refs['style_images'] = sorted(list(dict.fromkeys([str(x) for x in refs['style_images']])))
         return data
 
+    def insert_style_profile_version(
+        self,
+        user_id: int,
+        slug: str,
+        tokens: dict[str, Any],
+        *,
+        snapshot_path: str | None = None,
+    ) -> None:
+        """Сохраняет снимок tokens.json в style_profiles (версия ++)."""
+        try:
+            project = self.get_project(user_id, slug)
+            if project is None:
+                return
+            now = datetime.now(timezone.utc).isoformat()
+            payload_txt = json.dumps(tokens, ensure_ascii=False)
+            with self._connect() as conn:
+                row = conn.execute(
+                    'SELECT COALESCE(MAX(version), 0) AS v FROM style_profiles WHERE project_id = ?',
+                    (project.id,),
+                ).fetchone()
+                ver = int(row['v'] if row else 0) + 1
+                conn.execute(
+                    """
+                    INSERT INTO style_profiles (project_id, user_id, version, payload, snapshot_path, created_at)
+                    VALUES (?, ?, ?, ?, ?, ?)
+                    """,
+                    (project.id, user_id, ver, payload_txt, snapshot_path, now),
+                )
+                conn.commit()
+        except Exception as exc:
+            logger.warning('style_profiles insert skipped: %s', exc)
+
+    def record_generated_assets_for_brand(
+        self,
+        user_id: int,
+        project_slug: str,
+        brand_id: str,
+        out_root: Path,
+        *,
+        job_id: str | None = None,
+    ) -> int:
+        """Индексирует файлы в out/<provider>/<brand_id>/... в таблицу assets."""
+        try:
+            project = self.get_project(user_id, project_slug)
+            if not project or not brand_id:
+                return 0
+            now = datetime.now(timezone.utc).isoformat()
+            scan_ext = {'.png', '.svg', '.jpg', '.jpeg', '.webp'}
+            rows: list[tuple[Any, ...]] = []
+            for provider in ('recraft', 'seedream', 'flux'):
+                base = out_root / provider / brand_id
+                for kind in ('logos', 'icons', 'patterns', 'illustrations'):
+                    d = base / kind
+                    if not d.is_dir():
+                        continue
+                    for fp in sorted(d.iterdir()):
+                        if not fp.is_file() or fp.suffix.lower() not in scan_ext:
+                            continue
+                        storage = f'out/{provider}/{brand_id}/{kind}/{fp.name}'
+                        meta_txt = json.dumps({'brand_id': brand_id, 'relative': storage}, ensure_ascii=False)
+                        rows.append(
+                            (project.id, user_id, kind, provider, storage, fp.name, meta_txt, job_id, now)
+                        )
+            if not rows:
+                return 0
+            with self._connect() as conn:
+                conn.executemany(
+                    """
+                    INSERT INTO assets (
+                        project_id, user_id, kind, provider, storage_path, filename, meta, generation_job_id, created_at
+                    ) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?)
+                    """,
+                    rows,
+                )
+                conn.commit()
+            return len(rows)
+        except Exception as exc:
+            logger.warning('assets batch insert skipped: %s', exc)
+            return 0
+
+    def record_figma_asset_manifest(
+        self,
+        user_id: int,
+        project_slug: str,
+        *,
+        manifest: dict[str, Any],
+        export_rel_path: str,
+        job_id: str | None = None,
+    ) -> None:
+        try:
+            project = self.get_project(user_id, project_slug)
+            if not project:
+                return
+            now = datetime.now(timezone.utc).isoformat()
+            payload_txt = json.dumps(manifest, ensure_ascii=False)
+            with self._connect() as conn:
+                conn.execute(
+                    """
+                    INSERT INTO asset_manifests (
+                        project_id, user_id, kind, payload, storage_path, generation_job_id, created_at
+                    ) VALUES (?, ?, 'figma_plugin', ?, ?, ?, ?)
+                    """,
+                    (project.id, user_id, payload_txt, export_rel_path, job_id, now),
+                )
+                conn.commit()
+        except Exception as exc:
+            logger.warning('asset_manifests insert skipped: %s', exc)
+
+    def record_error_log(
+        self,
+        *,
+        user_id: int | None = None,
+        project_slug: str | None = None,
+        job_id: str | None = None,
+        source: str,
+        code: str | None = None,
+        message: str,
+        detail: dict[str, Any] | list | None = None,
+    ) -> None:
+        try:
+            now = datetime.now(timezone.utc).isoformat()
+            project_id: int | None = None
+            if user_id is not None and project_slug:
+                p = self.get_project(int(user_id), str(project_slug))
+                if p:
+                    project_id = p.id
+            detail_txt = json.dumps(detail, ensure_ascii=False) if detail is not None else None
+            with self._connect() as conn:
+                conn.execute(
+                    """
+                    INSERT INTO error_logs (
+                        user_id, project_id, generation_job_id, source, code, message, detail, created_at
+                    ) VALUES (?, ?, ?, ?, ?, ?, ?, ?)
+                    """,
+                    (user_id, project_id, job_id, source, code, message, detail_txt, now),
+                )
+                conn.commit()
+        except Exception as exc:
+            logger.warning('error_logs insert skipped: %s', exc)
+
     def save_tokens(self, user_id: int, slug: str, data: dict) -> dict:
         project = self.ensure_project(user_id, slug)
         normalized = self.normalize_tokens(data)
@@ -501,6 +614,7 @@ class ProjectService:
                 (normalized['name'], normalized['brand_id'], now, project.id),
             )
             conn.commit()
+        self.insert_style_profile_version(user_id, slug, normalized, snapshot_path='tokens.json')
         return normalized
 
     def reset_tokens(self, user_id: int, slug: str) -> dict:
