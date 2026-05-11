@@ -9,6 +9,7 @@ from typing import TYPE_CHECKING, Any
 if TYPE_CHECKING:
     from app.services.project_service import ProjectService
 
+from app.core.providers import ASSET_PROVIDER_SLUGS
 from app.services.generation_error_summary import ProviderGenerationError, summarize_generation_failure
 from app.services.generation_service import GenerationCancelledError
 
@@ -25,11 +26,7 @@ class GenerationJobStore:
 
     def create_job(self, *, user_id: int, project_slug: str) -> dict[str, Any]:
         job_id = uuid.uuid4().hex[:12]
-        provider_map = {
-            'recraft': 'pending',
-            'seedream': 'pending',
-            'flux': 'pending',
-        }
+        provider_map = {provider: 'pending' for provider in ASSET_PROVIDER_SLUGS}
         job = {
             'id': job_id,
             'user_id': user_id,
@@ -43,11 +40,7 @@ class GenerationJobStore:
             'result': None,
             'providers': dict(provider_map),
             'provider_statuses': dict(provider_map),
-            'provider_errors': {
-                'recraft': None,
-                'seedream': None,
-                'flux': None,
-            },
+            'provider_errors': {provider: None for provider in ASSET_PROVIDER_SLUGS},
             'current_provider': None,
             'failed_provider': None,
             'cancel_requested': False,

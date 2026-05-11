@@ -510,7 +510,9 @@ class ProjectService:
             now = datetime.now(timezone.utc).isoformat()
             scan_ext = {'.png', '.svg', '.jpg', '.jpeg', '.webp'}
             rows: list[tuple[Any, ...]] = []
-            for provider in ('recraft', 'seedream', 'flux'):
+            from app.core.providers import ASSET_PROVIDER_SLUGS
+
+            for provider in ASSET_PROVIDER_SLUGS:
                 base = out_root / provider / brand_id
                 for kind in ('logos', 'icons', 'patterns', 'illustrations'):
                     d = base / kind

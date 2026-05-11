@@ -8,6 +8,7 @@ from fastapi.responses import FileResponse, JSONResponse, RedirectResponse
 
 from app.schemas.palette import PaletteSuggestRequest, PaletteSuggestResponse
 from app.core.paths import OUT_DIR
+from app.core.providers import ASSET_PROVIDER_SLUGS
 from app.core.settings import settings
 from app.db import project_service
 from app.services.generation_service import GenerationService
@@ -78,9 +79,8 @@ def _palette_items_from_tokens(tokens: dict) -> list[dict]:
 
 def _scan_asset_group(brand_id: str, section: str, suffixes: tuple[str, ...]) -> list[dict]:
     provider_roots = [
-        ('recraft', OUT_DIR / 'recraft' / brand_id / section),
-        ('seedream', OUT_DIR / 'seedream' / brand_id / section),
-        ('flux', OUT_DIR / 'flux' / brand_id / section),
+        (provider, OUT_DIR / provider / brand_id / section)
+        for provider in ASSET_PROVIDER_SLUGS
     ]
     assets = []
     for provider, root in provider_roots:
@@ -112,7 +112,7 @@ def _build_download_zip(user_id: int, project_slug: str, brand_id: str, kind: st
         raise HTTPException(status_code=404, detail='Неизвестный тип экспорта.')
 
     with zipfile.ZipFile(zip_path, 'w', compression=zipfile.ZIP_DEFLATED) as zf:
-        for provider in ('recraft', 'seedream', 'flux'):
+        for provider in ASSET_PROVIDER_SLUGS:
             for section in section_map[kind]:
                 section_dir = OUT_DIR / provider / brand_id / section
                 if not section_dir.exists():
@@ -351,21 +351,21 @@ async def get_active_generation_job_for_project(request: Request, project_slug: 
 
 @router.api_route('/assets/{brand_id}/{relpath:path}', methods=['GET', 'OPTIONS'])
 async def serve_assets(brand_id: str, relpath: str):
-    if relpath.startswith('recraft/'):
-        base_dir = OUT_DIR / 'recraft' / brand_id
-        rel = relpath[len('recraft/'):]
-    elif relpath.startswith('seedream/'):
-        base_dir = OUT_DIR / 'seedream' / brand_id
-        rel = relpath[len('seedream/'):]
-    elif relpath.startswith('flux/'):
-        base_dir = OUT_DIR / 'flux' / brand_id
-        rel = relpath[len('flux/'):]
-    elif relpath.startswith(('logos/', 'icons/', 'patterns/', 'illustrations/')):
-        base_dir = OUT_DIR / 'recraft' / brand_id
-        rel = relpath
-    else:
-        base_dir = OUT_DIR / '_meta' / brand_id
-        rel = relpath
+    base_dir = None
+    rel = relpath
+    for provider in ASSET_PROVIDER_SLUGS:
+        prefix = f'{provider}/'
+        if relpath.startswith(prefix):
+            base_dir = OUT_DIR / provider / brand_id
+            rel = relpath[len(prefix):]
+            break
+    if base_dir is None:
+        if relpath.startswith(('logos/', 'icons/', 'patterns/', 'illustrations/')):
+            base_dir = OUT_DIR / 'recraft' / brand_id
+            rel = relpath
+        else:
+            base_dir = OUT_DIR / '_meta' / brand_id
+            rel = relpath
     file_path = (base_dir / rel).resolve()
     if not str(file_path).startswith(str(base_dir.resolve())):
         raise HTTPException(status_code=403, detail='Forbidden')

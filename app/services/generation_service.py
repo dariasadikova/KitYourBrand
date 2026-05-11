@@ -14,7 +14,8 @@ from typing import Any, Callable
 
 from PIL import Image
 
-from app.core.paths import FLUX_DIR, OUT_DIR, RECRAFT_DIR, SEEDREAM_DIR
+from app.core.paths import OUT_DIR
+from app.core.providers import ASSET_PROVIDER_SLUGS, PROVIDERS, iter_asset_providers, iter_standard_cli_providers
 from app.services.generation_error_summary import ProviderGenerationError, summarize_generation_failure
 from app.services.project_service import ProjectService
 
@@ -42,26 +43,21 @@ class GenerationService:
     def __init__(self, project_service: ProjectService) -> None:
         self.project_service = project_service
         self.out_root = OUT_DIR
-        self.recraft_out_root = OUT_DIR / 'recraft'
-        self.seedream_out_root = OUT_DIR / 'seedream'
-        self.flux_out_root = OUT_DIR / 'flux'
+        self.providers = PROVIDERS
         self.meta_out_root = OUT_DIR / '_meta'
 
-        self.recraft_dir = RECRAFT_DIR
-        self.seedream_dir = SEEDREAM_DIR
-        self.flux_dir = FLUX_DIR
-
-        self.recraft_main = self.recraft_dir / 'src' / 'main.py'
+        self.recraft = self.providers['recraft']
+        self.recraft_out_root = self.recraft.out_root
+        self.recraft_dir = self.recraft.provider_dir
+        if self.recraft.main_path is None:
+            raise ValueError('Не настроен CLI entrypoint для провайдера Recraft.')
+        self.recraft_main = self.recraft.main_path
         self.recraft_tokens = self.recraft_dir / 'config' / 'tokens.json'
         self.recraft_refs = self.recraft_dir / 'references'
-        self.seedream_main = self.seedream_dir / 'src' / 'main.py'
-        self.flux_main = self.flux_dir / 'src' / 'main.py'
 
         for path in [
             self.out_root,
-            self.recraft_out_root,
-            self.seedream_out_root,
-            self.flux_out_root,
+            *[provider.out_root for provider in iter_asset_providers()],
             self.meta_out_root,
         ]:
             path.mkdir(parents=True, exist_ok=True)
@@ -103,15 +99,15 @@ class GenerationService:
 
     def convert_webp_to_png_for_brand(self, brand_id: str) -> dict[str, int]:
         summary: dict[str, int] = {}
-        for provider in ('recraft', 'seedream', 'flux'):
-            root = self.out_root / provider / brand_id
+        for provider in iter_asset_providers():
+            root = provider.out_root / brand_id
             n = (
                 self.convert_webp_to_png_in_dir(root / 'logos')
                 + self.convert_webp_to_png_in_dir(root / 'patterns')
                 + self.convert_webp_to_png_in_dir(root / 'illustrations')
             )
             if n:
-                summary[provider] = n
+                summary[provider.slug] = n
         return summary
 
     def scan_dir(self, dir_path: Path, exts: tuple[str, ...]) -> list[tuple[str, str]]:
@@ -127,8 +123,8 @@ class GenerationService:
         """Remove previous generation files for this brand only."""
         if not brand_id:
             return
-        for provider_root in (self.recraft_out_root, self.seedream_out_root, self.flux_out_root):
-            brand_root = provider_root / brand_id
+        for provider in iter_asset_providers():
+            brand_root = provider.out_root / brand_id
             for section in ('logos', 'icons', 'patterns', 'illustrations'):
                 section_dir = brand_root / section
                 if section_dir.exists():
@@ -170,9 +166,8 @@ class GenerationService:
         base_host = (base_host or '').rstrip('/').replace('127.0.0.1', 'localhost')
         base_url = f'{base_host}/assets/{effective_brand_id}'
         provider_roots = [
-            ('recraft', self.recraft_out_root / effective_brand_id, 'recraft'),
-            ('seedream', self.seedream_out_root / effective_brand_id, 'seedream'),
-            ('flux', self.flux_out_root / effective_brand_id, 'flux'),
+            (provider.slug, provider.out_root / effective_brand_id, provider.slug)
+            for provider in iter_asset_providers()
         ]
         logos: list[dict[str, Any]] = []
         icons: list[dict[str, Any]] = []
@@ -227,7 +222,8 @@ class GenerationService:
             'references': {'style_images': style_images_urls},
             'provenance': {
                 'generator': 'KitYourBrand FastAPI',
-                'note': 'Ассеты доступны по /assets/<brand_id>/recraft|seedream|flux/...; референсы — по /projects/<project_slug>/refs/*',
+                'note': 'Ассеты доступны по /assets/<brand_id>/<provider>/...; референсы — по /projects/<project_slug>/refs/*',
+                'available_providers': list(ASSET_PROVIDER_SLUGS),
             },
         }
 
@@ -236,7 +232,7 @@ class GenerationService:
         manifest_path = meta_dir / 'figma_plugin_manifest.json'
         manifest_path.write_text(json.dumps(manifest, ensure_ascii=False, indent=2), encoding='utf-8')
 
-        for provider_name in ('recraft', 'seedream', 'flux'):
+        for provider_name in ASSET_PROVIDER_SLUGS:
             m2 = dict(manifest)
             m2['brand'] = dict(brand)
             m2['brand']['provider'] = provider_name
@@ -627,83 +623,62 @@ class GenerationService:
             for src in ref_src_paths:
                 shutil.copy(src, refs_out_dir / src.name)
 
-        report(55, 'Запуск провайдера Seedream', 'seedream', 'running')
-        try:
-            seedream = self._run_standard_provider(
-                provider='seedream',
-                main_path=self.seedream_main,
-                project_dir=self.seedream_dir,
-                provider_out_root=self.seedream_out_root,
-                tokens_path=self.recraft_tokens,
-                brand_id=brand_id,
-                logos_count=logos_count,
-                icons_count=icons_count,
-                patterns_count=patterns_count,
-                illustrations_count=illustrations_count,
-                cli_label='seedream',
-                should_cancel=should_cancel,
-            )
-            report(68, 'Seedream завершён успешно', 'seedream', 'success')
-            provider_successes['seedream'] = seedream
-        except ProviderGenerationError as exc:
-            report(
-                68,
-                exc.user_message or 'Seedream завершился с ошибкой',
-                'seedream',
-                'error',
-                {'message': exc.user_message, 'hint': exc.hint},
-            )
-            provider_failures['seedream'] = {
-                'message': exc.user_message,
-                'hint': exc.hint,
-            }
-            seedream = {
-                'ok': False,
-                'error': exc.user_message or 'Seedream завершился с ошибкой',
-                'error_hint': exc.hint,
-                'stdout': '',
-                'stderr': '',
-            }
-        ensure_not_cancelled()
+        standard_provider_results: dict[str, dict[str, Any]] = {}
+        progress_points = {
+            'seedream': (55, 68),
+            'flux': (72, 85),
+        }
 
-        report(72, 'Запуск провайдера Flux', 'flux', 'running')
-        try:
-            flux = self._run_standard_provider(
-                provider='flux',
-                main_path=self.flux_main,
-                project_dir=self.flux_dir,
-                provider_out_root=self.flux_out_root,
-                tokens_path=self.recraft_tokens,
-                brand_id=brand_id,
-                logos_count=logos_count,
-                icons_count=icons_count,
-                patterns_count=patterns_count,
-                illustrations_count=illustrations_count,
-                cli_label='flux',
-                should_cancel=should_cancel,
-            )
-            report(85, 'Flux завершён успешно', 'flux', 'success')
-            provider_successes['flux'] = flux
-        except ProviderGenerationError as exc:
-            report(
-                85,
-                exc.user_message or 'Flux завершился с ошибкой',
-                'flux',
-                'error',
-                {'message': exc.user_message, 'hint': exc.hint},
-            )
-            provider_failures['flux'] = {
-                'message': exc.user_message,
-                'hint': exc.hint,
-            }
-            flux = {
-                'ok': False,
-                'error': exc.user_message or 'Flux завершился с ошибкой',
-                'error_hint': exc.hint,
-                'stdout': '',
-                'stderr': '',
-            }
-        ensure_not_cancelled()
+        for provider in iter_standard_cli_providers():
+            if provider.slug == 'recraft':
+                continue
+            if provider.main_path is None:
+                provider_failures[provider.slug] = {
+                    'message': f'CLI не настроен для провайдера {provider.label}',
+                    'hint': 'Проверьте ProviderConfig.main_path.',
+                }
+                continue
+
+            start_progress, end_progress = progress_points.get(provider.slug, (72, 85))
+            report(start_progress, f'Запуск провайдера {provider.label}', provider.slug, 'running')
+            try:
+                result = self._run_standard_provider(
+                    provider=provider.slug,
+                    main_path=provider.main_path,
+                    project_dir=provider.provider_dir,
+                    provider_out_root=provider.out_root,
+                    tokens_path=self.recraft_tokens,
+                    brand_id=brand_id,
+                    logos_count=logos_count,
+                    icons_count=icons_count,
+                    patterns_count=patterns_count,
+                    illustrations_count=illustrations_count,
+                    cli_label=provider.slug,
+                    should_cancel=should_cancel,
+                )
+                report(end_progress, f'{provider.label} завершён успешно', provider.slug, 'success')
+                provider_successes[provider.slug] = result
+                standard_provider_results[provider.slug] = result
+            except ProviderGenerationError as exc:
+                report(
+                    end_progress,
+                    exc.user_message or f'{provider.label} завершился с ошибкой',
+                    provider.slug,
+                    'error',
+                    {'message': exc.user_message, 'hint': exc.hint},
+                )
+                provider_failures[provider.slug] = {
+                    'message': exc.user_message,
+                    'hint': exc.hint,
+                }
+                standard_provider_results[provider.slug] = {
+                    'ok': False,
+                    'error': exc.user_message or f'{provider.label} завершился с ошибкой',
+                    'error_hint': exc.hint,
+                    'stdout': '',
+                    'stderr': '',
+                }
+            ensure_not_cancelled()
 
         if not provider_successes:
             last_provider = next(reversed(provider_failures.keys()), 'recraft')
@@ -770,6 +745,19 @@ class GenerationService:
             )
             top_error_hint = str((first_err or {}).get('hint') or '').strip() or None
 
+        providers_response = {}
+        for provider_slug in ASSET_PROVIDER_SLUGS:
+            providers_response[provider_slug] = provider_successes.get(
+                provider_slug,
+                {
+                    'ok': False,
+                    'error': (provider_failures.get(provider_slug) or {}).get('message') if provider_failures.get(provider_slug) else '',
+                    'error_hint': (provider_failures.get(provider_slug) or {}).get('hint') if provider_failures.get(provider_slug) else None,
+                    'stdout': '',
+                    'stderr': '',
+                },
+            )
+
         return {
             'ok': True,
             'message': completion_message,
@@ -791,16 +779,18 @@ class GenerationService:
                     'stderr': '',
                 },
             ),
-            'seedream': seedream,
-            'flux': flux,
+            'seedream': standard_provider_results.get('seedream', providers_response.get('seedream')),
+            'flux': standard_provider_results.get('flux', providers_response.get('flux')),
+            'providers': providers_response,
             'figma_manifest': {
                 'ok': True,
                 'url': f'/assets/{brand_id}/figma_plugin_manifest.json',
                 'urls': {
                     'combined': f'/assets/{brand_id}/figma_plugin_manifest.json',
-                    'recraft': f'/assets/{brand_id}/figma_plugin_manifest_recraft.json',
-                    'seedream': f'/assets/{brand_id}/figma_plugin_manifest_seedream.json',
-                    'flux': f'/assets/{brand_id}/figma_plugin_manifest_flux.json',
+                    **{
+                        provider_slug: f'/assets/{brand_id}/figma_plugin_manifest_{provider_slug}.json'
+                        for provider_slug in ASSET_PROVIDER_SLUGS
+                    },
                 },
                 'counts': counts,
             },

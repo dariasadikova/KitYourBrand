@@ -4,6 +4,7 @@ from fastapi import APIRouter, HTTPException, Request, status
 from fastapi.responses import JSONResponse
 
 from app.core.paths import OUT_DIR
+from app.core.providers import ASSET_PROVIDER_SLUGS
 from app.db import project_service
 from app.services.generation_jobs import generation_jobs
 
@@ -49,9 +50,8 @@ def _palette_items_from_tokens(tokens: dict) -> list[dict]:
 
 def _scan_asset_group(brand_id: str, section: str, suffixes: tuple[str, ...]) -> list[dict]:
     provider_roots = [
-        ('recraft', OUT_DIR / 'recraft' / brand_id / section),
-        ('seedream', OUT_DIR / 'seedream' / brand_id / section),
-        ('flux', OUT_DIR / 'flux' / brand_id / section),
+        (provider, OUT_DIR / provider / brand_id / section)
+        for provider in ASSET_PROVIDER_SLUGS
     ]
     assets = []
     for provider, root in provider_roots:
