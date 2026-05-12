@@ -1,8 +1,9 @@
 import { apiClient } from './apiClient'
 import type { FigmaExportResponse, GenerationJob, ProjectResultsResponse } from '../types/results'
 
-export function getProjectResults(projectSlug: string): Promise<ProjectResultsResponse> {
-  return apiClient<ProjectResultsResponse>(`/api/projects/${projectSlug}/results`)
+export function getProjectResults(projectSlug: string, jobId?: string): Promise<ProjectResultsResponse> {
+  const query = jobId ? `?job=${encodeURIComponent(jobId)}` : ''
+  return apiClient<ProjectResultsResponse>(`/api/projects/${projectSlug}/results${query}`)
 }
 
 export function generateFigmaManifest(projectSlug: string, brandId: string): Promise<FigmaExportResponse> {

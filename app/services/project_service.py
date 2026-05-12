@@ -368,12 +368,22 @@ class ProjectService:
 
     def delete_generation_history_all(self, user_id: int) -> tuple[int, int]:
         """Delete all terminal history rows for user. Returns (deleted, skipped_active)."""
+        deleted_jobs: list[tuple[str, str]] = []
         with self._connect() as conn:
             total_row = conn.execute(
                 'SELECT COUNT(*) AS c FROM generation_jobs_history WHERE user_id = ?',
                 (user_id,),
             ).fetchone()
             total = int(total_row['c']) if total_row else 0
+            rows = conn.execute(
+                """
+                SELECT job_id, project_slug
+                FROM generation_jobs_history
+                WHERE user_id = ? AND status NOT IN ('pending', 'running')
+                """,
+                (user_id,),
+            ).fetchall()
+            deleted_jobs = [(str(row['job_id']), str(row['project_slug'])) for row in rows]
             cur = conn.execute(
                 """
                 DELETE FROM generation_jobs_history
@@ -382,7 +392,24 @@ class ProjectService:
                 (user_id,),
             )
             deleted = int(cur.rowcount or 0)
+            if deleted_jobs:
+                job_ids = [job_id for job_id, _ in deleted_jobs]
+                placeholders = ', '.join(['?'] * len(job_ids))
+                params: list[Any] = [user_id, *job_ids]
+                conn.execute(
+                    f'DELETE FROM assets WHERE user_id = ? AND generation_job_id IN ({placeholders})',
+                    params,
+                )
+                conn.execute(
+                    f'DELETE FROM asset_manifests WHERE user_id = ? AND generation_job_id IN ({placeholders})',
+                    params,
+                )
+                conn.execute(
+                    f'DELETE FROM error_logs WHERE user_id = ? AND generation_job_id IN ({placeholders})',
+                    params,
+                )
             conn.commit()
+        self._delete_generation_result_snapshots(user_id, deleted_jobs)
         skipped = max(0, total - deleted)
         return deleted, skipped
 
@@ -395,7 +422,19 @@ class ProjectService:
 
         placeholders = ', '.join(['?'] * len(unique_ids))
         params: list[Any] = [user_id, *unique_ids]
+        deleted_jobs: list[tuple[str, str]] = []
         with self._connect() as conn:
+            rows = conn.execute(
+                f"""
+                SELECT job_id, project_slug
+                FROM generation_jobs_history
+                WHERE user_id = ?
+                  AND job_id IN ({placeholders})
+                  AND status NOT IN ('pending', 'running')
+                """,
+                params,
+            ).fetchall()
+            deleted_jobs = [(str(row['job_id']), str(row['project_slug'])) for row in rows]
             cur = conn.execute(
                 f"""
                 DELETE FROM generation_jobs_history
@@ -406,9 +445,65 @@ class ProjectService:
                 params,
             )
             deleted = int(cur.rowcount or 0)
+            if deleted_jobs:
+                deletable_ids = [job_id for job_id, _ in deleted_jobs]
+                delete_placeholders = ', '.join(['?'] * len(deletable_ids))
+                delete_params: list[Any] = [user_id, *deletable_ids]
+                conn.execute(
+                    f'DELETE FROM assets WHERE user_id = ? AND generation_job_id IN ({delete_placeholders})',
+                    delete_params,
+                )
+                conn.execute(
+                    f'DELETE FROM asset_manifests WHERE user_id = ? AND generation_job_id IN ({delete_placeholders})',
+                    delete_params,
+                )
+                conn.execute(
+                    f'DELETE FROM error_logs WHERE user_id = ? AND generation_job_id IN ({delete_placeholders})',
+                    delete_params,
+                )
             conn.commit()
+        self._delete_generation_result_snapshots(user_id, deleted_jobs)
         skipped = max(0, len(unique_ids) - deleted)
         return deleted, skipped
+
+    def _delete_generation_result_snapshots(self, user_id: int, jobs: list[tuple[str, str]]) -> None:
+        for job_id, project_slug in jobs:
+            snapshot_dir = self.project_dir(user_id, project_slug) / 'generation_results' / job_id
+            try:
+                if snapshot_dir.exists() and snapshot_dir.is_dir():
+                    shutil.rmtree(snapshot_dir)
+            except Exception as exc:
+                logger.warning('generation result snapshot delete skipped: %s', exc)
+
+    def get_generation_history_job(self, user_id: int, project_slug: str, job_id: str) -> dict[str, Any] | None:
+        with self._connect() as conn:
+            row = conn.execute(
+                """
+                SELECT job_id, project_id, project_slug, project_name, status, started_at, finished_at
+                FROM generation_jobs_history
+                WHERE user_id = ? AND project_slug = ? AND job_id = ?
+                """,
+                (user_id, project_slug, job_id),
+            ).fetchone()
+        return dict(row) if row else None
+
+    def list_assets_for_generation(self, user_id: int, project_slug: str, job_id: str) -> list[dict[str, Any]]:
+        project = self.get_project(user_id, project_slug)
+        if project is None:
+            return []
+        with self._connect() as conn:
+            rows = conn.execute(
+                """
+                SELECT kind, provider, storage_path, filename, meta, created_at
+                FROM assets
+                WHERE user_id = ?
+                  AND project_id = ?
+                  AND generation_job_id = ?
+                ORDER BY kind, provider, filename
+                """,
+                (user_id, project.id, job_id),
+            ).fetchall()
+        return [dict(row) for row in rows]
 
     def ensure_project(self, user_id: int, slug: str) -> ProjectRecord:
         project = self.get_project(user_id, slug)
@@ -522,6 +617,12 @@ class ProjectService:
                         if not fp.is_file() or fp.suffix.lower() not in scan_ext:
                             continue
                         storage = f'out/{provider}/{brand_id}/{kind}/{fp.name}'
+                        if job_id:
+                            snapshot_rel = f'generation_results/{job_id}/{provider}/{kind}/{fp.name}'
+                            snapshot_path = self.project_dir(user_id, project_slug) / snapshot_rel
+                            snapshot_path.parent.mkdir(parents=True, exist_ok=True)
+                            shutil.copy2(fp, snapshot_path)
+                            storage = snapshot_rel
                         meta_txt = json.dumps({'brand_id': brand_id, 'relative': storage}, ensure_ascii=False)
                         rows.append(
                             (project.id, user_id, kind, provider, storage, fp.name, meta_txt, job_id, now)

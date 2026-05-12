@@ -96,10 +96,20 @@ def _scan_asset_group(brand_id: str, section: str, suffixes: tuple[str, ...]) ->
                 })
     return assets
 
-def _build_download_zip(user_id: int, project_slug: str, brand_id: str, kind: str) -> Path:
+def _asset_storage_path(user_id: int, project_slug: str, storage_path: str) -> Path:
+    rel = Path(storage_path.replace('\\', '/'))
+    if rel.parts and rel.parts[0] == 'generation_results':
+        return project_service.project_dir(user_id, project_slug) / rel
+    if rel.parts and rel.parts[0] == 'out':
+        return settings.project_root / rel
+    return project_service.project_dir(user_id, project_slug) / rel
+
+
+def _build_download_zip(user_id: int, project_slug: str, brand_id: str, kind: str, job_id: str | None = None) -> Path:
     exports_dir = project_service.exports_dir(user_id, project_slug)
     exports_dir.mkdir(parents=True, exist_ok=True)
-    zip_path = exports_dir / f'{project_slug}_{kind}.zip'
+    suffix = f'_{job_id}' if job_id else ''
+    zip_path = exports_dir / f'{project_slug}_{kind}{suffix}.zip'
 
     section_map = {
         'logos': ['logos'],
@@ -112,6 +122,19 @@ def _build_download_zip(user_id: int, project_slug: str, brand_id: str, kind: st
         raise HTTPException(status_code=404, detail='Неизвестный тип экспорта.')
 
     with zipfile.ZipFile(zip_path, 'w', compression=zipfile.ZIP_DEFLATED) as zf:
+        if job_id:
+            rows = project_service.list_assets_for_generation(user_id, project_slug, job_id)
+            for row in rows:
+                section = str(row.get('kind') or '')
+                if section not in section_map[kind]:
+                    continue
+                file_path = _asset_storage_path(user_id, project_slug, str(row.get('storage_path') or ''))
+                if not file_path.exists() or not file_path.is_file():
+                    continue
+                provider = str(row.get('provider') or 'provider')
+                zf.write(file_path, arcname=f'{provider}/{section}/{file_path.name}')
+            return zip_path
+
         for provider in ASSET_PROVIDER_SLUGS:
             for section in section_map[kind]:
                 section_dir = OUT_DIR / provider / brand_id / section
@@ -304,6 +327,28 @@ async def download_export(request: Request, project_slug: str, filename: str):
     return FileResponse(path, filename=filename)
 
 
+@router.get('/projects/{project_slug}/result-assets/{job_id}/{provider}/{kind}/{filename}')
+async def serve_generation_result_asset(
+    request: Request,
+    project_slug: str,
+    job_id: str,
+    provider: str,
+    kind: str,
+    filename: str,
+):
+    user_id = require_auth(request)
+    project_or_404(user_id, project_slug)
+    snapshot_root = (project_service.project_dir(user_id, project_slug) / 'generation_results' / job_id).resolve()
+    path = (snapshot_root / provider / kind / filename).resolve()
+    try:
+        path.relative_to(snapshot_root)
+    except ValueError:
+        raise HTTPException(status_code=403, detail='Forbidden')
+    if not path.exists() or not path.is_file():
+        raise HTTPException(status_code=404, detail='Файл не найден.')
+    return FileResponse(path)
+
+
 @router.post('/projects/{project_slug}/generate/start')
 async def start_generate_assets(request: Request, project_slug: str) -> JSONResponse:
     user_id = require_auth(request)
@@ -385,11 +430,12 @@ async def project_results_page(request: Request, project_slug: str) -> RedirectR
         return auth_redirect
 
     project_or_404(int(request.session['user_id']), project_slug)
-    return redirect_to_react(request, f'/projects/{project_slug}/results')
+    query = f'?{request.url.query}' if request.url.query else ''
+    return redirect_to_react(request, f'/projects/{project_slug}/results{query}')
 
 
 @router.get('/projects/{project_slug}/downloads/{kind}')
-async def download_generated_assets(request: Request, project_slug: str, kind: str):
+async def download_generated_assets(request: Request, project_slug: str, kind: str, job: str | None = None):
     user_id = require_auth(request)
     project = project_or_404(user_id, project_slug)
     tokens = project_service.load_tokens(user_id, project_slug)
@@ -397,5 +443,8 @@ async def download_generated_assets(request: Request, project_slug: str, kind: s
     if not brand_id:
         raise HTTPException(status_code=400, detail='У проекта не указан brand_id.')
 
-    zip_path = _build_download_zip(user_id, project_slug, brand_id, kind)
+    job_id = (job or '').strip() or None
+    if job_id and not project_service.get_generation_history_job(user_id, project_slug, job_id):
+        raise HTTPException(status_code=404, detail='Запуск генерации не найден.')
+    zip_path = _build_download_zip(user_id, project_slug, brand_id, kind, job_id)
     return FileResponse(zip_path, filename=zip_path.name, media_type='application/zip')

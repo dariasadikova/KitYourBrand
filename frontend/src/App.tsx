@@ -1,4 +1,4 @@
-import { type FormEvent, type MouseEvent, type ReactNode, useEffect, useState } from 'react'
+import { type FormEvent, type MouseEvent, type ReactNode, useEffect, useLayoutEffect, useRef, useState } from 'react'
 import { Link, Navigate, Route, Routes, useNavigate, useParams, useSearchParams } from 'react-router-dom'
 import { cancelGenerationJob, deleteGenerationHistorySelected, getGenerationHistory } from './services/generationHistoryApi'
 import { getCurrentSession, login, logout, register } from './services/authApi'
@@ -855,13 +855,13 @@ function renderHistoryAction(
     )
   }
   if (row.action === 'open') {
-    return <Link className="btn btn-primary btn-inline generation-history-action-btn" to={`/projects/${row.project_slug}/results`}>Открыть</Link>
+    return <Link className="btn btn-primary btn-inline generation-history-action-btn" to={`/projects/${row.project_slug}/results?job=${encodeURIComponent(row.job_id)}`}>Открыть</Link>
   }
   if (row.action === 'restore') {
     return (
       <button
         type="button"
-        className="btn btn-inline generation-history-btn-restore"
+        className="btn btn-inline generation-history-action-btn generation-history-btn-restore"
         onClick={() => restoreProjectSlug(row.project_slug)}
       >
         Восстановить
@@ -884,6 +884,8 @@ function HistoryStatCard({ label, value }: { label: string; value: string }) {
 }
 
 function ResultsPage({ projectSlug }: { projectSlug: string }) {
+  const [searchParams] = useSearchParams()
+  const selectedJobId = searchParams.get('job')?.trim() || ''
   const [results, setResults] = useState<ProjectResultsResponse | null>(null)
   const [job, setJob] = useState<GenerationJob | null>(null)
   const [manifestUrl, setManifestUrl] = useState('')
@@ -896,8 +898,11 @@ function ResultsPage({ projectSlug }: { projectSlug: string }) {
 
   useEffect(() => {
     let alive = true
+    setIsLoading(true)
+    setError('')
+    setJob(null)
 
-    getProjectResults(projectSlug)
+    getProjectResults(projectSlug, selectedJobId)
       .then((payload) => {
         if (!alive) return
         setResults(payload)
@@ -937,10 +942,15 @@ function ResultsPage({ projectSlug }: { projectSlug: string }) {
     return () => {
       alive = false
     }
-  }, [projectSlug])
+  }, [projectSlug, selectedJobId])
 
   async function handleGenerateFigma() {
     if (!results) return
+    if (results.selected_generation_job_id) {
+      setExportStatus('Для сохранённой версии доступно скачивание архива. Figma manifest формируется для текущей версии проекта.')
+      setExportTone('error')
+      return
+    }
     setManifestUrl('')
     setIsExporting(true)
     setExportStatus('Подготовка manifest…')
@@ -1002,7 +1012,7 @@ function ResultsPage({ projectSlug }: { projectSlug: string }) {
         <div className="results-page__head">
           <div>
             <h1>Результаты генерации бренд-комплекта</h1>
-            <p>Ваш бренд-комплект готов к использованию</p>
+            <p>{results.selected_generation_job_id ? 'Открыта сохранённая версия генерации из истории' : 'Ваш бренд-комплект готов к использованию'}</p>
           </div>
         </div>
 
@@ -1028,10 +1038,10 @@ function ResultsPage({ projectSlug }: { projectSlug: string }) {
             )}
           </section>
 
-          <ResultsAssetSection title="Логотипы" kind="logos" projectSlug={projectSlug} assets={results.assets.logos} gridClassName="results-icons-grid" cardClassName="results-icon-card" />
-          <ResultsAssetSection title="Иконки" kind="icons" projectSlug={projectSlug} assets={results.assets.icons} gridClassName="results-icons-grid" cardClassName="results-icon-card" />
-          <ResultsAssetSection title="Паттерны" kind="patterns" projectSlug={projectSlug} assets={results.assets.patterns} gridClassName="results-media-grid results-media-grid--patterns" cardClassName="results-media-card" />
-          <ResultsAssetSection title="Иллюстрации" kind="illustrations" projectSlug={projectSlug} assets={results.assets.illustrations} gridClassName="results-media-grid" cardClassName="results-media-card" />
+          <ResultsAssetSection title="Логотипы" kind="logos" projectSlug={projectSlug} selectedJobId={results.selected_generation_job_id || ''} assets={results.assets.logos} gridClassName="results-icons-grid" cardClassName="results-icon-card" />
+          <ResultsAssetSection title="Иконки" kind="icons" projectSlug={projectSlug} selectedJobId={results.selected_generation_job_id || ''} assets={results.assets.icons} gridClassName="results-icons-grid" cardClassName="results-icon-card" />
+          <ResultsAssetSection title="Паттерны" kind="patterns" projectSlug={projectSlug} selectedJobId={results.selected_generation_job_id || ''} assets={results.assets.patterns} gridClassName="results-media-grid results-media-grid--patterns" cardClassName="results-media-card" />
+          <ResultsAssetSection title="Иллюстрации" kind="illustrations" projectSlug={projectSlug} selectedJobId={results.selected_generation_job_id || ''} assets={results.assets.illustrations} gridClassName="results-media-grid" cardClassName="results-media-card" />
 
           <section className="results-card results-card--export" data-figma-export>
             <div className="results-card__head results-card__head--stacked">
@@ -1049,10 +1059,10 @@ function ResultsPage({ projectSlug }: { projectSlug: string }) {
               </div>
             </details>
             <div className="results-export__actions">
-              <button type="button" className="btn btn-primary" disabled={isExporting} onClick={handleGenerateFigma}>
+              <button type="button" className="btn btn-primary" disabled={isExporting || Boolean(results.selected_generation_job_id)} onClick={handleGenerateFigma}>
                 {isExporting ? 'Генерируем Figma JSON…' : manifestUrl ? 'Manifest готов ✓' : 'Экспорт бренд-комплекта'}
               </button>
-              <a href={`/projects/${projectSlug}/downloads/all`} className="btn btn-secondary">Скачать архив</a>
+              <a href={`/projects/${projectSlug}/downloads/all${results.selected_generation_job_id ? `?job=${encodeURIComponent(results.selected_generation_job_id)}` : ''}`} className="btn btn-secondary">Скачать архив</a>
             </div>
             <p className={`results-export__status${exportTone ? ` results-export__status--${exportTone}` : ''}`} aria-live="polite">{exportStatus}</p>
           </section>
@@ -1068,6 +1078,7 @@ function ResultsAssetSection({
   title,
   kind,
   projectSlug,
+  selectedJobId,
   assets,
   gridClassName,
   cardClassName,
@@ -1075,22 +1086,24 @@ function ResultsAssetSection({
   title: string
   kind: 'logos' | 'icons' | 'patterns' | 'illustrations'
   projectSlug: string
+  selectedJobId: string
   assets: ResultAsset[]
   gridClassName: string
   cardClassName: string
 }) {
+  const downloadUrl = `/projects/${projectSlug}/downloads/${kind}${selectedJobId ? `?job=${encodeURIComponent(selectedJobId)}` : ''}`
   return (
-    <section className="results-card">
+    <section className="results-card" key={`${kind}-${selectedJobId || 'current'}`}>
       <div className="results-card__head">
         <div className="results-card__title">
           <h2>{title}</h2>
         </div>
-        <a href={`/projects/${projectSlug}/downloads/${kind}`} className="btn btn-primary btn-inline">Скачать</a>
+        <a href={downloadUrl} className="btn btn-primary btn-inline">Скачать</a>
       </div>
       {assets.length ? (
         <div className={gridClassName}>
           {assets.map((asset) => (
-            <a href={asset.url} target="_blank" rel="noopener" className={cardClassName} title={`${asset.provider} / ${asset.name}`} key={`${asset.provider}-${asset.filename}`}>
+            <a href={asset.url} target="_blank" rel="noopener" className={cardClassName} title={`${asset.provider} / ${asset.name}`} key={`${selectedJobId || 'current'}-${asset.provider}-${asset.filename}-${asset.url}`}>
               <img src={asset.url} alt={asset.name} />
             </a>
           ))}
@@ -1134,16 +1147,7 @@ function ResultsGenerationModal({
           <strong>{Number(job.progress || 0)}%</strong>
           <span className="generation-status-text">{terminal && job.status === 'cancelled' ? 'Генерация прервана' : job.message || 'Выполняется'}</span>
         </div>
-        <div className="generation-providers">
-          {generationProviderEntries(statuses).map((provider) => (
-            <div className="generation-provider" key={provider.slug}>
-              <span>{provider.label}</span>
-              <span className={`provider-pill provider-pill--${normalizeProviderStatus(statuses[provider.slug])}`}>
-                {providerStatusLabel(statuses[provider.slug])}
-              </span>
-            </div>
-          ))}
-        </div>
+        <ProviderStatusRail statuses={statuses} />
         <label className="generation-log-label">Лог операций</label>
         <pre className="generation-log">{Array.isArray(job.logs) ? job.logs.join('\n') : ''}</pre>
         <div className="generation-modal__actions">
@@ -1169,6 +1173,66 @@ function providerStatusLabel(status: string | undefined) {
   if (normalized === 'success') return 'успех'
   if (normalized === 'error') return 'ошибка'
   return 'ожидание'
+}
+
+function activeProviderSlug(statuses: Record<string, string | undefined>) {
+  const entries = generationProviderEntries(statuses)
+  const running = entries.find((provider) => normalizeProviderStatus(statuses[provider.slug]) === 'running')
+  if (running) return running.slug
+
+  const lastResolvedIndex = entries.reduce((lastIndex, provider, index) => {
+    const status = normalizeProviderStatus(statuses[provider.slug])
+    return status === 'success' || status === 'error' ? index : lastIndex
+  }, -1)
+  const nextPending = entries.slice(lastResolvedIndex + 1).find((provider) => normalizeProviderStatus(statuses[provider.slug]) === 'pending')
+  return nextPending?.slug || entries[Math.max(0, lastResolvedIndex)]?.slug || entries[0]?.slug || ''
+}
+
+function ProviderStatusRail({ statuses }: { statuses: Record<string, string | undefined> }) {
+  const providers = generationProviderEntries(statuses)
+  const activeSlug = activeProviderSlug(statuses)
+  const statusSignature = providers.map((provider) => `${provider.slug}:${normalizeProviderStatus(statuses[provider.slug])}`).join('|')
+  const railRef = useRef<HTMLDivElement | null>(null)
+  const itemRefs = useRef<Record<string, HTMLDivElement | null>>({})
+
+  useLayoutEffect(() => {
+    const rail = railRef.current
+    const activeItem = itemRefs.current[activeSlug]
+    if (!rail || !activeItem) return
+
+    const frameId = window.requestAnimationFrame(() => {
+      const targetLeft = activeItem.offsetLeft - (rail.clientWidth - activeItem.clientWidth) / 2
+      const maxLeft = Math.max(0, rail.scrollWidth - rail.clientWidth)
+      rail.scrollTo({
+        left: Math.min(Math.max(0, targetLeft), maxLeft),
+        behavior: 'smooth',
+      })
+    })
+
+    return () => window.cancelAnimationFrame(frameId)
+  }, [activeSlug, statusSignature])
+
+  return (
+    <div className="generation-providers" ref={railRef} aria-label="Статусы AI-провайдеров">
+      {providers.map((provider) => {
+        const normalizedStatus = normalizeProviderStatus(statuses[provider.slug])
+        return (
+          <div
+            className={`generation-provider${provider.slug === activeSlug ? ' generation-provider--active' : ''}`}
+            key={provider.slug}
+            ref={(node) => {
+              itemRefs.current[provider.slug] = node
+            }}
+          >
+            <span>{provider.label}</span>
+            <span className={`provider-pill provider-pill--${normalizedStatus}`}>
+              {providerStatusLabel(statuses[provider.slug])}
+            </span>
+          </div>
+        )
+      })}
+    </div>
+  )
 }
 
 const PALETTE_KEYS = ['primary', 'secondary', 'accent', 'tertiary', 'neutral', 'extra'] as const
@@ -2051,16 +2115,7 @@ function ProjectGenerationModal({
                       : job.message || job.status_text || 'Выполняется'}
             </span>
           </div>
-          <div className="generation-providers">
-            {generationProviderEntries(statuses).map((provider) => (
-              <div className="generation-provider" key={provider.slug}>
-                <span>{provider.label}</span>
-                <span className={`provider-pill provider-pill--${normalizeProviderStatus(statuses[provider.slug])}`}>
-                  {providerStatusLabel(statuses[provider.slug])}
-                </span>
-              </div>
-            ))}
-          </div>
+          <ProviderStatusRail statuses={statuses} />
           <label className="generation-log-label">Лог операций</label>
           <pre className="generation-log">{Array.isArray(job.logs) ? job.logs.join('\n') : ''}</pre>
           <div className="generation-modal__actions">
@@ -2070,7 +2125,12 @@ function ProjectGenerationModal({
               </button>
             ) : null}
             {canOpenResult ? (
-              <Link className="btn btn-primary btn-inline" to={`/projects/${projectSlug}/results`}>Посмотреть результат</Link>
+              <Link
+                className="btn btn-primary btn-inline"
+                to={`/projects/${projectSlug}/results${job.id ? `?job=${encodeURIComponent(job.id)}` : ''}`}
+              >
+                Посмотреть результат
+              </Link>
             ) : null}
           </div>
         </div>

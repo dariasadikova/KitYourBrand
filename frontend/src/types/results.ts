@@ -26,6 +26,7 @@ export type ProjectResultsResponse = {
     illustrations: ResultAsset[]
   }
   active_generation_job_id: string
+  selected_generation_job_id?: string
   error?: string
 }
 

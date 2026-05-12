@@ -1,6 +1,9 @@
 from __future__ import annotations
 
-from fastapi import APIRouter, HTTPException, Request, status
+from pathlib import PurePosixPath
+from urllib.parse import quote
+
+from fastapi import APIRouter, HTTPException, Query, Request, status
 from fastapi.responses import JSONResponse
 
 from app.core.paths import OUT_DIR
@@ -70,8 +73,50 @@ def _scan_asset_group(brand_id: str, section: str, suffixes: tuple[str, ...]) ->
     return assets
 
 
+def _asset_url_from_storage(project_slug: str, brand_id: str, storage_path: str) -> str:
+    rel = PurePosixPath(storage_path.replace('\\', '/'))
+    parts = rel.parts
+    if len(parts) >= 5 and parts[0] == 'generation_results':
+        job_id, provider, kind, filename = parts[1], parts[2], parts[3], parts[-1]
+        return (
+            f'/projects/{quote(project_slug)}/result-assets/{quote(job_id)}/'
+            f'{quote(provider)}/{quote(kind)}/{quote(filename)}'
+        )
+    if len(parts) >= 5 and parts[0] == 'out':
+        provider, stored_brand_id, kind, filename = parts[1], parts[2], parts[3], parts[-1]
+        return f'/assets/{quote(stored_brand_id or brand_id)}/{quote(provider)}/{quote(kind)}/{quote(filename)}'
+    return f'/assets/{quote(brand_id)}/{quote("/".join(parts))}'
+
+
+def _assets_from_generation_rows(project_slug: str, brand_id: str, rows: list[dict]) -> dict[str, list[dict]]:
+    grouped: dict[str, list[dict]] = {
+        'logos': [],
+        'icons': [],
+        'patterns': [],
+        'illustrations': [],
+    }
+    for row in rows:
+        kind = str(row.get('kind') or '')
+        if kind not in grouped:
+            continue
+        filename = str(row.get('filename') or PurePosixPath(str(row.get('storage_path') or '')).name)
+        grouped[kind].append(
+            {
+                'provider': str(row.get('provider') or ''),
+                'name': PurePosixPath(filename).stem,
+                'filename': filename,
+                'url': _asset_url_from_storage(project_slug, brand_id, str(row.get('storage_path') or '')),
+            }
+        )
+    return grouped
+
+
 @router.get('/{project_slug}/results')
-def get_project_results(request: Request, project_slug: str) -> JSONResponse:
+def get_project_results(
+    request: Request,
+    project_slug: str,
+    job_id: str | None = Query(default=None, alias='job'),
+) -> JSONResponse:
     user_id = _require_user_id(request)
     project = project_service.get_project(user_id, project_slug)
     if project is None:
@@ -82,7 +127,22 @@ def get_project_results(request: Request, project_slug: str) -> JSONResponse:
     if not brand_id:
         return JSONResponse({'ok': False, 'error': 'У проекта не указан brand_id.'}, status_code=400)
 
-    active_job = generation_jobs.get_active_job_for_project(user_id=user_id, project_slug=project_slug)
+    selected_job_id = (job_id or '').strip()
+    active_job = None if selected_job_id else generation_jobs.get_active_job_for_project(user_id=user_id, project_slug=project_slug)
+
+    if selected_job_id:
+        history_job = project_service.get_generation_history_job(user_id, project_slug, selected_job_id)
+        if history_job is None:
+            raise HTTPException(status_code=404, detail='Запуск генерации не найден.')
+        asset_rows = project_service.list_assets_for_generation(user_id, project_slug, selected_job_id)
+        assets = _assets_from_generation_rows(project_slug, brand_id, asset_rows)
+    else:
+        assets = {
+            'logos': _scan_asset_group(brand_id, 'logos', ('.png', '.svg', '.jpg', '.jpeg')),
+            'icons': _scan_asset_group(brand_id, 'icons', ('.png', '.svg', '.jpg', '.jpeg')),
+            'patterns': _scan_asset_group(brand_id, 'patterns', ('.png', '.svg', '.jpg', '.jpeg')),
+            'illustrations': _scan_asset_group(brand_id, 'illustrations', ('.png', '.svg', '.jpg', '.jpeg')),
+        }
 
     return JSONResponse(
         {
@@ -93,12 +153,8 @@ def get_project_results(request: Request, project_slug: str) -> JSONResponse:
                 'brand_id': brand_id,
             },
             'palette_items': _palette_items_from_tokens(tokens),
-            'assets': {
-                'logos': _scan_asset_group(brand_id, 'logos', ('.png', '.svg', '.jpg', '.jpeg')),
-                'icons': _scan_asset_group(brand_id, 'icons', ('.png', '.svg', '.jpg', '.jpeg')),
-                'patterns': _scan_asset_group(brand_id, 'patterns', ('.png', '.svg', '.jpg', '.jpeg')),
-                'illustrations': _scan_asset_group(brand_id, 'illustrations', ('.png', '.svg', '.jpg', '.jpeg')),
-            },
+            'assets': assets,
             'active_generation_job_id': (active_job or {}).get('id') if active_job else '',
+            'selected_generation_job_id': selected_job_id,
         }
     )

@@ -96,7 +96,7 @@ def _enrich_generation_history_rows(raw: list[dict]) -> list[dict]:
                 'status_key': status_key,
                 'duration_display': _format_history_duration(r.get('duration_seconds')),
                 'action': action,
-                'results_url': f'/app/projects/{slug}/results',
+                'results_url': f"/app/projects/{slug}/results?job={r['job_id']}",
                 'editor_url': f'/app/projects/{slug}',
                 'error_message': (r.get('error_message') or '').strip(),
                 'error_hint': (r.get('error_hint') or '').strip(),
