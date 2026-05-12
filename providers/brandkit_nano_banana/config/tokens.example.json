@@ -1,0 +1,19 @@
+{
+  "name": "Example Brand",
+  "brand_id": "example-brand",
+  "style": {
+    "prompt": "clean modern visual identity",
+    "negative": "text, watermark"
+  },
+  "palette": {
+    "primary": "#111111",
+    "secondary": "#ffffff",
+    "accent": "#ffcc00"
+  },
+  "prompts": {
+    "logos": ["primary logo mark"],
+    "icons": ["home", "search"],
+    "patterns": ["brand pattern"],
+    "illustrations": ["hero illustration"]
+  }
+}

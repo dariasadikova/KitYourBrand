@@ -27,6 +27,29 @@ import type { ProjectSummary } from './types/project'
 import type { GenerationJob, ProjectResultsResponse, ResultAsset } from './types/results'
 import type { PaletteVariant, PaletteVariantName, ProjectEditorResponse, ProjectTokens } from './types/editor'
 
+const GENERATION_PROVIDERS = [
+  { slug: 'recraft', label: 'Recraft' },
+  { slug: 'seedream', label: 'Seedream' },
+  { slug: 'flux', label: 'Flux' },
+  { slug: 'nano_banana', label: 'Nano Banana' },
+  { slug: 'gpt5_image', label: 'GPT-5 Image' },
+] as const
+
+const DEFAULT_PROVIDER_STATUSES = Object.fromEntries(
+  GENERATION_PROVIDERS.map((provider) => [provider.slug, 'pending']),
+) as Record<string, string>
+
+function providerLabel(provider: string): string {
+  return GENERATION_PROVIDERS.find((item) => item.slug === provider)?.label
+    || provider.replace(/_/g, ' ').replace(/\b\w/g, (char) => char.toUpperCase())
+}
+
+function generationProviderEntries(statuses: Record<string, string | undefined>) {
+  const known = GENERATION_PROVIDERS.map((provider) => provider.slug)
+  const extra = Object.keys(statuses || {}).filter((provider) => !known.includes(provider as typeof known[number]))
+  return [...known, ...extra].map((provider) => ({ slug: provider, label: providerLabel(provider) }))
+}
+
 function App() {
   const [session, setSession] = useState<AuthMeResponse | null>(null)
 
@@ -1112,11 +1135,11 @@ function ResultsGenerationModal({
           <span className="generation-status-text">{terminal && job.status === 'cancelled' ? 'Генерация прервана' : job.message || 'Выполняется'}</span>
         </div>
         <div className="generation-providers">
-          {(['recraft', 'seedream', 'flux'] as const).map((provider) => (
-            <div className="generation-provider" key={provider}>
-              <span>{provider === 'recraft' ? 'Recraft' : provider === 'seedream' ? 'Seedream' : 'Flux'}</span>
-              <span className={`provider-pill provider-pill--${normalizeProviderStatus(statuses[provider])}`}>
-                {providerStatusLabel(statuses[provider])}
+          {generationProviderEntries(statuses).map((provider) => (
+            <div className="generation-provider" key={provider.slug}>
+              <span>{provider.label}</span>
+              <span className={`provider-pill provider-pill--${normalizeProviderStatus(statuses[provider.slug])}`}>
+                {providerStatusLabel(statuses[provider.slug])}
               </span>
             </div>
           ))}
@@ -1489,7 +1512,7 @@ function ProjectEditorPage({ projectSlug, isNewProjectFlow }: { projectSlug: str
       progress: 0,
       message: 'Автосохранение проекта',
       logs: ['Инициализация генерации...'],
-      provider_statuses: { recraft: 'pending', seedream: 'pending', flux: 'pending' },
+      provider_statuses: { ...DEFAULT_PROVIDER_STATUSES },
     })
 
     try {
@@ -1520,7 +1543,7 @@ function ProjectEditorPage({ projectSlug, isNewProjectFlow }: { projectSlug: str
         progress: current?.progress || 0,
         message: 'Ошибка генерации',
         logs: [...(current?.logs || []), err instanceof Error ? err.message : 'Ошибка запуска генерации.'],
-        provider_statuses: current?.provider_statuses || { recraft: 'pending', seedream: 'pending', flux: 'pending' },
+        provider_statuses: current?.provider_statuses || { ...DEFAULT_PROVIDER_STATUSES },
       }))
     } finally {
       setIsGenerationStarting(false)
@@ -2029,11 +2052,11 @@ function ProjectGenerationModal({
             </span>
           </div>
           <div className="generation-providers">
-            {(['recraft', 'seedream', 'flux'] as const).map((provider) => (
-              <div className="generation-provider" key={provider}>
-                <span>{provider === 'recraft' ? 'Recraft' : provider === 'seedream' ? 'Seedream' : 'Flux'}</span>
-                <span className={`provider-pill provider-pill--${normalizeProviderStatus(statuses[provider])}`}>
-                  {providerStatusLabel(statuses[provider])}
+            {generationProviderEntries(statuses).map((provider) => (
+              <div className="generation-provider" key={provider.slug}>
+                <span>{provider.label}</span>
+                <span className={`provider-pill provider-pill--${normalizeProviderStatus(statuses[provider.slug])}`}>
+                  {providerStatusLabel(statuses[provider.slug])}
                 </span>
               </div>
             ))}
