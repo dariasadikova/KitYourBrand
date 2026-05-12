@@ -2,7 +2,7 @@
 
 OpenRouter CLI provider for KitYourBrand.
 
-Model: `google/gemini-3.1-flash-image-preview`
+Model: `google/gemini-2.5-flash-image`
 
 Required env:
 

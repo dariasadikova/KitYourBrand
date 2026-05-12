@@ -22,6 +22,39 @@ from app.services.project_service import ProjectService
 logger = logging.getLogger("kityourbrand.generation")
 PROVIDER_TIMEOUT_SECONDS = 300
 
+# Доли шкалы 0–100 для этапов генерации (остальное — поровну между CLI-провайдерами).
+_PROGRESS_SETUP_END = 20
+_PROGRESS_RECRAFT_LO = 21
+_PROGRESS_RECRAFT_HI = 38
+_PROGRESS_NEW_STYLE = 40
+_PROGRESS_STD_LO = 43
+_PROGRESS_STD_HI = 78
+_PROGRESS_WEBP = 82
+_PROGRESS_MANIFEST_DEFAULT = 90
+
+
+def _progress_setup_step_pct(step_index: int, total_steps: int) -> int:
+    """Шаги подготовки заполняют [0, _PROGRESS_SETUP_END]. step_index от 1 до total_steps."""
+    if total_steps <= 0:
+        return 0
+    return max(0, min(_PROGRESS_SETUP_END, _PROGRESS_SETUP_END * step_index // total_steps))
+
+
+def _split_progress_band(start: int, end: int, n: int) -> list[tuple[int, int]]:
+    """Делит inclusive [start, end] на n непрерывных отрезков; в каждом (lo, hi) включительно."""
+    if n <= 0:
+        return []
+    span = end - start + 1
+    parts: list[tuple[int, int]] = []
+    pos = start
+    for i in range(n):
+        chunk = span // n + (1 if i < (span % n) else 0)
+        lo = pos
+        hi = pos + chunk - 1
+        parts.append((lo, hi))
+        pos = hi + 1
+    return parts
+
 
 class GenerationCancelledError(RuntimeError):
     """Raised when user cancels current generation job."""
@@ -138,6 +171,8 @@ class GenerationService:
         brand_id: str,
         base_host: str,
         progress_callback: Callable[[int, str, str | None, str | None, dict[str, Any] | None], None] | None = None,
+        *,
+        manifest_progress: int = _PROGRESS_MANIFEST_DEFAULT,
     ) -> tuple[dict[str, Any], dict[str, int], Path]:
         def report(
             progress: int,
@@ -149,7 +184,7 @@ class GenerationService:
             if progress_callback:
                 progress_callback(progress, message, provider, provider_status, provider_error)
 
-        report(95, 'Сборка Figma manifest')
+        report(manifest_progress, 'Сборка Figma manifest')
 
         tokens = self.project_service.load_tokens(user_id, project_slug)
         effective_brand_id = (brand_id or tokens.get('brand_id') or '').strip()
@@ -512,17 +547,22 @@ class GenerationService:
         if not brand_id:
             raise ValueError('Не указан brand_id.')
 
-        report(5, 'Загрузка конфигурации проекта')
-        ensure_not_cancelled()
-        self.clear_brand_outputs(brand_id)
-        report(9, 'Очистка результатов прошлой генерации')
-
         style_id = (payload.get('style_id') or tokens.get('style_id') or '').strip()
         logos_count = int(payload.get('logos_count') or 0)
         icons_count = int(payload.get('icons_count') or 0)
         patterns_count = int(payload.get('patterns_count') or 0)
         illustrations_count = int(payload.get('illustrations_count') or 0)
         build_style = bool(payload.get('build_style'))
+
+        setup_steps = 5 if build_style else 3
+        si = 0
+
+        si += 1
+        report(_progress_setup_step_pct(si, setup_steps), 'Загрузка конфигурации проекта')
+        ensure_not_cancelled()
+        self.clear_brand_outputs(brand_id)
+        si += 1
+        report(_progress_setup_step_pct(si, setup_steps), 'Очистка результатов прошлой генерации')
 
         generation_cfg = tokens.get('generation', {}) if isinstance(tokens.get('generation'), dict) else {}
         active_palette_keys = generation_cfg.get('active_palette_keys') if isinstance(generation_cfg.get('active_palette_keys'), list) else []
@@ -538,7 +578,8 @@ class GenerationService:
 
         self.recraft_tokens.parent.mkdir(parents=True, exist_ok=True)
         shutil.copyfile(token_path, self.recraft_tokens)
-        report(12, 'Проект сохранён и подготовлен для генерации')
+        si += 1
+        report(_progress_setup_step_pct(si, setup_steps), 'Проект сохранён и подготовлен для генерации')
         ensure_not_cancelled()
 
         recraft_out_abs = self.recraft_out_root / brand_id
@@ -546,12 +587,15 @@ class GenerationService:
 
         ref_src_paths: list[Path] = []
         if build_style:
-            report(18, 'Подготовка референсов для Recraft')
+            si += 1
+            report(_progress_setup_step_pct(si, setup_steps), 'Подготовка референсов для Recraft')
             ref_src_paths = self._prepare_recraft_references(user_id, project_slug, tokens)
             if ref_src_paths:
-                report(22, f'Референсы подготовлены: {len(ref_src_paths)} шт.')
+                si += 1
+                report(_progress_setup_step_pct(si, setup_steps), f'Референсы подготовлены: {len(ref_src_paths)} шт.')
             else:
-                report(22, 'Референсов нет, создание нового стиля будет пропущено')
+                si += 1
+                report(_progress_setup_step_pct(si, setup_steps), 'Референсов нет, создание нового стиля будет пропущено')
 
         recraft_cmd = [sys.executable, str(self.recraft_main), '--tokens', str(self.recraft_tokens)]
         if style_id:
@@ -569,7 +613,7 @@ class GenerationService:
         provider_successes: dict[str, dict[str, Any]] = {}
         provider_failures: dict[str, dict[str, str | None]] = {}
 
-        report(28, 'Запуск провайдера Recraft', 'recraft', 'running')
+        report(_PROGRESS_RECRAFT_LO, 'Запуск провайдера Recraft', 'recraft', 'running')
         try:
             recraft_stdout, recraft_stderr = self._run_provider_command(
                 provider='recraft',
@@ -578,7 +622,7 @@ class GenerationService:
                 cli_label='recraft',
                 should_cancel=should_cancel,
             )
-            report(48, 'Recraft завершён успешно', 'recraft', 'success')
+            report(_PROGRESS_RECRAFT_HI, 'Recraft завершён успешно', 'recraft', 'success')
             provider_successes['recraft'] = {
                 'ok': True,
                 'error': '',
@@ -588,7 +632,7 @@ class GenerationService:
             }
         except ProviderGenerationError as exc:
             report(
-                48,
+                _PROGRESS_RECRAFT_HI,
                 exc.user_message or 'Recraft завершился с ошибкой',
                 'recraft',
                 'error',
@@ -610,7 +654,7 @@ class GenerationService:
         effective_style_id = new_style_id or style_id
 
         if new_style_id:
-            report(52, f'Получен новый style_id: {new_style_id}')
+            report(_PROGRESS_NEW_STYLE, f'Получен новый style_id: {new_style_id}')
             tokens['style_id'] = new_style_id
             self.project_service.save_tokens(user_id, project_slug, tokens)
             meta_brand_dir = self.meta_out_root / brand_id
@@ -623,11 +667,14 @@ class GenerationService:
             for src in ref_src_paths:
                 shutil.copy(src, refs_out_dir / src.name)
 
+        runnable_std = [
+            p for p in iter_standard_cli_providers()
+            if p.slug != 'recraft' and p.main_path is not None
+        ]
+        std_segments = _split_progress_band(_PROGRESS_STD_LO, _PROGRESS_STD_HI, len(runnable_std))
+        std_progress_by_slug = {p.slug: std_segments[i] for i, p in enumerate(runnable_std)}
+
         standard_provider_results: dict[str, dict[str, Any]] = {}
-        progress_points = {
-            'seedream': (55, 68),
-            'flux': (72, 85),
-        }
 
         for provider in iter_standard_cli_providers():
             if provider.slug == 'recraft':
@@ -639,7 +686,7 @@ class GenerationService:
                 }
                 continue
 
-            start_progress, end_progress = progress_points.get(provider.slug, (72, 85))
+            start_progress, end_progress = std_progress_by_slug[provider.slug]
             report(start_progress, f'Запуск провайдера {provider.label}', provider.slug, 'running')
             try:
                 result = self._run_standard_provider(
@@ -693,7 +740,7 @@ class GenerationService:
                 hint='Проверьте ключи, баланс и доступность провайдеров, затем повторите запуск.',
             )
 
-        report(90, 'Постобработка изображений WEBP → PNG')
+        report(_PROGRESS_WEBP, 'Постобработка изображений WEBP → PNG')
         webp_converted = self.convert_webp_to_png_for_brand(brand_id)
 
         manifest, counts, export_path = self.build_and_save_figma_manifest(

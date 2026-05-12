@@ -28,7 +28,7 @@ except Exception:
 ROOT_ENV = Path(__file__).resolve().parents[3] / ".env"
 load_dotenv(ROOT_ENV)
 
-DEFAULT_MODEL = "google/gemini-3.1-flash-image-preview"
+DEFAULT_MODEL = "google/gemini-2.5-flash-image"
 PROVIDER_SLUG = "nano_banana"
 PROVIDER_LABEL = "Nano Banana"
 

@@ -90,6 +90,8 @@ class ProjectService:
                     conn.execute('ALTER TABLE generation_jobs_history ADD COLUMN error_message TEXT')
                 if 'error_hint' not in hist_cols:
                     conn.execute('ALTER TABLE generation_jobs_history ADD COLUMN error_hint TEXT')
+                if 'tokens_snapshot' not in hist_cols:
+                    conn.execute('ALTER TABLE generation_jobs_history ADD COLUMN tokens_snapshot TEXT')
             conn.commit()
 
     def _slugify(self, value: str) -> str:
@@ -224,14 +226,19 @@ class ProjectService:
         if project is None:
             return
         started = datetime.now(timezone.utc).isoformat()
+        tokens_snapshot: str | None = None
+        try:
+            tokens_snapshot = json.dumps(self.load_tokens(user_id, project_slug), ensure_ascii=False)
+        except Exception:
+            tokens_snapshot = None
         with self._connect() as conn:
             conn.execute(
                 """
                 INSERT INTO generation_jobs_history (
-                    user_id, job_id, project_id, project_slug, project_name, status, started_at
-                ) VALUES (?, ?, ?, ?, ?, 'pending', ?)
+                    user_id, job_id, project_id, project_slug, project_name, status, started_at, tokens_snapshot
+                ) VALUES (?, ?, ?, ?, ?, 'pending', ?, ?)
                 """,
-                (user_id, job_id, project.id, project_slug, project.name, started),
+                (user_id, job_id, project.id, project_slug, project.name, started, tokens_snapshot),
             )
             conn.commit()
 
@@ -479,13 +486,61 @@ class ProjectService:
         with self._connect() as conn:
             row = conn.execute(
                 """
-                SELECT job_id, project_id, project_slug, project_name, status, started_at, finished_at
+                SELECT job_id, project_id, project_slug, project_name, status, started_at, finished_at,
+                       tokens_snapshot
                 FROM generation_jobs_history
                 WHERE user_id = ? AND project_slug = ? AND job_id = ?
                 """,
                 (user_id, project_slug, job_id),
             ).fetchone()
         return dict(row) if row else None
+
+    def tokens_at_generation_start(
+        self,
+        user_id: int,
+        project_slug: str,
+        *,
+        tokens_snapshot_json: str | None,
+        started_at: str | None,
+    ) -> dict[str, Any] | None:
+        """Палитра/токены на момент запуска: снимок из истории или последний style_profiles до started_at."""
+        if tokens_snapshot_json:
+            try:
+                data = json.loads(tokens_snapshot_json)
+                if isinstance(data, dict):
+                    return self.normalize_tokens(data)
+            except (json.JSONDecodeError, TypeError):
+                pass
+        if not started_at:
+            return None
+        project = self.get_project(user_id, project_slug)
+        if project is None:
+            return None
+        with self._connect() as conn:
+            row = conn.execute(
+                """
+                SELECT payload FROM style_profiles
+                WHERE project_id = ? AND created_at <= ?
+                ORDER BY created_at DESC, id DESC
+                LIMIT 1
+                """,
+                (project.id, str(started_at).strip()),
+            ).fetchone()
+        if not row or row['payload'] is None:
+            return None
+        raw = row['payload']
+        try:
+            if isinstance(raw, str):
+                data = json.loads(raw)
+            elif isinstance(raw, (bytes, bytearray)):
+                data = json.loads(raw.decode('utf-8'))
+            else:
+                data = raw
+            if isinstance(data, dict):
+                return self.normalize_tokens(data)
+        except (json.JSONDecodeError, TypeError, UnicodeDecodeError):
+            return None
+        return None
 
     def list_assets_for_generation(self, user_id: int, project_slug: str, job_id: str) -> list[dict[str, Any]]:
         project = self.get_project(user_id, project_slug)

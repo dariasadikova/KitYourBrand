@@ -17,7 +17,7 @@ from app.integrations.provider_http import request_with_retries
 @dataclass
 class Gpt5ImageRequest:
     prompt: str
-    model: str = "openai/gpt-5.4-image-2"
+    model: str = "openai/gpt-5-image-mini"
     n: int = 1
     timeout_secs: int = 240
     referer: Optional[str] = None
@@ -28,7 +28,7 @@ class Gpt5ImageRequest:
 
 
 class OpenRouterGpt5ImageClient:
-    """OpenRouter image generation client for GPT-5 Image."""
+    """OpenRouter image generation client for GPT-5 Image Mini."""
 
     def __init__(self, api_key: str, base_url: str = "https://openrouter.ai/api/v1/chat/completions"):
         self.api_key = api_key

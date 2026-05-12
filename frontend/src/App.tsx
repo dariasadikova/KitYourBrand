@@ -1115,6 +1115,66 @@ function ResultsAssetSection({
   )
 }
 
+function isGenerationLogErrorLine(line: string): boolean {
+  const withoutTime = line.replace(/^\[[^\]]+\]\s*/, '').trim()
+  const s = withoutTime.toLowerCase()
+  if (!s) return false
+  const markers = [
+    'insufficient credits',
+    'insufficient balance',
+    'out of credits',
+    'payment required',
+    'billing',
+    'rate limit',
+    'too many requests',
+    'quota exceeded',
+    'error:',
+    '[error]',
+    ' failed',
+    'failed:',
+    'failure',
+    'exception',
+    'traceback',
+    'http 401',
+    'http 403',
+    'http 429',
+    'http 500',
+    'http 502',
+    'http 503',
+    'econnrefused',
+    'etimedout',
+    'timeout',
+    'unauthorized',
+    'forbidden',
+    'invalid api key',
+    'api key invalid',
+    'openrouter.ai',
+    'ошибка',
+    'не удалось',
+    'недостаточно средств',
+    'недостаточно',
+    'отказано',
+  ]
+  return markers.some((m) => s.includes(m))
+}
+
+function GenerationLogView({ logs }: { logs: string[] | undefined }) {
+  const lines = Array.isArray(logs) ? logs : []
+  return (
+    <pre className="generation-log">
+      {lines.map((line, i) => (
+        <span
+          key={i}
+          className={isGenerationLogErrorLine(line) ? 'generation-log__line generation-log__line--error' : 'generation-log__line'}
+        >
+          {line}
+          {i < lines.length - 1 ? '\n' : ''}
+        </span>
+      ))}
+    </pre>
+  )
+}
+
 function ResultsGenerationModal({
   job,
   cancelRequested,
@@ -1149,7 +1209,7 @@ function ResultsGenerationModal({
         </div>
         <ProviderStatusRail statuses={statuses} />
         <label className="generation-log-label">Лог операций</label>
-        <pre className="generation-log">{Array.isArray(job.logs) ? job.logs.join('\n') : ''}</pre>
+        <GenerationLogView logs={job.logs} />
         <div className="generation-modal__actions">
           {!terminal ? (
             <button type="button" className="btn btn-outline btn-inline" disabled={cancelRequested} onClick={onCancel}>
@@ -2117,7 +2177,7 @@ function ProjectGenerationModal({
           </div>
           <ProviderStatusRail statuses={statuses} />
           <label className="generation-log-label">Лог операций</label>
-          <pre className="generation-log">{Array.isArray(job.logs) ? job.logs.join('\n') : ''}</pre>
+          <GenerationLogView logs={job.logs} />
           <div className="generation-modal__actions">
             {!terminal ? (
               <button type="button" className="btn btn-outline btn-inline" disabled={cancelRequested} onClick={onCancel}>

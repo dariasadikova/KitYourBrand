@@ -61,7 +61,7 @@ PROVIDERS: dict[str, ProviderConfig] = {
     ),
     'gpt5_image': ProviderConfig(
         slug='gpt5_image',
-        label='GPT-5 Image',
+        label='GPT-5 Image Mini',
         kind='openrouter',
         provider_dir=PROVIDERS_DIR / 'brandkit_gpt5_image',
         out_root=OUT_DIR / 'gpt5_image',

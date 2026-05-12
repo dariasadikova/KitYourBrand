@@ -1968,6 +1968,10 @@ img {
     margin: 0;
     font: 500 .9rem/1.5 'SFMono-Regular', Consolas, monospace;
 }
+.generation-log__line--error {
+    color: #fca5a5;
+    font-weight: 600;
+}
 .generation-modal__actions { display: flex; justify-content: flex-end; gap: 12px; margin-top: 16px; flex-shrink: 0; padding-top: 2px; }
 .generation-modal__actions .btn-outline {
     color: #1f2937;

@@ -28,9 +28,9 @@ except Exception:
 ROOT_ENV = Path(__file__).resolve().parents[3] / ".env"
 load_dotenv(ROOT_ENV)
 
-DEFAULT_MODEL = "openai/gpt-5.4-image-2"
+DEFAULT_MODEL = "openai/gpt-5-image-mini"
 PROVIDER_SLUG = "gpt5_image"
-PROVIDER_LABEL = "GPT-5 Image"
+PROVIDER_LABEL = "GPT-5 Image Mini"
 
 
 def load_json(path: str) -> Dict:

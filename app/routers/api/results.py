@@ -1,5 +1,6 @@
 from __future__ import annotations
 
+import json
 from pathlib import PurePosixPath
 from urllib.parse import quote
 
@@ -129,11 +130,20 @@ def get_project_results(
 
     selected_job_id = (job_id or '').strip()
     active_job = None if selected_job_id else generation_jobs.get_active_job_for_project(user_id=user_id, project_slug=project_slug)
+    palette_tokens: dict = tokens
 
     if selected_job_id:
         history_job = project_service.get_generation_history_job(user_id, project_slug, selected_job_id)
         if history_job is None:
             raise HTTPException(status_code=404, detail='Запуск генерации не найден.')
+        past_tokens = project_service.tokens_at_generation_start(
+            user_id,
+            project_slug,
+            tokens_snapshot_json=history_job.get('tokens_snapshot'),
+            started_at=history_job.get('started_at'),
+        )
+        if past_tokens:
+            palette_tokens = past_tokens
         asset_rows = project_service.list_assets_for_generation(user_id, project_slug, selected_job_id)
         assets = _assets_from_generation_rows(project_slug, brand_id, asset_rows)
     else:
@@ -144,15 +154,17 @@ def get_project_results(
             'illustrations': _scan_asset_group(brand_id, 'illustrations', ('.png', '.svg', '.jpg', '.jpeg')),
         }
 
+    display_brand_id = (palette_tokens.get('brand_id') or brand_id).strip() or brand_id
+
     return JSONResponse(
         {
             'ok': True,
             'project': {
                 'slug': project.slug,
                 'name': project.name,
-                'brand_id': brand_id,
+                'brand_id': display_brand_id,
             },
-            'palette_items': _palette_items_from_tokens(tokens),
+            'palette_items': _palette_items_from_tokens(palette_tokens),
             'assets': assets,
             'active_generation_job_id': (active_job or {}).get('id') if active_job else '',
             'selected_generation_job_id': selected_job_id,

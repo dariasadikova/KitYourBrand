@@ -17,7 +17,7 @@ from app.integrations.provider_http import request_with_retries
 @dataclass
 class NanoBananaRequest:
     prompt: str
-    model: str = "google/gemini-3.1-flash-image-preview"
+    model: str = "google/gemini-2.5-flash-image"
     n: int = 1
     timeout_secs: int = 240
     referer: Optional[str] = None

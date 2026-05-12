@@ -53,6 +53,7 @@ class GenerationJobHistory(Base):
     duration_seconds: Mapped[float | None] = mapped_column(sa.Float, nullable=True)
     error_message: Mapped[str | None] = mapped_column(sa.Text, nullable=True)
     error_hint: Mapped[str | None] = mapped_column(sa.Text, nullable=True)
+    tokens_snapshot: Mapped[str | None] = mapped_column(sa.Text, nullable=True)
 
 
 class StyleProfile(Base):
