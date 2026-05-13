@@ -96,16 +96,26 @@ class GenerationService:
             path.mkdir(parents=True, exist_ok=True)
 
     @staticmethod
-    def _provider_subprocess_env() -> dict[str, str]:
-        """Переменные для CLI провайдеров: корень проекта и ключи из настроек / .env."""
+    def _provider_subprocess_env(user_id: int | None = None) -> dict[str, str]:
+        """Переменные для CLI провайдеров: корень проекта и пользовательские ключи из профиля."""
         from app.core.settings import settings
+        from app.db import auth_service
 
         env = dict(os.environ)
         env['KITYOURBRAND_PROJECT_ROOT'] = str(settings.project_root.resolve())
-        if settings.recraft_api_key:
-            env['RECRAFT_API_KEY'] = settings.recraft_api_key
-        if settings.openrouter_api_key:
-            env['OPENROUTER_API_KEY'] = settings.openrouter_api_key
+
+        recraft_api_key = (settings.recraft_api_key or '').strip()
+        openrouter_api_key = (settings.openrouter_api_key or '').strip()
+
+        if user_id is not None:
+            user_keys = auth_service.get_user_api_keys(user_id)
+            recraft_api_key = user_keys.get('recraft_api_key') or recraft_api_key
+            openrouter_api_key = user_keys.get('openrouter_api_key') or openrouter_api_key
+
+        if recraft_api_key:
+            env['RECRAFT_API_KEY'] = recraft_api_key
+        if openrouter_api_key:
+            env['OPENROUTER_API_KEY'] = openrouter_api_key
         if settings.openrouter_referer:
             env['OPENROUTER_REFERER'] = settings.openrouter_referer
         if settings.openrouter_title:
@@ -333,11 +343,12 @@ class GenerationService:
         should_cancel: Callable[[], bool] | None = None,
         provider: str | None = None,
         timeout_seconds: int | None = None,
+        user_id: int | None = None,
     ) -> tuple[str, str]:
         proc = subprocess.Popen(
             cmd,
             cwd=str(cwd),
-            env=self._provider_subprocess_env(),
+            env=self._provider_subprocess_env(user_id),
             stdout=subprocess.PIPE,
             stderr=subprocess.PIPE,
             text=True,
@@ -433,6 +444,7 @@ class GenerationService:
         cwd: Path,
         cli_label: str,
         should_cancel: Callable[[], bool] | None = None,
+        user_id: int | None = None,
     ) -> tuple[str, str]:
         try:
             return self._run_checked(
@@ -442,6 +454,7 @@ class GenerationService:
                 should_cancel=should_cancel,
                 provider=provider,
                 timeout_seconds=PROVIDER_TIMEOUT_SECONDS,
+                user_id=user_id,
             )
         except ProviderExecutionTimeoutError as exc:
             self._emit_cli_output(cli_label, exc.stdout, exc.stderr)
@@ -482,6 +495,7 @@ class GenerationService:
         illustrations_count: int,
         cli_label: str = 'cli',
         should_cancel: Callable[[], bool] | None = None,
+        user_id: int | None = None,
     ) -> dict[str, Any]:
         if not main_path.exists():
             raise ProviderGenerationError(
@@ -507,6 +521,7 @@ class GenerationService:
             cwd=project_dir,
             cli_label=cli_label,
             should_cancel=should_cancel,
+            user_id=user_id,
         )
         return {
             'ok': True,
@@ -621,6 +636,7 @@ class GenerationService:
                 cwd=self.recraft_dir,
                 cli_label='recraft',
                 should_cancel=should_cancel,
+                user_id=user_id,
             )
             report(_PROGRESS_RECRAFT_HI, 'Recraft завершён успешно', 'recraft', 'success')
             provider_successes['recraft'] = {
@@ -702,6 +718,7 @@ class GenerationService:
                     illustrations_count=illustrations_count,
                     cli_label=provider.slug,
                     should_cancel=should_cancel,
+                    user_id=user_id,
                 )
                 report(end_progress, f'{provider.label} завершён успешно', provider.slug, 'success')
                 provider_successes[provider.slug] = result

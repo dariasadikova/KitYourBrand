@@ -48,6 +48,10 @@ class AuthService:
                 conn.execute('ALTER TABLE users ADD COLUMN avatar_path TEXT')
             if 'had_projects' not in col_names:
                 conn.execute('ALTER TABLE users ADD COLUMN had_projects INTEGER NOT NULL DEFAULT 0')
+            if 'recraft_api_key' not in col_names:
+                conn.execute('ALTER TABLE users ADD COLUMN recraft_api_key TEXT')
+            if 'openrouter_api_key' not in col_names:
+                conn.execute('ALTER TABLE users ADD COLUMN openrouter_api_key TEXT')
             conn.commit()
 
     def email_exists(self, email: str) -> bool:
@@ -61,27 +65,52 @@ class AuthService:
     def get_user_by_email(self, email: str) -> Optional[sqlite3.Row]:
         with self._connect() as conn:
             return conn.execute(
-                "SELECT id, name, email, password_hash, is_active, avatar_path, had_projects FROM users WHERE lower(email) = lower(?) LIMIT 1",
+                "SELECT id, name, email, password_hash, is_active, avatar_path, had_projects, recraft_api_key, openrouter_api_key FROM users WHERE lower(email) = lower(?) LIMIT 1",
                 (email.strip(),),
             ).fetchone()
 
     def get_user_by_id(self, user_id: int) -> Optional[sqlite3.Row]:
         with self._connect() as conn:
             return conn.execute(
-                "SELECT id, name, email, password_hash, is_active, avatar_path, had_projects FROM users WHERE id = ? LIMIT 1",
+                "SELECT id, name, email, password_hash, is_active, avatar_path, had_projects, recraft_api_key, openrouter_api_key FROM users WHERE id = ? LIMIT 1",
                 (user_id,),
             ).fetchone()
 
-    def update_user_profile(self, user_id: int, *, name: str, avatar_path: str | None) -> None:
+    def update_user_profile(
+        self,
+        user_id: int,
+        *,
+        name: str,
+        avatar_path: str | None,
+        recraft_api_key: str | None = None,
+        openrouter_api_key: str | None = None,
+    ) -> None:
         normalized_name = (name or "").strip()
         if len(normalized_name) < 2:
             raise ValueError("Имя должно содержать хотя бы 2 символа.")
         with self._connect() as conn:
             conn.execute(
-                "UPDATE users SET name = ?, avatar_path = ? WHERE id = ?",
-                (normalized_name, avatar_path, user_id),
+                """
+                UPDATE users
+                SET name = ?,
+                    avatar_path = ?,
+                    recraft_api_key = COALESCE(?, recraft_api_key),
+                    openrouter_api_key = COALESCE(?, openrouter_api_key)
+                WHERE id = ?
+                """,
+                (normalized_name, avatar_path, recraft_api_key, openrouter_api_key, user_id),
             )
             conn.commit()
+
+
+    def get_user_api_keys(self, user_id: int) -> dict[str, str]:
+        row = self.get_user_by_id(user_id)
+        if row is None:
+            return {'recraft_api_key': '', 'openrouter_api_key': ''}
+        return {
+            'recraft_api_key': str(row['recraft_api_key'] or '').strip(),
+            'openrouter_api_key': str(row['openrouter_api_key'] or '').strip(),
+        }
 
     def change_password(self, user_id: int, *, new_password: str, current_password: str | None = None) -> None:
         row = self.get_user_by_id(user_id)

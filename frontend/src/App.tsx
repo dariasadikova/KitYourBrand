@@ -2342,6 +2342,8 @@ function ProfilePage({ onSessionRefresh }: { onSessionRefresh: () => Promise<voi
   const [profile, setProfile] = useState<Profile | null>(null)
   const [name, setName] = useState('')
   const [newPassword, setNewPassword] = useState('')
+  const [recraftApiKey, setRecraftApiKey] = useState('')
+  const [openrouterApiKey, setOpenrouterApiKey] = useState('')
   const [avatar, setAvatar] = useState<File | null>(null)
   const [success, setSuccess] = useState('')
   const [error, setError] = useState('')
@@ -2379,6 +2381,8 @@ function ProfilePage({ onSessionRefresh }: { onSessionRefresh: () => Promise<voi
     formData.append('name', name)
     formData.append('new_password', newPassword)
     formData.append('remove_avatar', '0')
+    formData.append('recraft_api_key', recraftApiKey)
+    formData.append('openrouter_api_key', openrouterApiKey)
     if (avatar) formData.append('avatar', avatar)
 
     try {
@@ -2386,6 +2390,8 @@ function ProfilePage({ onSessionRefresh }: { onSessionRefresh: () => Promise<voi
       setProfile(payload.profile)
       setName(payload.profile.name)
       setNewPassword('')
+      setRecraftApiKey('')
+      setOpenrouterApiKey('')
       setAvatar(null)
       setSuccess('Изменения сохранены')
       await onSessionRefresh()
@@ -2404,6 +2410,8 @@ function ProfilePage({ onSessionRefresh }: { onSessionRefresh: () => Promise<voi
     formData.append('name', name)
     formData.append('new_password', '')
     formData.append('remove_avatar', '1')
+    formData.append('recraft_api_key', '')
+    formData.append('openrouter_api_key', '')
 
     try {
       const payload = await updateProfile(formData)
@@ -2491,6 +2499,34 @@ function ProfilePage({ onSessionRefresh }: { onSessionRefresh: () => Promise<voi
               <span>Новый пароль</span>
               <input type="password" name="new_password" placeholder="Введите новый пароль" value={newPassword} onChange={(event) => setNewPassword(event.target.value)} />
               <p className="profile-field-hint">Минимум 8 символов</p>
+            </label>
+          </div>
+        </article>
+
+        <article className="profile-card">
+          <h2>API ключи провайдеров</h2>
+          <div className="profile-password-grid">
+            <label className="editor-field">
+              <span>Recraft API key</span>
+              <input
+                type="password"
+                name="recraft_api_key"
+                placeholder={profile?.api_keys?.recraft?.configured ? `Сохранён: ${profile.api_keys.recraft.masked}` : 'Введите Recraft API key'}
+                value={recraftApiKey}
+                onChange={(event) => setRecraftApiKey(event.target.value)}
+              />
+              <p className="profile-field-hint">Оставьте поле пустым, чтобы сохранить текущий ключ</p>
+            </label>
+            <label className="editor-field">
+              <span>OpenRouter API key</span>
+              <input
+                type="password"
+                name="openrouter_api_key"
+                placeholder={profile?.api_keys?.openrouter?.configured ? `Сохранён: ${profile.api_keys.openrouter.masked}` : 'Введите OpenRouter API key'}
+                value={openrouterApiKey}
+                onChange={(event) => setOpenrouterApiKey(event.target.value)}
+              />
+              <p className="profile-field-hint">Используется для Seedream, Flux, Nano Banana и GPT-5 Image Mini</p>
             </label>
           </div>
         </article>

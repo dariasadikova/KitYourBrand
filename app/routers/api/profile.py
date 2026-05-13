@@ -23,16 +23,37 @@ def _require_user_id(request: Request) -> int:
     return int(user_id)
 
 
+def _mask_api_key(value: str | None) -> str:
+    cleaned = (value or '').strip()
+    if not cleaned:
+        return ''
+    if len(cleaned) <= 8:
+        return '••••'
+    return f'{cleaned[:4]}••••{cleaned[-4:]}'
+
+
 def _profile_payload(row) -> dict:
     user_name = (str(row['name']) if row else '') or 'Пользователь'
     user_email = (str(row['email']) if row else '') or ''
     avatar_path = str(row['avatar_path']) if row and row['avatar_path'] else ''
+    recraft_api_key = str(row['recraft_api_key']) if row and row['recraft_api_key'] else ''
+    openrouter_api_key = str(row['openrouter_api_key']) if row and row['openrouter_api_key'] else ''
 
     return {
         'name': user_name,
         'email': user_email,
         'initial': (user_name[:1] or '?').upper(),
         'avatar_url': f'/profile/avatar/{avatar_path}' if avatar_path else '',
+        'api_keys': {
+            'recraft': {
+                'configured': bool(recraft_api_key),
+                'masked': _mask_api_key(recraft_api_key),
+            },
+            'openrouter': {
+                'configured': bool(openrouter_api_key),
+                'masked': _mask_api_key(openrouter_api_key),
+            },
+        },
     }
 
 
@@ -52,6 +73,8 @@ async def update_profile(
     name: str = Form(''),
     new_password: str = Form(''),
     remove_avatar: str = Form('0'),
+    recraft_api_key: str = Form(''),
+    openrouter_api_key: str = Form(''),
     avatar: UploadFile | None = File(None),
 ) -> JSONResponse:
     user_id = _require_user_id(request)
@@ -86,7 +109,13 @@ async def update_profile(
         (PROFILE_AVATARS_DIR / avatar_path).write_bytes(content)
 
     try:
-        auth_service.update_user_profile(user_id, name=name, avatar_path=avatar_path)
+        auth_service.update_user_profile(
+            user_id,
+            name=name,
+            avatar_path=avatar_path,
+            recraft_api_key=recraft_api_key.strip() or None,
+            openrouter_api_key=openrouter_api_key.strip() or None,
+        )
         if new_password.strip():
             auth_service.change_password(user_id, new_password=new_password)
     except ValueError as exc:

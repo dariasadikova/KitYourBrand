@@ -18,6 +18,8 @@ class User(Base):
     email: Mapped[str] = mapped_column(sa.Text, nullable=False, unique=True)
     password_hash: Mapped[str] = mapped_column(sa.Text, nullable=False)
     avatar_path: Mapped[str | None] = mapped_column(sa.Text, nullable=True)
+    recraft_api_key: Mapped[str | None] = mapped_column(sa.Text, nullable=True)
+    openrouter_api_key: Mapped[str | None] = mapped_column(sa.Text, nullable=True)
     # DEFAULT в DDL — чтобы INSERT из AuthService без этих полей оставался валидным.
     had_projects: Mapped[int] = mapped_column(sa.Integer, nullable=False, server_default=sa.text('0'))
     auth_provider: Mapped[str] = mapped_column(sa.Text, nullable=False, server_default=sa.text("'local'"))
