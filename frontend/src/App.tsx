@@ -2488,48 +2488,76 @@ function ProfilePage({ onSessionRefresh }: { onSessionRefresh: () => Promise<voi
           </div>
         </article>
 
-        <article className="profile-card">
-          <h2>Смена пароля</h2>
-          <div className="profile-password-grid">
-            <label className="editor-field">
-              <span>Текущий пароль</span>
-              <input type="password" className="profile-current-password" value="••••••••••••" disabled />
-            </label>
-            <label className="editor-field">
-              <span>Новый пароль</span>
-              <input type="password" name="new_password" placeholder="Введите новый пароль" value={newPassword} onChange={(event) => setNewPassword(event.target.value)} />
-              <p className="profile-field-hint">Минимум 8 символов</p>
-            </label>
-          </div>
-        </article>
+        <div className="profile-credentials-row">
+          <article className="profile-card">
+            <h2>Смена пароля</h2>
+            <div className="profile-password-grid">
+              <label className="editor-field">
+                <span>Текущий пароль</span>
+                <input type="password" className="profile-current-password" value="••••••••••••" disabled />
+              </label>
+              <label className="editor-field">
+                <span>Новый пароль</span>
+                <input type="password" name="new_password" placeholder="Введите новый пароль" value={newPassword} onChange={(event) => setNewPassword(event.target.value)} />
+                <p className="profile-field-hint">Минимум 8 символов</p>
+              </label>
+            </div>
+          </article>
 
-        <article className="profile-card">
-          <h2>API ключи провайдеров</h2>
-          <div className="profile-password-grid">
-            <label className="editor-field">
-              <span>Recraft API key</span>
-              <input
-                type="password"
-                name="recraft_api_key"
-                placeholder={profile?.api_keys?.recraft?.configured ? `Сохранён: ${profile.api_keys.recraft.masked}` : 'Введите Recraft API key'}
-                value={recraftApiKey}
-                onChange={(event) => setRecraftApiKey(event.target.value)}
-              />
-              <p className="profile-field-hint">Оставьте поле пустым, чтобы сохранить текущий ключ</p>
-            </label>
-            <label className="editor-field">
-              <span>OpenRouter API key</span>
-              <input
-                type="password"
-                name="openrouter_api_key"
-                placeholder={profile?.api_keys?.openrouter?.configured ? `Сохранён: ${profile.api_keys.openrouter.masked}` : 'Введите OpenRouter API key'}
-                value={openrouterApiKey}
-                onChange={(event) => setOpenrouterApiKey(event.target.value)}
-              />
-              <p className="profile-field-hint">Используется для Seedream, Flux, Nano Banana и GPT-5 Image Mini</p>
-            </label>
-          </div>
-        </article>
+          <article className="profile-card">
+            <h2>API ключи провайдеров</h2>
+            <div className="profile-password-grid">
+              <label className="editor-field">
+                <span>Recraft API key</span>
+                <div className="profile-input-adorned">
+                  <input
+                    type="password"
+                    name="recraft_api_key"
+                    placeholder={profile?.api_keys?.recraft?.configured ? `Сохранён: ${profile.api_keys.recraft.masked}` : 'Введите Recraft API key'}
+                    value={recraftApiKey}
+                    onChange={(event) => setRecraftApiKey(event.target.value)}
+                    autoComplete="off"
+                  />
+                  <button
+                    type="button"
+                    className="profile-api-info-btn profile-input-adorned__hint"
+                    aria-label="Подсказка: Recraft API key"
+                    aria-describedby="profile-api-hint-recraft"
+                  >
+                    i
+                  </button>
+                  <span id="profile-api-hint-recraft" className="profile-input-adorned__tooltip" role="tooltip">
+                    Оставьте поле пустым, чтобы сохранить текущий ключ
+                  </span>
+                </div>
+              </label>
+              <label className="editor-field">
+                <span>OpenRouter API key</span>
+                <div className="profile-input-adorned">
+                  <input
+                    type="password"
+                    name="openrouter_api_key"
+                    placeholder={profile?.api_keys?.openrouter?.configured ? `Сохранён: ${profile.api_keys.openrouter.masked}` : 'Введите OpenRouter API key'}
+                    value={openrouterApiKey}
+                    onChange={(event) => setOpenrouterApiKey(event.target.value)}
+                    autoComplete="off"
+                  />
+                  <button
+                    type="button"
+                    className="profile-api-info-btn profile-input-adorned__hint"
+                    aria-label="Подсказка: OpenRouter API key"
+                    aria-describedby="profile-api-hint-openrouter"
+                  >
+                    i
+                  </button>
+                  <span id="profile-api-hint-openrouter" className="profile-input-adorned__tooltip" role="tooltip">
+                    Используется для Seedream, Flux, Nano Banana и GPT-5 Image Mini
+                  </span>
+                </div>
+              </label>
+            </div>
+          </article>
+        </div>
 
         <div className="profile-actions">
           <Link to="/profile" className="btn btn-outline btn-inline">Отмена</Link>
