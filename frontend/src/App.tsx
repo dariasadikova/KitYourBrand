@@ -1,4 +1,12 @@
-import { type FormEvent, type MouseEvent, type ReactNode, useEffect, useLayoutEffect, useRef, useState } from 'react'
+import {
+  type FormEvent,
+  type MouseEvent,
+  type ReactNode,
+  useEffect,
+  useLayoutEffect,
+  useRef,
+  useState,
+} from 'react'
 import { Link, Navigate, Route, Routes, useNavigate, useParams, useSearchParams } from 'react-router-dom'
 import { cancelGenerationJob, deleteGenerationHistorySelected, getGenerationHistory } from './services/generationHistoryApi'
 import { getCurrentSession, login, logout, register } from './services/authApi'
@@ -20,6 +28,12 @@ import {
   getGenerationJob,
   getProjectResults,
 } from './services/resultsApi'
+import {
+  PROVIDER_NEWS_ENTRIES,
+  PROVIDER_NEWS_VERSION,
+  providerNewsStorageKey,
+  readSeenProviderNewsVersion,
+} from './config/providerNews'
 import type { AuthMeResponse } from './types/auth'
 import type { GenerationHistoryResponse, GenerationHistoryRow } from './types/generationHistory'
 import type { Profile } from './types/profile'
@@ -507,8 +521,29 @@ function MigrationShell({
   const navigate = useNavigate()
   const userName = session?.user?.name || 'Пользователь'
   const userEmail = session?.user?.email || ''
+  const userId = session?.user?.id
   const avatarUrl = (session?.user?.avatar_url || '').trim()
   const userInitial = userName.slice(0, 1).toUpperCase() || '?'
+  const [seenProviderNewsVersion, setSeenProviderNewsVersion] = useState(() =>
+    session?.user?.id != null ? readSeenProviderNewsVersion(session.user.id) : 0,
+  )
+
+  useEffect(() => {
+    if (userId == null) return
+    setSeenProviderNewsVersion(readSeenProviderNewsVersion(userId))
+  }, [userId])
+
+  const hasUnreadProviderNews = userId != null && seenProviderNewsVersion < PROVIDER_NEWS_VERSION
+
+  function markProviderNewsSeen() {
+    if (userId == null || seenProviderNewsVersion >= PROVIDER_NEWS_VERSION) return
+    try {
+      localStorage.setItem(providerNewsStorageKey(userId), String(PROVIDER_NEWS_VERSION))
+    } catch {
+      /* storage unavailable */
+    }
+    setSeenProviderNewsVersion(PROVIDER_NEWS_VERSION)
+  }
 
   async function handleLogoutClick(event: MouseEvent<HTMLAnchorElement>) {
     event.preventDefault()
@@ -532,13 +567,28 @@ function MigrationShell({
         </div>
         <div className="dashboard-page-header__actions">
           <div className="dashboard-userbar">
-            <button type="button" className="dashboard-icon-btn" aria-label="Уведомления">
-              <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round" aria-hidden="true">
-                <path d="M6 8a6 6 0 0 1 12 0c0 7 3 9 3 9H3s3-2 3-9" />
-                <path d="M10.3 21a1.94 1.94 0 0 0 3.4 0" />
-              </svg>
-              <span className="dashboard-badge"></span>
-            </button>
+            <div className="dashboard-notify" onMouseEnter={markProviderNewsSeen}>
+              <button
+                type="button"
+                className="dashboard-icon-btn"
+                aria-label={hasUnreadProviderNews ? 'Уведомления: есть непрочитанное сообщение о новых нейросетях' : 'Уведомления'}
+                onFocus={markProviderNewsSeen}
+              >
+                <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round" aria-hidden="true">
+                  <path d="M6 8a6 6 0 0 1 12 0c0 7 3 9 3 9H3s3-2 3-9" />
+                  <path d="M10.3 21a1.94 1.94 0 0 0 3.4 0" />
+                </svg>
+                {hasUnreadProviderNews ? <span className="dashboard-badge" aria-hidden="true" /> : null}
+              </button>
+              <div className="dashboard-notify-popover" role="region" aria-label="Сообщения о нейросетях">
+                {PROVIDER_NEWS_ENTRIES.map((entry, index) => (
+                  <div className="dashboard-notify-item" key={index}>
+                    <strong className="dashboard-notify-item__title">{entry.title}</strong>
+                    <p className="dashboard-notify-item__body">{entry.body}</p>
+                  </div>
+                ))}
+              </div>
+            </div>
             <div className="dashboard-userpill">
               <span className="dashboard-userpill__email">{userEmail}</span>
               <span className="dashboard-userpill__avatar">
@@ -1006,13 +1056,26 @@ function ResultsPage({ projectSlug }: { projectSlug: string }) {
     )
   }
 
+  const hasResultsContent =
+    results.palette_items.length > 0 ||
+    results.assets.logos.length > 0 ||
+    results.assets.icons.length > 0 ||
+    results.assets.patterns.length > 0 ||
+    results.assets.illustrations.length > 0
+
   return (
     <>
       <section className="results-page" data-results-page data-project-slug={projectSlug} data-brand-id={results.project.brand_id} data-active-job-id={job?.id || ''}>
         <div className="results-page__head">
           <div>
             <h1>Результаты генерации бренд-комплекта</h1>
-            <p>{results.selected_generation_job_id ? 'Открыта сохранённая версия генерации из истории' : 'Ваш бренд-комплект готов к использованию'}</p>
+            <p>
+              {results.selected_generation_job_id
+                ? 'Открыта сохранённая версия генерации из истории'
+                : hasResultsContent
+                  ? 'Ваш бренд-комплект готов к использованию'
+                  : 'Здесь появятся результаты после первой успешной генерации в редакторе проекта.'}
+            </p>
           </div>
         </div>
 
@@ -1038,11 +1101,12 @@ function ResultsPage({ projectSlug }: { projectSlug: string }) {
             )}
           </section>
 
-          <ResultsAssetSection title="Логотипы" kind="logos" projectSlug={projectSlug} selectedJobId={results.selected_generation_job_id || ''} assets={results.assets.logos} gridClassName="results-icons-grid" cardClassName="results-icon-card" />
-          <ResultsAssetSection title="Иконки" kind="icons" projectSlug={projectSlug} selectedJobId={results.selected_generation_job_id || ''} assets={results.assets.icons} gridClassName="results-icons-grid" cardClassName="results-icon-card" />
-          <ResultsAssetSection title="Паттерны" kind="patterns" projectSlug={projectSlug} selectedJobId={results.selected_generation_job_id || ''} assets={results.assets.patterns} gridClassName="results-media-grid results-media-grid--patterns" cardClassName="results-media-card" />
-          <ResultsAssetSection title="Иллюстрации" kind="illustrations" projectSlug={projectSlug} selectedJobId={results.selected_generation_job_id || ''} assets={results.assets.illustrations} gridClassName="results-media-grid" cardClassName="results-media-card" />
+          <ResultsAssetSection title="Логотипы" kind="logos" projectSlug={projectSlug} selectedJobId={results.selected_generation_job_id || ''} assets={results.assets.logos} gridClassName="results-icons-grid" cardClassName="results-icon-card" showDownloadButton={hasResultsContent} />
+          <ResultsAssetSection title="Иконки" kind="icons" projectSlug={projectSlug} selectedJobId={results.selected_generation_job_id || ''} assets={results.assets.icons} gridClassName="results-icons-grid" cardClassName="results-icon-card" showDownloadButton={hasResultsContent} />
+          <ResultsAssetSection title="Паттерны" kind="patterns" projectSlug={projectSlug} selectedJobId={results.selected_generation_job_id || ''} assets={results.assets.patterns} gridClassName="results-media-grid results-media-grid--patterns" cardClassName="results-media-card" showDownloadButton={hasResultsContent} />
+          <ResultsAssetSection title="Иллюстрации" kind="illustrations" projectSlug={projectSlug} selectedJobId={results.selected_generation_job_id || ''} assets={results.assets.illustrations} gridClassName="results-media-grid" cardClassName="results-media-card" showDownloadButton={hasResultsContent} />
 
+          {hasResultsContent ? (
           <section className="results-card results-card--export" data-figma-export>
             <div className="results-card__head results-card__head--stacked">
               <div className="results-card__title">
@@ -1066,6 +1130,7 @@ function ResultsPage({ projectSlug }: { projectSlug: string }) {
             </div>
             <p className={`results-export__status${exportTone ? ` results-export__status--${exportTone}` : ''}`} aria-live="polite">{exportStatus}</p>
           </section>
+          ) : null}
         </div>
       </section>
 
@@ -1082,6 +1147,7 @@ function ResultsAssetSection({
   assets,
   gridClassName,
   cardClassName,
+  showDownloadButton,
 }: {
   title: string
   kind: 'logos' | 'icons' | 'patterns' | 'illustrations'
@@ -1090,6 +1156,7 @@ function ResultsAssetSection({
   assets: ResultAsset[]
   gridClassName: string
   cardClassName: string
+  showDownloadButton: boolean
 }) {
   const downloadUrl = `/projects/${projectSlug}/downloads/${kind}${selectedJobId ? `?job=${encodeURIComponent(selectedJobId)}` : ''}`
   return (
@@ -1098,7 +1165,7 @@ function ResultsAssetSection({
         <div className="results-card__title">
           <h2>{title}</h2>
         </div>
-        <a href={downloadUrl} className="btn btn-primary btn-inline">Скачать</a>
+        {showDownloadButton ? <a href={downloadUrl} className="btn btn-primary btn-inline">Скачать</a> : null}
       </div>
       {assets.length ? (
         <div className={gridClassName}>
@@ -1326,7 +1393,7 @@ type StyleRef = {
 }
 
 const ASSET_LABELS: Record<AssetType, string> = {
-  logos: 'Логотипы',
+  logos: 'Логотип',
   icons: 'Иконки',
   patterns: 'Паттерны',
   illustrations: 'Иллюстрации',
@@ -2074,7 +2141,7 @@ function ProjectEditorPage({ projectSlug, isNewProjectFlow }: { projectSlug: str
             {isGenerationStarting ? 'Запускаем генерацию...' : 'Собрать бренд-комплект'}
           </button>
           <div className="cta-stats">
-            <span><strong>{assetCounts.logos}</strong> логотипов</span>
+            <span><strong>{assetCounts.logos}</strong> вариантов логотипа</span>
             <span><strong>{assetCounts.icons}</strong> иконок</span>
             <span><strong>{assetCounts.patterns}</strong> паттернов</span>
             <span><strong>{assetCounts.illustrations}</strong> иллюстраций</span>
@@ -2300,7 +2367,7 @@ function clampAssetCount(value: unknown, fallback: number): number {
 }
 
 function assetCountLabel(type: AssetType): string {
-  if (type === 'logos') return 'Количество логотипов'
+  if (type === 'logos') return 'Количество вариантов логотипа'
   if (type === 'icons') return 'Количество иконок'
   if (type === 'patterns') return 'Количество паттернов'
   return 'Количество иллюстраций'

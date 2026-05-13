@@ -136,9 +136,11 @@ class ProjectService:
     def create_project(self, user_id: int, name: str) -> ProjectRecord:
         project_name = (name or '').strip() or 'Новый проект'
         base_slug = self._slugify(project_name)
-        slug = f'{base_slug}-{uuid.uuid4().hex[:6]}'
+        rand = uuid.uuid4().hex
+        slug = f'{base_slug}-{rand[:6]}'
         now = datetime.now(timezone.utc).isoformat()
         tokens = self.make_default_tokens(project_name)
+        tokens['brand_id'] = f'{base_slug}-{rand[:10]}'
 
         with self._connect() as conn:
             cur = conn.execute(
@@ -241,6 +243,20 @@ class ProjectService:
                 (user_id, job_id, project.id, project_slug, project.name, started, tokens_snapshot),
             )
             conn.commit()
+
+    def project_has_successful_generation(self, user_id: int, project_slug: str) -> bool:
+        """True if generation completed for this project (row finalized as success in history)."""
+        with self._connect() as conn:
+            row = conn.execute(
+                """
+                SELECT 1 AS ok
+                FROM generation_jobs_history
+                WHERE user_id = ? AND project_slug = ? AND status = 'success'
+                LIMIT 1
+                """,
+                (user_id, project_slug),
+            ).fetchone()
+        return row is not None
 
     def set_generation_job_running(self, job_id: str) -> None:
         with self._connect() as conn:

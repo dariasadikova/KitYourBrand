@@ -146,13 +146,20 @@ def get_project_results(
             palette_tokens = past_tokens
         asset_rows = project_service.list_assets_for_generation(user_id, project_slug, selected_job_id)
         assets = _assets_from_generation_rows(project_slug, brand_id, asset_rows)
+        palette_items = _palette_items_from_tokens(palette_tokens)
     else:
-        assets = {
-            'logos': _scan_asset_group(brand_id, 'logos', ('.png', '.svg', '.jpg', '.jpeg')),
-            'icons': _scan_asset_group(brand_id, 'icons', ('.png', '.svg', '.jpg', '.jpeg')),
-            'patterns': _scan_asset_group(brand_id, 'patterns', ('.png', '.svg', '.jpg', '.jpeg')),
-            'illustrations': _scan_asset_group(brand_id, 'illustrations', ('.png', '.svg', '.jpg', '.jpeg')),
-        }
+        has_finished_generation = project_service.project_has_successful_generation(user_id, project_slug)
+        if has_finished_generation:
+            assets = {
+                'logos': _scan_asset_group(brand_id, 'logos', ('.png', '.svg', '.jpg', '.jpeg')),
+                'icons': _scan_asset_group(brand_id, 'icons', ('.png', '.svg', '.jpg', '.jpeg')),
+                'patterns': _scan_asset_group(brand_id, 'patterns', ('.png', '.svg', '.jpg', '.jpeg')),
+                'illustrations': _scan_asset_group(brand_id, 'illustrations', ('.png', '.svg', '.jpg', '.jpeg')),
+            }
+            palette_items = _palette_items_from_tokens(tokens)
+        else:
+            assets = {'logos': [], 'icons': [], 'patterns': [], 'illustrations': []}
+            palette_items = []
 
     display_brand_id = (palette_tokens.get('brand_id') or brand_id).strip() or brand_id
 
@@ -164,7 +171,7 @@ def get_project_results(
                 'name': project.name,
                 'brand_id': display_brand_id,
             },
-            'palette_items': _palette_items_from_tokens(palette_tokens),
+            'palette_items': palette_items,
             'assets': assets,
             'active_generation_job_id': (active_job or {}).get('id') if active_job else '',
             'selected_generation_job_id': selected_job_id,

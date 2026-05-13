@@ -1295,6 +1295,58 @@ img {
     background: var(--primary);
 }
 
+.dashboard-notify {
+    position: relative;
+}
+
+.dashboard-notify-popover {
+    position: absolute;
+    top: calc(100% + 10px);
+    right: 0;
+    width: min(340px, calc(100vw - 32px));
+    padding: 14px 16px;
+    border-radius: 14px;
+    background: rgba(30, 34, 38, 0.98);
+    border: 1px solid rgba(255, 255, 255, 0.12);
+    box-shadow: 0 18px 48px rgba(0, 0, 0, 0.45);
+    color: #e8eaed;
+    font-size: 0.9rem;
+    line-height: 1.5;
+    opacity: 0;
+    visibility: hidden;
+    transform: translateY(-4px);
+    transition: opacity 0.18s ease, visibility 0.18s ease, transform 0.18s ease;
+    z-index: 60;
+    pointer-events: none;
+}
+
+.dashboard-notify:hover .dashboard-notify-popover,
+.dashboard-notify:focus-within .dashboard-notify-popover {
+    opacity: 1;
+    visibility: visible;
+    transform: translateY(0);
+    pointer-events: auto;
+}
+
+.dashboard-notify-item + .dashboard-notify-item {
+    margin-top: 14px;
+    padding-top: 14px;
+    border-top: 1px solid rgba(255, 255, 255, 0.08);
+}
+
+.dashboard-notify-item__title {
+    display: block;
+    font-size: 0.95rem;
+    font-weight: 600;
+    margin: 0 0 6px;
+    color: #f1f5f9;
+}
+
+.dashboard-notify-item__body {
+    margin: 0;
+    color: rgba(226, 232, 240, 0.92);
+}
+
 .dashboard-userpill {
     min-height: 44px;
     padding: 6px 12px 6px 12px;
