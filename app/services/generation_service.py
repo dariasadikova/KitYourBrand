@@ -9,13 +9,20 @@ import subprocess
 import sys
 import threading
 import time
-from pathlib import Path
+from pathlib import Path, PurePosixPath
 from typing import Any, Callable
+from urllib.parse import quote
 
 from PIL import Image
 
 from app.core.paths import OUT_DIR
-from app.core.providers import ASSET_PROVIDER_SLUGS, PROVIDERS, iter_asset_providers, iter_standard_cli_providers
+from app.core.providers import (
+    ASSET_PROVIDER_SLUGS,
+    PROVIDERS,
+    iter_asset_providers,
+    iter_standard_cli_providers,
+    parse_generation_provider_slugs,
+)
 from app.services.generation_error_summary import ProviderGenerationError, summarize_generation_failure
 from app.services.project_service import ProjectService
 
@@ -54,6 +61,28 @@ def _split_progress_band(start: int, end: int, n: int) -> list[tuple[int, int]]:
         parts.append((lo, hi))
         pos = hi + 1
     return parts
+
+
+def _figma_entry_url_for_storage(
+    base_host: str,
+    project_slug: str,
+    brand_id: str,
+    storage_path: str,
+) -> str:
+    """Публичный URL ассета для Figma manifest (как на странице результатов)."""
+    rel = PurePosixPath(str(storage_path).replace('\\', '/'))
+    parts = rel.parts
+    if len(parts) >= 5 and parts[0] == 'generation_results':
+        job_id, provider, kind, filename = parts[1], parts[2], parts[3], parts[-1]
+        return (
+            f'{base_host}/projects/{quote(project_slug)}/result-assets/{quote(job_id)}/'
+            f'{quote(provider)}/{quote(kind)}/{quote(filename)}'
+        )
+    if len(parts) >= 5 and parts[0] == 'out':
+        provider, stored_brand_id, kind, filename = parts[1], parts[2], parts[3], parts[-1]
+        bid = stored_brand_id or brand_id
+        return f'{base_host}/assets/{quote(bid)}/{quote(provider)}/{quote(kind)}/{quote(filename)}'
+    return f'{base_host}/assets/{quote(brand_id)}/{quote("/".join(parts))}'
 
 
 class GenerationCancelledError(RuntimeError):
@@ -140,9 +169,11 @@ class GenerationService:
                 continue
         return converted
 
-    def convert_webp_to_png_for_brand(self, brand_id: str) -> dict[str, int]:
+    def convert_webp_to_png_for_brand(self, brand_id: str, *, only_providers: frozenset[str] | None = None) -> dict[str, int]:
         summary: dict[str, int] = {}
         for provider in iter_asset_providers():
+            if only_providers is not None and provider.slug not in only_providers:
+                continue
             root = provider.out_root / brand_id
             n = (
                 self.convert_webp_to_png_in_dir(root / 'logos')
@@ -162,11 +193,14 @@ class GenerationService:
                 items.append((Path(fn).stem, fn))
         return items
 
-    def clear_brand_outputs(self, brand_id: str) -> None:
-        """Remove previous generation files for this brand only."""
+    def clear_brand_outputs(self, brand_id: str, *, only_providers: frozenset[str] | None = None) -> None:
+        """Remove previous generation files for this brand only (optionally — только выбранные провайдеры)."""
         if not brand_id:
             return
-        for provider in iter_asset_providers():
+        targets = iter_asset_providers()
+        if only_providers is not None:
+            targets = tuple(p for p in targets if p.slug in only_providers)
+        for provider in targets:
             brand_root = provider.out_root / brand_id
             for section in ('logos', 'icons', 'patterns', 'illustrations'):
                 section_dir = brand_root / section
@@ -292,6 +326,112 @@ class GenerationService:
 
         export_dir = self.project_service.exports_dir(user_id, project_slug)
         export_path = export_dir / 'figma_plugin_manifest.json'
+        export_path.write_text(json.dumps(manifest, ensure_ascii=False, indent=2), encoding='utf-8')
+
+        counts = {
+            'logos': len(logos),
+            'icons': len(icons),
+            'patterns': len(patterns),
+            'illustrations': len(illustrations),
+        }
+        return manifest, counts, export_path
+
+    def build_and_save_figma_manifest_for_job(
+        self,
+        user_id: int,
+        project_slug: str,
+        brand_id: str,
+        base_host: str,
+        generation_job_id: str,
+    ) -> tuple[dict[str, Any], dict[str, int], Path]:
+        """Figma manifest по снимку ассетов конкретного запуска (generation_results / out в БД)."""
+        job_row = self.project_service.get_generation_history_job(user_id, project_slug, generation_job_id)
+        if not job_row:
+            raise ValueError('Запуск генерации не найден.')
+
+        live_tokens = self.project_service.load_tokens(user_id, project_slug)
+        past_tokens = self.project_service.tokens_at_generation_start(
+            user_id,
+            project_slug,
+            tokens_snapshot_json=job_row.get('tokens_snapshot'),
+            started_at=job_row.get('started_at'),
+        )
+        palette_tokens: dict[str, Any] = past_tokens if past_tokens else live_tokens
+
+        effective_brand_id = (brand_id or palette_tokens.get('brand_id') or live_tokens.get('brand_id') or '').strip()
+        if not effective_brand_id:
+            raise ValueError('Не указан brand_id для сборки Figma manifest.')
+
+        base_host_norm = (base_host or '').rstrip('/').replace('127.0.0.1', 'localhost')
+        rows = self.project_service.list_assets_for_generation(user_id, project_slug, generation_job_id)
+
+        logos: list[dict[str, Any]] = []
+        icons: list[dict[str, Any]] = []
+        patterns: list[dict[str, Any]] = []
+        illustrations: list[dict[str, Any]] = []
+        grouped: dict[str, list[dict[str, Any]]] = {
+            'logos': logos,
+            'icons': icons,
+            'patterns': patterns,
+            'illustrations': illustrations,
+        }
+
+        for row in rows:
+            kind = str(row.get('kind') or '')
+            if kind not in grouped:
+                continue
+            storage = str(row.get('storage_path') or '')
+            filename = str(row.get('filename') or PurePosixPath(storage).name)
+            provider = str(row.get('provider') or '')
+            name_stem = PurePosixPath(filename).stem
+            url = _figma_entry_url_for_storage(base_host_norm, project_slug, effective_brand_id, storage)
+            entry: dict[str, Any] = {
+                'name': f'{provider}-{name_stem}',
+                'provider': provider,
+                'url': url,
+            }
+            if kind == 'icons':
+                entry['sizes'] = [16, 24, 32]
+            if kind == 'patterns':
+                entry['tile'] = 'seamless'
+            grouped[kind].append(entry)
+
+        brand = {
+            'name': palette_tokens.get('name', 'Brand'),
+            'style_id': palette_tokens.get('style_id', ''),
+            'brand_id': effective_brand_id,
+        }
+        palette = palette_tokens.get('palette', {}) or {}
+        refs = (palette_tokens.get('references') or {}).get('style_images', []) or []
+
+        style_images_urls: list[str] = []
+        for p in refs:
+            if isinstance(p, str) and p.startswith('http'):
+                style_images_urls.append(p)
+            else:
+                filename = Path(str(p)).name
+                style_images_urls.append(f'{base_host_norm}/projects/{project_slug}/refs/{filename}')
+
+        manifest: dict[str, Any] = {
+            'brand': brand,
+            'palette': palette,
+            'logos': logos,
+            'icons': icons,
+            'patterns': patterns,
+            'illustrations': illustrations,
+            'tokens': {'icon': palette_tokens.get('icon', {})},
+            'references': {'style_images': style_images_urls},
+            'provenance': {
+                'generator': 'KitYourBrand FastAPI',
+                'generation_job_id': generation_job_id,
+                'note': 'Ассеты привязаны к запуску генерации (URL из снимка / result-assets).',
+                'available_providers': list(ASSET_PROVIDER_SLUGS),
+            },
+        }
+
+        export_dir = self.project_service.exports_dir(user_id, project_slug)
+        export_name = f'figma_plugin_manifest_{generation_job_id}.json'
+        export_path = export_dir / export_name
         export_path.write_text(json.dumps(manifest, ensure_ascii=False, indent=2), encoding='utf-8')
 
         counts = {
@@ -568,6 +708,17 @@ class GenerationService:
         patterns_count = int(payload.get('patterns_count') or 0)
         illustrations_count = int(payload.get('illustrations_count') or 0)
         build_style = bool(payload.get('build_style'))
+        active_providers = parse_generation_provider_slugs(payload)
+
+        if build_style and 'recraft' not in active_providers:
+            raise ValueError(
+                'Создание стиля Recraft несовместимо с отключённым провайдером Recraft. '
+                'Включите Recraft или отключите опцию «Создать новый стиль».'
+            )
+        if 'recraft' not in active_providers and not style_id:
+            raise ValueError(
+                'Укажите Style ID в проекте или включите провайдера Recraft для этой генерации.'
+            )
 
         setup_steps = 5 if build_style else 3
         si = 0
@@ -575,7 +726,7 @@ class GenerationService:
         si += 1
         report(_progress_setup_step_pct(si, setup_steps), 'Загрузка конфигурации проекта')
         ensure_not_cancelled()
-        self.clear_brand_outputs(brand_id)
+        self.clear_brand_outputs(brand_id, only_providers=active_providers)
         si += 1
         report(_progress_setup_step_pct(si, setup_steps), 'Очистка результатов прошлой генерации')
 
@@ -588,7 +739,7 @@ class GenerationService:
         token_path = self.project_service.tokens_path(user_id, project_slug)
         if not token_path.exists():
             raise FileNotFoundError(f'Файл tokens.json не найден: {token_path}')
-        if not self.recraft_main.exists():
+        if 'recraft' in active_providers and not self.recraft_main.exists():
             raise FileNotFoundError(f'Не найден генератор артефактов (Recraft): {self.recraft_main}')
 
         self.recraft_tokens.parent.mkdir(parents=True, exist_ok=True)
@@ -597,95 +748,102 @@ class GenerationService:
         report(_progress_setup_step_pct(si, setup_steps), 'Проект сохранён и подготовлен для генерации')
         ensure_not_cancelled()
 
-        recraft_out_abs = self.recraft_out_root / brand_id
-        recraft_out_abs.mkdir(parents=True, exist_ok=True)
-
-        ref_src_paths: list[Path] = []
-        if build_style:
-            si += 1
-            report(_progress_setup_step_pct(si, setup_steps), 'Подготовка референсов для Recraft')
-            ref_src_paths = self._prepare_recraft_references(user_id, project_slug, tokens)
-            if ref_src_paths:
-                si += 1
-                report(_progress_setup_step_pct(si, setup_steps), f'Референсы подготовлены: {len(ref_src_paths)} шт.')
-            else:
-                si += 1
-                report(_progress_setup_step_pct(si, setup_steps), 'Референсов нет, создание нового стиля будет пропущено')
-
-        recraft_cmd = [sys.executable, str(self.recraft_main), '--tokens', str(self.recraft_tokens)]
-        if style_id:
-            recraft_cmd.extend(['--style-id', style_id])
-        if build_style:
-            recraft_cmd.append('--build-style')
-        recraft_cmd.extend([
-            '--logos', str(logos_count),
-            '--icons', str(icons_count),
-            '--patterns', str(patterns_count),
-            '--illustrations', str(illustrations_count),
-            '--out', str(recraft_out_abs),
-        ])
-
         provider_successes: dict[str, dict[str, Any]] = {}
         provider_failures: dict[str, dict[str, str | None]] = {}
 
-        report(_PROGRESS_RECRAFT_LO, 'Запуск провайдера Recraft', 'recraft', 'running')
-        try:
-            recraft_stdout, recraft_stderr = self._run_provider_command(
-                provider='recraft',
-                cmd=recraft_cmd,
-                cwd=self.recraft_dir,
-                cli_label='recraft',
-                should_cancel=should_cancel,
-                user_id=user_id,
-            )
-            report(_PROGRESS_RECRAFT_HI, 'Recraft завершён успешно', 'recraft', 'success')
-            provider_successes['recraft'] = {
-                'ok': True,
-                'error': '',
-                'error_hint': None,
-                'stdout': recraft_stdout,
-                'stderr': recraft_stderr,
-            }
-        except ProviderGenerationError as exc:
-            report(
-                _PROGRESS_RECRAFT_HI,
-                exc.user_message or 'Recraft завершился с ошибкой',
-                'recraft',
-                'error',
-                {'message': exc.user_message, 'hint': exc.hint},
-            )
-            provider_failures['recraft'] = {
-                'message': exc.user_message,
-                'hint': exc.hint,
-            }
-            recraft_stdout = ''
-            recraft_stderr = ''
-        ensure_not_cancelled()
-
+        recraft_stdout = ''
+        recraft_stderr = ''
         new_style_id = ''
-        if recraft_stdout:
-            m = re.search(r'created style_id:\s*([0-9a-fA-F\-]+)', recraft_stdout)
-            if m:
-                new_style_id = m.group(1).strip()
-        effective_style_id = new_style_id or style_id
+        effective_style_id = style_id
+        ref_src_paths: list[Path] = []
 
-        if new_style_id:
-            report(_PROGRESS_NEW_STYLE, f'Получен новый style_id: {new_style_id}')
-            tokens['style_id'] = new_style_id
-            self.project_service.save_tokens(user_id, project_slug, tokens)
-            meta_brand_dir = self.meta_out_root / brand_id
-            meta_brand_dir.mkdir(parents=True, exist_ok=True)
-            (meta_brand_dir / 'style_id.txt').write_text(new_style_id, encoding='utf-8')
+        if 'recraft' in active_providers:
+            recraft_out_abs = self.recraft_out_root / brand_id
+            recraft_out_abs.mkdir(parents=True, exist_ok=True)
 
-        if ref_src_paths:
-            refs_out_dir = self.meta_out_root / brand_id / 'references'
-            refs_out_dir.mkdir(parents=True, exist_ok=True)
-            for src in ref_src_paths:
-                shutil.copy(src, refs_out_dir / src.name)
+            if build_style:
+                si += 1
+                report(_progress_setup_step_pct(si, setup_steps), 'Подготовка референсов для Recraft')
+                ref_src_paths = self._prepare_recraft_references(user_id, project_slug, tokens)
+                if ref_src_paths:
+                    si += 1
+                    report(_progress_setup_step_pct(si, setup_steps), f'Референсы подготовлены: {len(ref_src_paths)} шт.')
+                else:
+                    si += 1
+                    report(_progress_setup_step_pct(si, setup_steps), 'Референсов нет, создание нового стиля будет пропущено')
+
+            recraft_cmd = [sys.executable, str(self.recraft_main), '--tokens', str(self.recraft_tokens)]
+            if style_id:
+                recraft_cmd.extend(['--style-id', style_id])
+            if build_style:
+                recraft_cmd.append('--build-style')
+            recraft_cmd.extend([
+                '--logos', str(logos_count),
+                '--icons', str(icons_count),
+                '--patterns', str(patterns_count),
+                '--illustrations', str(illustrations_count),
+                '--out', str(recraft_out_abs),
+            ])
+
+            report(_PROGRESS_RECRAFT_LO, 'Запуск провайдера Recraft', 'recraft', 'running')
+            try:
+                recraft_stdout, recraft_stderr = self._run_provider_command(
+                    provider='recraft',
+                    cmd=recraft_cmd,
+                    cwd=self.recraft_dir,
+                    cli_label='recraft',
+                    should_cancel=should_cancel,
+                    user_id=user_id,
+                )
+                report(_PROGRESS_RECRAFT_HI, 'Recraft завершён успешно', 'recraft', 'success')
+                provider_successes['recraft'] = {
+                    'ok': True,
+                    'error': '',
+                    'error_hint': None,
+                    'stdout': recraft_stdout,
+                    'stderr': recraft_stderr,
+                }
+            except ProviderGenerationError as exc:
+                report(
+                    _PROGRESS_RECRAFT_HI,
+                    exc.user_message or 'Recraft завершился с ошибкой',
+                    'recraft',
+                    'error',
+                    {'message': exc.user_message, 'hint': exc.hint},
+                )
+                provider_failures['recraft'] = {
+                    'message': exc.user_message,
+                    'hint': exc.hint,
+                }
+                recraft_stdout = ''
+                recraft_stderr = ''
+            ensure_not_cancelled()
+
+            if recraft_stdout:
+                m = re.search(r'created style_id:\s*([0-9a-fA-F\-]+)', recraft_stdout)
+                if m:
+                    new_style_id = m.group(1).strip()
+            effective_style_id = new_style_id or style_id
+
+            if new_style_id:
+                report(_PROGRESS_NEW_STYLE, f'Получен новый style_id: {new_style_id}')
+                tokens['style_id'] = new_style_id
+                self.project_service.save_tokens(user_id, project_slug, tokens)
+                meta_brand_dir = self.meta_out_root / brand_id
+                meta_brand_dir.mkdir(parents=True, exist_ok=True)
+                (meta_brand_dir / 'style_id.txt').write_text(new_style_id, encoding='utf-8')
+
+            if ref_src_paths:
+                refs_out_dir = self.meta_out_root / brand_id / 'references'
+                refs_out_dir.mkdir(parents=True, exist_ok=True)
+                for src in ref_src_paths:
+                    shutil.copy(src, refs_out_dir / src.name)
+        else:
+            report(_PROGRESS_RECRAFT_HI, 'Провайдер Recraft пропущен (не выбран в форме)', 'recraft', 'skipped')
 
         runnable_std = [
             p for p in iter_standard_cli_providers()
-            if p.slug != 'recraft' and p.main_path is not None
+            if p.slug != 'recraft' and p.main_path is not None and p.slug in active_providers
         ]
         std_segments = _split_progress_band(_PROGRESS_STD_LO, _PROGRESS_STD_HI, len(runnable_std))
         std_progress_by_slug = {p.slug: std_segments[i] for i, p in enumerate(runnable_std)}
@@ -693,7 +851,7 @@ class GenerationService:
         standard_provider_results: dict[str, dict[str, Any]] = {}
 
         for provider in iter_standard_cli_providers():
-            if provider.slug == 'recraft':
+            if provider.slug == 'recraft' or provider.slug not in active_providers:
                 continue
             if provider.main_path is None:
                 provider_failures[provider.slug] = {
@@ -745,7 +903,8 @@ class GenerationService:
             ensure_not_cancelled()
 
         if not provider_successes:
-            last_provider = next(reversed(provider_failures.keys()), 'recraft')
+            failed_active = [k for k in provider_failures if k in active_providers]
+            last_provider = failed_active[-1] if failed_active else 'recraft'
             last_error = provider_failures.get(last_provider) or {}
             raise ProviderGenerationError(
                 provider=last_provider,
@@ -758,7 +917,7 @@ class GenerationService:
             )
 
         report(_PROGRESS_WEBP, 'Постобработка изображений WEBP → PNG')
-        webp_converted = self.convert_webp_to_png_for_brand(brand_id)
+        webp_converted = self.convert_webp_to_png_for_brand(brand_id, only_providers=active_providers)
 
         manifest, counts, export_path = self.build_and_save_figma_manifest(
             user_id,
@@ -785,11 +944,12 @@ class GenerationService:
             brand_id,
             self.out_root,
             job_id=generation_job_id,
+            provider_slugs=active_providers,
         )
 
         report(100, 'Генерация завершена')
 
-        has_errors = bool(provider_failures)
+        has_errors = bool([k for k in provider_failures if k in active_providers])
         completion_message = (
             'Генерация завершена с ошибками провайдеров'
             if has_errors
@@ -798,7 +958,10 @@ class GenerationService:
         top_error_message = None
         top_error_hint = None
         if has_errors:
-            first_failed = next(iter(provider_failures.keys()))
+            first_failed = next(
+                (s for s in ASSET_PROVIDER_SLUGS if s in provider_failures and s in active_providers),
+                next(iter(provider_failures.keys()), 'recraft'),
+            )
             first_err = provider_failures.get(first_failed) or {}
             provider_label = first_failed[:1].upper() + first_failed[1:]
             first_msg = str((first_err or {}).get('message') or '').strip()
@@ -811,6 +974,16 @@ class GenerationService:
 
         providers_response = {}
         for provider_slug in ASSET_PROVIDER_SLUGS:
+            if provider_slug not in active_providers:
+                providers_response[provider_slug] = {
+                    'ok': True,
+                    'skipped': True,
+                    'error': '',
+                    'error_hint': None,
+                    'stdout': '',
+                    'stderr': '',
+                }
+                continue
             providers_response[provider_slug] = provider_successes.get(
                 provider_slug,
                 {

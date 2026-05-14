@@ -2,6 +2,7 @@ from __future__ import annotations
 
 from dataclasses import dataclass
 from pathlib import Path
+from typing import Any
 
 from app.core.paths import FLUX_DIR, OUT_DIR, PROVIDERS_DIR, RECRAFT_DIR, SEEDREAM_DIR
 
@@ -72,6 +73,24 @@ PROVIDERS: dict[str, ProviderConfig] = {
 
 
 ASSET_PROVIDER_SLUGS: tuple[str, ...] = tuple(PROVIDERS.keys())
+
+
+def parse_generation_provider_slugs(payload: dict[str, Any]) -> frozenset[str]:
+    """Читает payload[\"provider_slugs\"]. Нет ключа — все провайдеры; пустой список — ошибка."""
+    raw = payload.get('provider_slugs')
+    if raw is None:
+        return frozenset(ASSET_PROVIDER_SLUGS)
+    if not isinstance(raw, list):
+        return frozenset(ASSET_PROVIDER_SLUGS)
+    allowed_set = set(ASSET_PROVIDER_SLUGS)
+    seen: list[str] = []
+    for item in raw:
+        s = str(item).strip()
+        if s in allowed_set and s not in seen:
+            seen.append(s)
+    if not seen:
+        raise ValueError('Выберите хотя бы одного провайдера для генерации.')
+    return frozenset(seen)
 
 
 def get_provider(slug: str) -> ProviderConfig:

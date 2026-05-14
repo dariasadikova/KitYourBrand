@@ -24,9 +24,18 @@ class GenerationJobStore:
     def _stamp(self) -> str:
         return datetime.now().strftime('%H:%M:%S')
 
-    def create_job(self, *, user_id: int, project_slug: str) -> dict[str, Any]:
+    def create_job(
+        self,
+        *,
+        user_id: int,
+        project_slug: str,
+        active_providers: frozenset[str] | None = None,
+    ) -> dict[str, Any]:
         job_id = uuid.uuid4().hex[:12]
-        provider_map = {provider: 'pending' for provider in ASSET_PROVIDER_SLUGS}
+        active = frozenset(ASSET_PROVIDER_SLUGS) if active_providers is None else active_providers
+        provider_map = {
+            provider: ('pending' if provider in active else 'skipped') for provider in ASSET_PROVIDER_SLUGS
+        }
         job = {
             'id': job_id,
             'user_id': user_id,

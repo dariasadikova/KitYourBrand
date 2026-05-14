@@ -8,7 +8,7 @@ from fastapi.responses import FileResponse, JSONResponse, RedirectResponse
 
 from app.schemas.palette import PaletteSuggestRequest, PaletteSuggestResponse
 from app.core.paths import OUT_DIR
-from app.core.providers import ASSET_PROVIDER_SLUGS
+from app.core.providers import ASSET_PROVIDER_SLUGS, parse_generation_provider_slugs
 from app.core.settings import settings
 from app.db import project_service
 from app.services.generation_service import GenerationService
@@ -284,14 +284,25 @@ async def generate_figma(request: Request, project_slug: str) -> JSONResponse:
     if not brand_id:
         return JSONResponse({'ok': False, 'error': 'Укажите brand_id.'}, status_code=400)
 
+    generation_job_id = (data.get('job_id') or data.get('generation_job_id') or '').strip()
+
     base_host = str(request.base_url).rstrip('/').replace('127.0.0.1', 'localhost')
     try:
-        manifest, counts, export_path = generation_service.build_and_save_figma_manifest(
-            user_id,
-            project_slug,
-            brand_id,
-            base_host,
-        )
+        if generation_job_id:
+            manifest, counts, export_path = generation_service.build_and_save_figma_manifest_for_job(
+                user_id,
+                project_slug,
+                brand_id,
+                base_host,
+                generation_job_id,
+            )
+        else:
+            manifest, counts, export_path = generation_service.build_and_save_figma_manifest(
+                user_id,
+                project_slug,
+                brand_id,
+                base_host,
+            )
         try:
             export_rel = str(export_path.relative_to(project_service.project_dir(user_id, project_slug)))
         except ValueError:
@@ -301,7 +312,7 @@ async def generate_figma(request: Request, project_slug: str) -> JSONResponse:
             project_slug,
             manifest=manifest,
             export_rel_path=export_rel,
-            job_id=None,
+            job_id=generation_job_id or None,
         )
     except Exception as exc:
         return JSONResponse({'ok': False, 'error': str(exc)}, status_code=400)
@@ -354,7 +365,15 @@ async def start_generate_assets(request: Request, project_slug: str) -> JSONResp
     user_id = require_auth(request)
     project_or_404(user_id, project_slug)
     data = await request.json()
-    job = generation_jobs.create_job(user_id=user_id, project_slug=project_slug)
+    try:
+        active_providers = parse_generation_provider_slugs(data)
+    except ValueError as exc:
+        return JSONResponse({'ok': False, 'error': str(exc)}, status_code=400)
+    job = generation_jobs.create_job(
+        user_id=user_id,
+        project_slug=project_slug,
+        active_providers=active_providers,
+    )
     project_service.record_generation_job(user_id=user_id, job_id=job['id'], project_slug=project_slug)
     generation_jobs.start_generation(
         job_id=job['id'],

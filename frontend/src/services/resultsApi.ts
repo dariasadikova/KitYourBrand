@@ -6,11 +6,18 @@ export function getProjectResults(projectSlug: string, jobId?: string): Promise<
   return apiClient<ProjectResultsResponse>(`/api/projects/${projectSlug}/results${query}`)
 }
 
-export function generateFigmaManifest(projectSlug: string, brandId: string): Promise<FigmaExportResponse> {
+export function generateFigmaManifest(projectSlug: string, brandId: string, generationJobId?: string): Promise<FigmaExportResponse> {
+  const body: Record<string, string> = {}
+  if (brandId) {
+    body.brand_id = brandId
+  }
+  if (generationJobId) {
+    body.job_id = generationJobId
+  }
   return apiClient<FigmaExportResponse>(`/projects/${projectSlug}/generate-figma`, {
     method: 'POST',
     headers: { 'Content-Type': 'application/json' },
-    body: JSON.stringify(brandId ? { brand_id: brandId } : {}),
+    body: JSON.stringify(body),
   })
 }
 

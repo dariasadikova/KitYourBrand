@@ -49,10 +49,6 @@ const GENERATION_PROVIDERS = [
   { slug: 'gpt5_image', label: 'GPT-5 Image' },
 ] as const
 
-const DEFAULT_PROVIDER_STATUSES = Object.fromEntries(
-  GENERATION_PROVIDERS.map((provider) => [provider.slug, 'pending']),
-) as Record<string, string>
-
 function providerLabel(provider: string): string {
   return GENERATION_PROVIDERS.find((item) => item.slug === provider)?.label
     || provider.replace(/_/g, ' ').replace(/\b\w/g, (char) => char.toUpperCase())
@@ -996,18 +992,14 @@ function ResultsPage({ projectSlug }: { projectSlug: string }) {
 
   async function handleGenerateFigma() {
     if (!results) return
-    if (results.selected_generation_job_id) {
-      setExportStatus('Для сохранённой версии доступно скачивание архива. Figma manifest формируется для текущей версии проекта.')
-      setExportTone('error')
-      return
-    }
+    const jobIdForExport = results.selected_generation_job_id?.trim() || ''
     setManifestUrl('')
     setIsExporting(true)
-    setExportStatus('Подготовка manifest…')
+    setExportStatus(jobIdForExport ? 'Подготовка manifest для выбранной версии…' : 'Подготовка manifest…')
     setExportTone('loading')
 
     try {
-      const payload = await generateFigmaManifest(projectSlug, results.project.brand_id)
+      const payload = await generateFigmaManifest(projectSlug, results.project.brand_id, jobIdForExport || undefined)
       setManifestUrl(payload.download_url || payload.manifest_url || '')
       setExportStatus('Manifest готов. Теперь его можно скачать и использовать в Figma plugin.')
       setExportTone('success')
@@ -1123,7 +1115,7 @@ function ResultsPage({ projectSlug }: { projectSlug: string }) {
               </div>
             </details>
             <div className="results-export__actions">
-              <button type="button" className="btn btn-primary" disabled={isExporting || Boolean(results.selected_generation_job_id)} onClick={handleGenerateFigma}>
+              <button type="button" className="btn btn-primary" disabled={isExporting} onClick={handleGenerateFigma}>
                 {isExporting ? 'Генерируем Figma JSON…' : manifestUrl ? 'Manifest готов ✓' : 'Экспорт бренд-комплекта'}
               </button>
               <a href={`/projects/${projectSlug}/downloads/all${results.selected_generation_job_id ? `?job=${encodeURIComponent(results.selected_generation_job_id)}` : ''}`} className="btn btn-secondary">Скачать архив</a>
@@ -1291,7 +1283,7 @@ function ResultsGenerationModal({
 
 function normalizeProviderStatus(status: string | undefined): string {
   const normalized = String(status || '')
-  return ['pending', 'running', 'success', 'error'].includes(normalized) ? normalized : 'pending'
+  return ['pending', 'running', 'success', 'error', 'skipped'].includes(normalized) ? normalized : 'pending'
 }
 
 function providerStatusLabel(status: string | undefined) {
@@ -1299,6 +1291,7 @@ function providerStatusLabel(status: string | undefined) {
   if (normalized === 'running') return 'выполняется'
   if (normalized === 'success') return 'успех'
   if (normalized === 'error') return 'ошибка'
+  if (normalized === 'skipped') return 'пропущен'
   return 'ожидание'
 }
 
@@ -1309,7 +1302,7 @@ function activeProviderSlug(statuses: Record<string, string | undefined>) {
 
   const lastResolvedIndex = entries.reduce((lastIndex, provider, index) => {
     const status = normalizeProviderStatus(statuses[provider.slug])
-    return status === 'success' || status === 'error' ? index : lastIndex
+    return status === 'success' || status === 'error' || status === 'skipped' ? index : lastIndex
   }, -1)
   const nextPending = entries.slice(lastResolvedIndex + 1).find((provider) => normalizeProviderStatus(statuses[provider.slug]) === 'pending')
   return nextPending?.slug || entries[Math.max(0, lastResolvedIndex)]?.slug || entries[0]?.slug || ''
@@ -1400,10 +1393,10 @@ const ASSET_LABELS: Record<AssetType, string> = {
 }
 
 const ASSET_PLACEHOLDERS: Record<AssetType, string> = {
-  logos: 'wordmark, monogram, emblem...',
-  icons: 'camera, chat...',
-  patterns: 'geometric, monogram, organic...',
-  illustrations: 'friendly mascot for...',
+  logos: 'Опишите, какой логотип вам нужен…',
+  icons: 'Опишите, какие иконки или образы ожидаете…',
+  patterns: 'Опишите, каким должен быть паттерн…',
+  illustrations: 'Опишите, какую иллюстрацию хотите получить…',
 }
 
 const DEFAULT_ASSET_COUNTS: Record<AssetType, number> = {
@@ -1411,6 +1404,13 @@ const DEFAULT_ASSET_COUNTS: Record<AssetType, number> = {
   icons: 8,
   patterns: 4,
   illustrations: 4,
+}
+
+function illustrationFormatFromTokens(tokens: ProjectTokens): 'vector' | 'raster' {
+  const vector = getNestedTokenBoolean(tokens, 'illustration', 'vector', false)
+  const raster = getNestedTokenBoolean(tokens, 'illustration', 'raster', true)
+  if (vector && !raster) return 'vector'
+  return 'raster'
 }
 
 function ProjectEditorPage({ projectSlug, isNewProjectFlow }: { projectSlug: string; isNewProjectFlow: boolean }) {
@@ -1427,13 +1427,7 @@ function ProjectEditorPage({ projectSlug, isNewProjectFlow }: { projectSlug: str
   const [activePaletteVariant, setActivePaletteVariant] = useState<PaletteVariantName>('balanced')
   const [isPaletteLoading, setIsPaletteLoading] = useState(false)
   const [activeAssetType, setActiveAssetType] = useState<AssetType>('logos')
-  const [promptChips, setPromptChips] = useState<Record<AssetType, string[]>>({
-    logos: [],
-    icons: [],
-    patterns: [],
-    illustrations: [],
-  })
-  const [chipInputs, setChipInputs] = useState<Record<AssetType, string>>({
+  const [promptFields, setPromptFields] = useState<Record<AssetType, string>>({
     logos: '',
     icons: '',
     patterns: '',
@@ -1443,11 +1437,11 @@ function ProjectEditorPage({ projectSlug, isNewProjectFlow }: { projectSlug: str
   const [iconStrokeWidth, setIconStrokeWidth] = useState(2)
   const [iconCorner, setIconCorner] = useState('rounded')
   const [iconFill, setIconFill] = useState('outline')
-  const [illustrationVector, setIllustrationVector] = useState(false)
-  const [illustrationRaster, setIllustrationRaster] = useState(true)
+  const [illustrationFormat, setIllustrationFormat] = useState<'vector' | 'raster'>('raster')
   const [styleRefs, setStyleRefs] = useState<StyleRef[]>([])
   const [isRefsLoading, setIsRefsLoading] = useState(false)
   const [buildStyle, setBuildStyle] = useState(true)
+  const [selectedGenerationProviders, setSelectedGenerationProviders] = useState<string[]>(() => [...GENERATION_PROVIDERS.map((p) => p.slug)])
   const [generationJob, setGenerationJob] = useState<GenerationJob | null>(null)
   const [isGenerationModalOpen, setIsGenerationModalOpen] = useState(false)
   const [generationError, setGenerationError] = useState('')
@@ -1488,15 +1482,15 @@ function ProjectEditorPage({ projectSlug, isNewProjectFlow }: { projectSlug: str
       setPaletteSeedRole('primary')
       setPaletteSeedColor(normalizeHexColor(nextPaletteSlots.primary) || DEFAULT_PALETTE.primary)
       void fetchPaletteSuggestions('primary', normalizeHexColor(nextPaletteSlots.primary) || DEFAULT_PALETTE.primary)
-      setPromptChips(getPromptChips(nextTokens))
+      setPromptFields(tokensToPromptFields(nextTokens))
       setAssetCounts(getAssetCounts(nextTokens))
       setIconStrokeWidth(getNestedTokenNumber(nextTokens, 'icon', 'strokeWidth', 2))
       setIconCorner(getNestedTokenString(nextTokens, 'icon', 'corner', 'rounded'))
       setIconFill(getNestedTokenString(nextTokens, 'icon', 'fill', 'outline'))
-      setIllustrationVector(getNestedTokenBoolean(nextTokens, 'illustration', 'vector', false))
-      setIllustrationRaster(getNestedTokenBoolean(nextTokens, 'illustration', 'raster', true))
+      setIllustrationFormat(illustrationFormatFromTokens(nextTokens))
       setStyleRefs(normalizeStyleRefs(getNestedTokenArray(nextTokens, 'references', 'style_images'), projectSlug))
       setBuildStyle(getNestedTokenBoolean(nextTokens, 'generation', 'build_style', true))
+      setSelectedGenerationProviders(getGenerationProviderSlugsFromTokens(nextTokens))
     }
 
     return () => {
@@ -1560,20 +1554,6 @@ function ProjectEditorPage({ projectSlug, isNewProjectFlow }: { projectSlug: str
       if (current.length <= 2) return current
       return current.filter((item) => item !== key)
     })
-  }
-
-  function addPromptChips(type: AssetType) {
-    const parts = chipInputs[type].split(/[,;\n]+/).map((item) => item.trim()).filter(Boolean)
-    if (!parts.length) return
-    setPromptChips((current) => ({ ...current, [type]: [...current[type], ...parts] }))
-    setChipInputs((current) => ({ ...current, [type]: '' }))
-  }
-
-  function removePromptChip(type: AssetType, index: number) {
-    setPromptChips((current) => ({
-      ...current,
-      [type]: current[type].filter((_, currentIndex) => currentIndex !== index),
-    }))
   }
 
   function setAssetCount(type: AssetType, value: string) {
@@ -1648,6 +1628,7 @@ function ProjectEditorPage({ projectSlug, isNewProjectFlow }: { projectSlug: str
       patterns_count: assetCounts.patterns,
       illustrations_count: assetCounts.illustrations,
       build_style: buildStyle,
+      provider_slugs: [...selectedGenerationProviders],
     }
     next.icon = {
       ...getTokenRecord(next, 'icon'),
@@ -1657,15 +1638,15 @@ function ProjectEditorPage({ projectSlug, isNewProjectFlow }: { projectSlug: str
     }
     next.illustration = {
       ...getTokenRecord(next, 'illustration'),
-      vector: illustrationVector,
-      raster: illustrationRaster,
+      vector: illustrationFormat === 'vector',
+      raster: illustrationFormat === 'raster',
     }
     next.prompts = {
       ...getTokenRecord(next, 'prompts'),
-      logos: promptChips.logos,
-      icons: promptChips.icons,
-      patterns: promptChips.patterns,
-      illustrations: promptChips.illustrations,
+      logos: expandPromptFieldForCount(promptFields.logos, assetCounts.logos),
+      icons: expandPromptFieldForCount(promptFields.icons, assetCounts.icons),
+      patterns: expandPromptFieldForCount(promptFields.patterns, assetCounts.patterns),
+      illustrations: expandPromptFieldForCount(promptFields.illustrations, assetCounts.illustrations),
     }
     next.references = {
       ...getTokenRecord(next, 'references'),
@@ -1691,19 +1672,37 @@ function ProjectEditorPage({ projectSlug, isNewProjectFlow }: { projectSlug: str
     }
   }
 
+  function toggleGenerationProvider(slug: string, checked: boolean) {
+    if (slug === 'recraft' && !checked && buildStyle) {
+      setBuildStyle(false)
+    }
+    setSelectedGenerationProviders((prev) => {
+      if (checked) {
+        return prev.includes(slug) ? prev : [...prev, slug]
+      }
+      if (prev.length <= 1) {
+        return prev
+      }
+      return prev.filter((s) => s !== slug)
+    })
+  }
+
   async function handleGenerate() {
     setIsGenerationStarting(true)
     setIsGenerationModalOpen(true)
     setGenerationError('')
     setGenerationErrorHint('')
     setCancelRequested(false)
+    const initialProviderStatuses = Object.fromEntries(
+      GENERATION_PROVIDERS.map((p) => [p.slug, selectedGenerationProviders.includes(p.slug) ? 'pending' : 'skipped']),
+    ) as Record<string, string>
     setGenerationJob({
       id: '',
       status: 'running',
       progress: 0,
       message: 'Автосохранение проекта',
       logs: ['Инициализация генерации...'],
-      provider_statuses: { ...DEFAULT_PROVIDER_STATUSES },
+      provider_statuses: initialProviderStatuses,
     })
 
     try {
@@ -1719,6 +1718,7 @@ function ProjectEditorPage({ projectSlug, isNewProjectFlow }: { projectSlug: str
         patterns_count: assetCounts.patterns,
         illustrations_count: assetCounts.illustrations,
         build_style: buildStyle,
+        provider_slugs: [...selectedGenerationProviders],
       })
 
       if (!started.job_id) {
@@ -1734,7 +1734,9 @@ function ProjectEditorPage({ projectSlug, isNewProjectFlow }: { projectSlug: str
         progress: current?.progress || 0,
         message: 'Ошибка генерации',
         logs: [...(current?.logs || []), err instanceof Error ? err.message : 'Ошибка запуска генерации.'],
-        provider_statuses: current?.provider_statuses || { ...DEFAULT_PROVIDER_STATUSES },
+        provider_statuses: current?.provider_statuses || Object.fromEntries(
+          GENERATION_PROVIDERS.map((p) => [p.slug, selectedGenerationProviders.includes(p.slug) ? 'pending' : 'skipped']),
+        ) as Record<string, string>,
       }))
     } finally {
       setIsGenerationStarting(false)
@@ -1796,15 +1798,15 @@ function ProjectEditorPage({ projectSlug, isNewProjectFlow }: { projectSlug: str
       setPaletteSeedRole('primary')
       setPaletteSeedColor(normalizeHexColor(nextPaletteSlots.primary) || DEFAULT_PALETTE.primary)
       setPaletteSuggestions(null)
-      setPromptChips(getPromptChips(payload.tokens))
+      setPromptFields(tokensToPromptFields(payload.tokens))
       setAssetCounts(getAssetCounts(payload.tokens))
       setIconStrokeWidth(getNestedTokenNumber(payload.tokens, 'icon', 'strokeWidth', 2))
       setIconCorner(getNestedTokenString(payload.tokens, 'icon', 'corner', 'rounded'))
       setIconFill(getNestedTokenString(payload.tokens, 'icon', 'fill', 'outline'))
-      setIllustrationVector(getNestedTokenBoolean(payload.tokens, 'illustration', 'vector', false))
-      setIllustrationRaster(getNestedTokenBoolean(payload.tokens, 'illustration', 'raster', true))
+      setIllustrationFormat(illustrationFormatFromTokens(payload.tokens))
       setStyleRefs(normalizeStyleRefs(getNestedTokenArray(payload.tokens, 'references', 'style_images'), projectSlug))
       setBuildStyle(getNestedTokenBoolean(payload.tokens, 'generation', 'build_style', true))
+      setSelectedGenerationProviders(getGenerationProviderSlugsFromTokens(payload.tokens))
       setStatus('Проект сброшен.')
     } catch (err) {
       setError(err instanceof Error ? err.message : 'Не удалось сбросить проект.')
@@ -1982,34 +1984,16 @@ function ProjectEditorPage({ projectSlug, isNewProjectFlow }: { projectSlug: str
               hidden={activeAssetType !== type}
               key={type}
             >
-              <div className="editor-list-field">
-                <span className="editor-field-title">Темы генерации</span>
-                <div className="chip-list" role="list">
-                  {promptChips[type].map((text, index) => (
-                    <span className="chip" role="listitem" key={`${text}-${index}`}>
-                      <span className="chip__text">{text}</span>
-                      <button type="button" className="chip__remove" aria-label="Удалить" onClick={() => removePromptChip(type, index)}>✕</button>
-                    </span>
-                  ))}
-                </div>
-                <div className="chip-add-row">
-                  <input
-                    type="text"
-                    placeholder={ASSET_PLACEHOLDERS[type]}
-                    className="editor-grow-input"
-                    autoComplete="off"
-                    value={chipInputs[type]}
-                    onChange={(event) => setChipInputs((current) => ({ ...current, [type]: event.target.value }))}
-                    onKeyDown={(event) => {
-                      if (event.key === 'Enter') {
-                        event.preventDefault()
-                        addPromptChips(type)
-                      }
-                    }}
-                  />
-                  <button type="button" className="small-action" onClick={() => addPromptChips(type)}>Добавить</button>
-                </div>
-              </div>
+              <label className="editor-field">
+                <span>Промпт</span>
+                <textarea
+                  rows={4}
+                  placeholder={ASSET_PLACEHOLDERS[type]}
+                  autoComplete="off"
+                  value={promptFields[type]}
+                  onChange={(event) => setPromptFields((current) => ({ ...current, [type]: event.target.value }))}
+                />
+              </label>
 
               {type === 'icons' ? (
                 <div className="editor-grid">
@@ -2037,13 +2021,25 @@ function ProjectEditorPage({ projectSlug, isNewProjectFlow }: { projectSlug: str
               ) : null}
 
               {type === 'illustrations' ? (
-                <div className="illustration-format-row">
+                <div className="illustration-format-row" role="radiogroup" aria-label="Формат иллюстрации">
                   <label className="illustration-format-check">
-                    <input type="checkbox" checked={illustrationVector} onChange={(event) => setIllustrationVector(event.target.checked)} />
+                    <input
+                      type="radio"
+                      name={`illustration-format-${projectSlug}`}
+                      value="vector"
+                      checked={illustrationFormat === 'vector'}
+                      onChange={() => setIllustrationFormat('vector')}
+                    />
                     <span>Вектор</span>
                   </label>
                   <label className="illustration-format-check">
-                    <input type="checkbox" checked={illustrationRaster} onChange={(event) => setIllustrationRaster(event.target.checked)} />
+                    <input
+                      type="radio"
+                      name={`illustration-format-${projectSlug}`}
+                      value="raster"
+                      checked={illustrationFormat === 'raster'}
+                      onChange={() => setIllustrationFormat('raster')}
+                    />
                     <span>Растр</span>
                   </label>
                 </div>
@@ -2113,12 +2109,41 @@ function ProjectEditorPage({ projectSlug, isNewProjectFlow }: { projectSlug: str
             </div>
           </div>
           <label className="build-style-box">
-            <input type="checkbox" checked={buildStyle} onChange={(event) => setBuildStyle(event.target.checked)} />
+            <input
+              type="checkbox"
+              checked={buildStyle}
+              onChange={(event) => {
+                const next = event.target.checked
+                setBuildStyle(next)
+                if (next) {
+                  setSelectedGenerationProviders((prev) => (prev.includes('recraft') ? prev : [...prev, 'recraft']))
+                }
+              }}
+            />
             <div>
               <strong>Создать новый стиль по текущим референсам</strong>
               <span>Если включено, система проанализирует загруженные референсные изображения и создаст новый Style ID.</span>
             </div>
           </label>
+
+          <div className="editor-field generation-providers-pick">
+            <span>Нейросети для этого запуска</span>
+            <p className="generation-providers-hint">
+              Отметьте модели, которые должны выдать ассеты. Без Recraft в проекте должен&nbsp;быть сохранён Style&nbsp;ID.
+            </p>
+            <div className="generation-providers-checkboxes" role="group" aria-label="Провайдеры генерации">
+              {GENERATION_PROVIDERS.map((p) => (
+                <label key={p.slug} className="generation-provider-check">
+                  <input
+                    type="checkbox"
+                    checked={selectedGenerationProviders.includes(p.slug)}
+                    onChange={(event) => toggleGenerationProvider(p.slug, event.target.checked)}
+                  />
+                  <span>{p.label}</span>
+                </label>
+              ))}
+            </div>
+          </div>
 
           <div className="generated-summary">
             <h3>Что будет сгенерировано:</h3>
@@ -2315,6 +2340,24 @@ function getNestedTokenArray(tokens: ProjectTokens, group: string, key: string):
   return Array.isArray(value) ? value : []
 }
 
+const ALL_GENERATION_PROVIDER_SLUGS = GENERATION_PROVIDERS.map((p) => p.slug)
+
+function getGenerationProviderSlugsFromTokens(tokens: ProjectTokens): string[] {
+  const raw = getNestedTokenArray(tokens, 'generation', 'provider_slugs')
+  const allowed = new Set<string>(ALL_GENERATION_PROVIDER_SLUGS)
+  const picked: string[] = []
+  for (const item of raw) {
+    const s = String(item).trim()
+    if (allowed.has(s) && !picked.includes(s)) {
+      picked.push(s)
+    }
+  }
+  if (picked.length) {
+    return picked
+  }
+  return [...ALL_GENERATION_PROVIDER_SLUGS]
+}
+
 function getPaletteSlots(tokens: ProjectTokens): Record<PaletteKey, string> {
   const paletteSlots = getTokenRecord(tokens, 'palette_slots')
   const palette = getTokenRecord(tokens, 'palette')
@@ -2334,12 +2377,26 @@ function getActivePaletteKeys(tokens: ProjectTokens): PaletteKey[] {
   return normalized.length >= 2 ? normalized.slice(0, 6) : ['primary', 'secondary', 'accent']
 }
 
-function getPromptChips(tokens: ProjectTokens): Record<AssetType, string[]> {
+function tokensToPromptFields(tokens: ProjectTokens): Record<AssetType, string> {
   const prompts = getTokenRecord(tokens, 'prompts')
-  return ASSET_TYPES.reduce<Record<AssetType, string[]>>((acc, type) => {
-    acc[type] = normalizePromptArray(prompts[type])
+  return ASSET_TYPES.reduce<Record<AssetType, string>>((acc, type) => {
+    acc[type] = promptArrayToSingleFieldText(prompts[type])
     return acc
-  }, { logos: [], icons: [], patterns: [], illustrations: [] })
+  }, { logos: '', icons: '', patterns: '', illustrations: '' })
+}
+
+/** Один текст в форме — в tokens повторяется по числу вариантов (ожидание CLI). */
+function expandPromptFieldForCount(text: string, count: number): string[] {
+  const trimmed = text.trim()
+  if (!trimmed || count <= 0) return []
+  return Array.from({ length: count }, () => trimmed)
+}
+
+function promptArrayToSingleFieldText(raw: unknown): string {
+  const arr = normalizePromptArray(raw)
+  if (!arr.length) return ''
+  if (arr.every((item) => item === arr[0])) return arr[0]
+  return arr.join('\n')
 }
 
 function getAssetCounts(tokens: ProjectTokens): Record<AssetType, number> {

@@ -667,6 +667,7 @@ class ProjectService:
         out_root: Path,
         *,
         job_id: str | None = None,
+        provider_slugs: frozenset[str] | None = None,
     ) -> int:
         """Индексирует файлы в out/<provider>/<brand_id>/... в таблицу assets."""
         try:
@@ -679,6 +680,8 @@ class ProjectService:
             from app.core.providers import ASSET_PROVIDER_SLUGS
 
             for provider in ASSET_PROVIDER_SLUGS:
+                if provider_slugs is not None and provider not in provider_slugs:
+                    continue
                 base = out_root / provider / brand_id
                 for kind in ('logos', 'icons', 'patterns', 'illustrations'):
                     d = base / kind

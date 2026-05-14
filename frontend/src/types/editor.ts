@@ -31,6 +31,8 @@ export type StartGenerationPayload = {
   patterns_count: number
   illustrations_count: number
   build_style: boolean
+  /** Slugs from backend ASSET_PROVIDER_SLUGS; пустой список на сервере считается ошибкой */
+  provider_slugs: string[]
 }
 
 export type StartGenerationResponse = {
