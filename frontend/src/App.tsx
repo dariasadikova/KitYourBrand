@@ -1438,6 +1438,7 @@ function ProjectEditorPage({ projectSlug, isNewProjectFlow }: { projectSlug: str
   const [paletteSuggestions, setPaletteSuggestions] = useState<Record<PaletteVariantName, PaletteVariant> | null>(null)
   const [activePaletteVariant, setActivePaletteVariant] = useState<PaletteVariantName>('balanced')
   const [isPaletteLoading, setIsPaletteLoading] = useState(false)
+  const [paletteAssistantOpen, setPaletteAssistantOpen] = useState(false)
   const [activeAssetType, setActiveAssetType] = useState<AssetType>('logos')
   const [promptFields, setPromptFields] = useState<Record<AssetType, string>>({
     logos: '',
@@ -1493,7 +1494,9 @@ function ProjectEditorPage({ projectSlug, isNewProjectFlow }: { projectSlug: str
       setActivePaletteKeys(getActivePaletteKeys(nextTokens))
       setPaletteSeedRole('primary')
       setPaletteSeedColor(normalizeHexColor(nextPaletteSlots.primary) || DEFAULT_PALETTE.primary)
-      void fetchPaletteSuggestions('primary', normalizeHexColor(nextPaletteSlots.primary) || DEFAULT_PALETTE.primary)
+      setPaletteSuggestions(null)
+      setPaletteAssistantOpen(false)
+      setActivePaletteVariant('balanced')
       setPromptFields(tokensToPromptFields(nextTokens))
       setAssetCounts(getAssetCounts(nextTokens))
       setIconStrokeWidth(getNestedTokenNumber(nextTokens, 'icon', 'strokeWidth', 2))
@@ -1517,7 +1520,7 @@ function ProjectEditorPage({ projectSlug, isNewProjectFlow }: { projectSlug: str
     if (normalized) {
       setPaletteSeedRole(key)
       setPaletteSeedColor(normalized)
-      void fetchPaletteSuggestions(key, normalized)
+      setPaletteSuggestions(null)
     }
   }
 
@@ -1810,6 +1813,8 @@ function ProjectEditorPage({ projectSlug, isNewProjectFlow }: { projectSlug: str
       setPaletteSeedRole('primary')
       setPaletteSeedColor(normalizeHexColor(nextPaletteSlots.primary) || DEFAULT_PALETTE.primary)
       setPaletteSuggestions(null)
+      setPaletteAssistantOpen(false)
+      setActivePaletteVariant('balanced')
       setPromptFields(tokensToPromptFields(payload.tokens))
       setAssetCounts(getAssetCounts(payload.tokens))
       setIconStrokeWidth(getNestedTokenNumber(payload.tokens, 'icon', 'strokeWidth', 2))
@@ -1897,9 +1902,13 @@ function ProjectEditorPage({ projectSlug, isNewProjectFlow }: { projectSlug: str
             <div>
               <div className="step-progress-caption">Шаг 2 из 6</div>
               <h2>Визуальный стиль</h2>
-              <p>Цветовая палитра</p>
+              <p>Цветовая палитра: в генерацию попадают отмеченные цвета из сетки ниже</p>
             </div>
           </div>
+
+          <p className="editor-note editor-note--compact">
+            Итоговая палитра — это ваши значения в сетке (шаг сохранения / запуска). Блок «Подбор палитры» ниже необязателен: он лишь предлагает варианты; они применятся к сетке только после нажатия Soft, Balanced или Contrast.
+          </p>
 
           <div className="palette-grid palette-grid--six">
             {PALETTE_KEYS.map((key) => {
@@ -1932,51 +1941,71 @@ function ProjectEditorPage({ projectSlug, isNewProjectFlow }: { projectSlug: str
           </div>
           <div className="editor-note editor-note--compact" hidden={activePaletteKeys.length >= 2}>Выберите минимум 2 цвета палитры. Они будут использоваться в текущей генерации.</div>
 
-          <div className="palette-autofill" hidden={!normalizeHexColor(paletteSeedColor)}>
-            <div className="palette-autofill__head">
-              <div>
-                <h3>Автоподбор палитры</h3>
-                <p>Основа палитры: {capitalizePaletteLabel(paletteSeedRole)} {paletteSeedColor}. Выберите один из готовых вариантов.</p>
-              </div>
-              <button
-                type="button"
-                className="btn btn-outline btn-inline palette-autofill__refresh"
-                disabled={isPaletteLoading}
-                onClick={() => void fetchPaletteSuggestions(paletteSeedRole, paletteSeedColor)}
-              >
-                {isPaletteLoading ? 'Обновляем...' : 'Обновить варианты'}
-              </button>
-            </div>
-            <div className="palette-autofill__meta">
-              <span className="palette-autofill__chip">Основа: {capitalizePaletteLabel(paletteSeedRole)} · {paletteSeedColor}</span>
-              <span className="palette-autofill__chip palette-autofill__chip--muted">Палитра обновится только после выбора варианта</span>
-            </div>
-            <div className="palette-autofill__actions">
-              {(['soft', 'balanced', 'contrast'] as const).map((variantName) => (
+          <div className="palette-assistant-bar">
+            <button
+              type="button"
+              className="btn btn-outline btn-inline palette-assistant-toggle"
+              aria-expanded={paletteAssistantOpen}
+              onClick={() => {
+                const next = !paletteAssistantOpen
+                setPaletteAssistantOpen(next)
+                if (next && normalizeHexColor(paletteSeedColor)) {
+                  void fetchPaletteSuggestions(paletteSeedRole, paletteSeedColor)
+                }
+              }}
+            >
+              {paletteAssistantOpen ? 'Скрыть подбор палитры' : 'Подобрать палитру по опорному цвету (необязательно)'}
+            </button>
+          </div>
+
+          {paletteAssistantOpen ? (
+            <div className="palette-autofill">
+              <div className="palette-autofill__head">
+                <div>
+                  <h3>Подбор палитры</h3>
+                  <p>
+                    Сейчас за опору взят цвет {capitalizePaletteLabel(paletteSeedRole)}.
+                  </p>
+                  <p>
+                    Нажмите вариант Soft / Balanced / Contrast, чтобы подставить предложенные 6 цветов. Пока не нажали — в генерации используются только ваши значения в сетке.
+                  </p>
+                </div>
                 <button
                   type="button"
-                  className={`small-action palette-variant-btn${activePaletteVariant === variantName ? ' is-active' : ''}`}
-                  key={variantName}
-                  onClick={() => void applySuggestedPalette(variantName)}
+                  className="btn btn-inline palette-autofill__refresh"
+                  disabled={isPaletteLoading || !normalizeHexColor(paletteSeedColor)}
+                  onClick={() => void fetchPaletteSuggestions(paletteSeedRole, paletteSeedColor)}
                 >
-                  {variantName === 'soft' ? 'Soft' : variantName === 'balanced' ? 'Balanced' : 'Contrast'}
+                  {isPaletteLoading ? 'Обновляем...' : 'Обновить варианты'}
                 </button>
-              ))}
-            </div>
-            <div className="palette-autofill__preview">
-              {paletteSuggestions?.[activePaletteVariant]
-                ? PALETTE_KEYS.map((key) => (
-                  <div className="palette-preview-swatch" key={key}>
-                    <div className="palette-preview-swatch__color" style={{ background: paletteSuggestions[activePaletteVariant][key] }}></div>
-                    <div className="palette-preview-swatch__meta">
-                      <span className="palette-preview-swatch__label">{PALETTE_LABELS[key]}</span>
-                      <strong className="palette-preview-swatch__value">{paletteSuggestions[activePaletteVariant][key]}</strong>
+              </div>
+              <div className="palette-autofill__actions">
+                {(['soft', 'balanced', 'contrast'] as const).map((variantName) => (
+                  <button
+                    type="button"
+                    className={`small-action palette-variant-btn${activePaletteVariant === variantName ? ' is-active' : ''}`}
+                    key={variantName}
+                    onClick={() => void applySuggestedPalette(variantName)}
+                  >
+                    {variantName === 'soft' ? 'Soft' : variantName === 'balanced' ? 'Balanced' : 'Contrast'}
+                  </button>
+                ))}
+              </div>
+              <div className="palette-autofill__preview">
+                {paletteSuggestions?.[activePaletteVariant]
+                  ? PALETTE_KEYS.map((key) => (
+                    <div className="palette-preview-swatch" key={key}>
+                      <div className="palette-preview-swatch__color" style={{ background: paletteSuggestions[activePaletteVariant][key] }}></div>
+                      <div className="palette-preview-swatch__meta">
+                        <span className="palette-preview-swatch__label">{PALETTE_LABELS[key]}</span>
+                        <strong className="palette-preview-swatch__value">{paletteSuggestions[activePaletteVariant][key]}</strong>
+                      </div>
                     </div>
-                  </div>
-                ))
-                : null}
+                  ))
+                  : null}
+              </div>
             </div>
-          </div>
+          ) : null}
         </section>
 
         <section className="editor-card editor-card--progressive" data-progress-step="3">

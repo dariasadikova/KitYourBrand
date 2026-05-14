@@ -2233,6 +2233,17 @@ img {
     color: rgba(255, 255, 255, 0.72);
 }
 
+.palette-assistant-bar {
+    margin-top: 14px;
+    display: flex;
+    flex-wrap: wrap;
+    gap: 10px;
+}
+
+.palette-assistant-toggle {
+    justify-content: center;
+}
+
 .palette-autofill {
     margin-top: 18px;
     padding: 18px;
@@ -2262,8 +2273,30 @@ img {
     font-size: 0.92rem;
 }
 
+.palette-autofill__head p + p {
+    margin-top: 10px;
+}
+
 .palette-autofill__refresh {
     white-space: nowrap;
+}
+
+.palette-autofill__refresh.btn {
+    background: #fff;
+    color: #0b0f13;
+    border: 1px solid rgba(0, 0, 0, 0.14);
+}
+
+.palette-autofill__refresh.btn:hover:not(:disabled) {
+    background: #f3f4f6;
+    color: #0b0f13;
+    border-color: rgba(0, 0, 0, 0.2);
+}
+
+.palette-autofill__refresh.btn:disabled {
+    opacity: 0.5;
+    cursor: not-allowed;
+    transform: none;
 }
 
 .palette-autofill__meta {
