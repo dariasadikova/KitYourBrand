@@ -10,10 +10,32 @@ if TYPE_CHECKING:
     from app.services.project_service import ProjectService
 
 from app.core.providers import ASSET_PROVIDER_SLUGS
-from app.services.generation_error_summary import ProviderGenerationError, summarize_generation_failure
+from app.services.generation_error_summary import (
+    ProviderGenerationError,
+    summarize_generation_failure,
+    user_log_line_for_provider_error,
+)
 from app.services.generation_service import GenerationCancelledError
 
 TERMINAL_JOB_STATUSES = ('completed', 'completed_with_errors', 'failed', 'cancelled')
+
+_HISTORY_LOG_EXCERPT_MAX_LINES = 40
+_HISTORY_ERROR_RECORD_MAX_CHARS = 8000
+
+
+def _history_error_message_with_logs(primary: str | None, log_lines: list[Any] | None, *, max_chars: int) -> str:
+    """Текст для поля error_message в generation_jobs_history: суть + хвост журнала как в UI."""
+    base = (primary or '').strip() or 'Ошибка генерации.'
+    raw = [str(x).strip() for x in (log_lines or []) if str(x).strip()]
+    if not raw:
+        text = base
+    else:
+        tail = raw[-_HISTORY_LOG_EXCERPT_MAX_LINES:]
+        journal = '\n'.join(tail)
+        text = f'{base}\n\nФрагмент журнала:\n{journal}'
+    if len(text) > max_chars:
+        return text[: max_chars - 1] + '…'
+    return text
 
 
 class GenerationJobStore:
@@ -161,7 +183,14 @@ class GenerationJobStore:
                         changes['error_hint'] = provider_error.get('hint')
 
                 self.update(job_id, **changes)
-                self.append_log(job_id, message)
+                log_message = message
+                if provider_status == 'error' and provider and provider_error:
+                    log_message = user_log_line_for_provider_error(
+                        provider,
+                        provider_error.get('message') if provider_error.get('message') is not None else None,
+                        provider_error.get('hint') if provider_error.get('hint') is not None else None,
+                    )
+                self.append_log(job_id, log_message)
 
             try:
                 result = generation_service.generate_assets(
@@ -190,10 +219,18 @@ class GenerationJobStore:
                 )
                 self.append_log(job_id, 'Генерация завершена с ошибками провайдеров.' if has_errors else 'Генерация завершена успешно!')
                 if project_service is not None:
+                    snapshot = self.get_job(job_id) or {}
+                    hist_err_msg: str | None = None
+                    if has_errors:
+                        hist_err_msg = _history_error_message_with_logs(
+                            result.get('error') or 'Часть провайдеров завершилась с ошибкой.',
+                            snapshot.get('logs'),
+                            max_chars=_HISTORY_ERROR_RECORD_MAX_CHARS,
+                        )
                     project_service.finalize_generation_job_record(
                         job_id,
                         'success',
-                        error_message=(result.get('error') or None) if has_errors else None,
+                        error_message=hist_err_msg,
                         error_hint=(result.get('error_hint') or None) if has_errors else None,
                     )
                     if has_errors:
@@ -278,10 +315,16 @@ class GenerationJobStore:
                 if hint:
                     self.append_log(job_id, hint)
                 if project_service is not None:
+                    snapshot_logs = (self.get_job(job_id) or {}).get('logs')
+                    hist_err_msg = _history_error_message_with_logs(
+                        user_msg or 'Ошибка генерации',
+                        snapshot_logs,
+                        max_chars=_HISTORY_ERROR_RECORD_MAX_CHARS,
+                    )
                     project_service.finalize_generation_job_record(
                         job_id,
                         'failed',
-                        error_message=user_msg or 'Ошибка генерации',
+                        error_message=hist_err_msg,
                         error_hint=hint,
                     )
                     fp = str(failed_provider).strip() if failed_provider else 'unknown'

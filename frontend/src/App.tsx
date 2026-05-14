@@ -732,6 +732,10 @@ function GenerationHistoryPage() {
     }
   }
 
+  const historyErrBody = errorRow ? String(errorRow.error_message || '').trim() : ''
+  const historyErrHint = errorRow ? String(errorRow.error_hint || '').trim() : ''
+  const historyErrShowHint = Boolean(errorRow && historyErrHint && !historyErrBody.includes(historyErrHint))
+
   return (
     <section className="dashboard-content generation-history-page">
       <div className="dashboard-head generation-history-head">
@@ -857,8 +861,11 @@ function GenerationHistoryPage() {
           <div className="generation-history-modal__dialog" role="alertdialog" aria-modal="true" aria-labelledby="generation-history-error-title">
             <button type="button" className="generation-history-modal__close" aria-label="Закрыть" onClick={() => setErrorRow(null)}>×</button>
             <h2 id="generation-history-error-title">Ошибка генерации</h2>
-            <p className="generation-history-error-body">{errorRow.error_message || 'Генерация завершилась с ошибкой.'}</p>
-            {errorRow.error_hint ? <p className="generation-history-error-hint">{errorRow.error_hint}</p> : null}
+            <p className="generation-history-error-body">
+              {historyErrBody
+                || 'Текст ошибки не был сохранён (часто так бывает у старых записей или после сбоя). Откройте проект и при необходимости запустите генерацию снова.'}
+            </p>
+            {historyErrShowHint ? <p className="generation-history-error-hint">{historyErrHint}</p> : null}
             <div className="generation-history-modal__actions">
               <button type="button" className="btn btn-primary btn-inline" onClick={() => setErrorRow(null)}>Ок</button>
             </div>
@@ -1209,10 +1216,15 @@ function isGenerationLogErrorLine(line: string): boolean {
     'api key invalid',
     'openrouter.ai',
     'ошибка',
+    'сбой',
+    'подсказка:',
     'не удалось',
     'недостаточно средств',
     'недостаточно',
     'отказано',
+    'превышено время',
+    'недоступен',
+    'завершена с ошибками',
   ]
   return markers.some((m) => s.includes(m))
 }

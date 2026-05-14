@@ -306,14 +306,25 @@ class ProjectService:
     def mark_abandoned_generation_jobs(self) -> None:
         """After restart in-memory jobs are lost; pending/running rows become failed."""
         finished = datetime.now(timezone.utc).isoformat()
+        lost_msg = (
+            'Генерация прервалась: сервер был перезапущен, пока задача ещё выполнялась. '
+            'Подробный журнал недоступен — запустите генерацию снова.'
+        )
+        lost_hint = (
+            'Если сбой повторяется, проверьте ключи API в профиле, баланс провайдеров и стабильность сети.'
+        )
         with self._connect() as conn:
             conn.execute(
                 """
                 UPDATE generation_jobs_history
-                SET status = 'failed', finished_at = ?, duration_seconds = NULL
+                SET status = 'failed',
+                    finished_at = ?,
+                    duration_seconds = NULL,
+                    error_message = ?,
+                    error_hint = ?
                 WHERE status IN ('pending', 'running')
                 """,
-                (finished,),
+                (finished, lost_msg, lost_hint),
             )
             conn.commit()
 
