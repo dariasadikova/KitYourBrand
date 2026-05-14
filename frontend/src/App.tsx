@@ -1890,15 +1890,33 @@ function ProjectEditorPage({ projectSlug, isNewProjectFlow }: { projectSlug: str
           </div>
 
           <div className="palette-grid palette-grid--six">
-            {PALETTE_KEYS.map((key) => (
-              <div className="palette-item" key={key}>
+            {PALETTE_KEYS.map((key) => {
+              const slotActive = activePaletteKeys.includes(key)
+              return (
+              <div
+                className={`palette-item${slotActive ? '' : ' palette-item--inactive'}`}
+                key={key}
+              >
                 <label className="palette-item__label">
-                  <input type="checkbox" checked={activePaletteKeys.includes(key)} onChange={(event) => togglePaletteKey(key, event.target.checked)} /> <span>{PALETTE_LABELS[key]}</span>
+                  <input type="checkbox" checked={slotActive} onChange={(event) => togglePaletteKey(key, event.target.checked)} /> <span>{PALETTE_LABELS[key]}</span>
                 </label>
-                <input type="color" className="palette-swatch" value={normalizeHexColor(paletteSlots[key]) || DEFAULT_PALETTE[key]} onChange={(event) => setPaletteValue(key, event.target.value)} />
-                <input type="text" className="editor-field__compact" value={paletteSlots[key]} onChange={(event) => setPaletteValue(key, event.target.value)} />
+                <input
+                  type="color"
+                  className="palette-swatch"
+                  value={normalizeHexColor(paletteSlots[key]) || DEFAULT_PALETTE[key]}
+                  disabled={!slotActive}
+                  onChange={(event) => setPaletteValue(key, event.target.value)}
+                />
+                <input
+                  type="text"
+                  className="editor-field__compact"
+                  value={paletteSlots[key]}
+                  disabled={!slotActive}
+                  onChange={(event) => setPaletteValue(key, event.target.value)}
+                />
               </div>
-            ))}
+              )
+            })}
           </div>
           <div className="editor-note editor-note--compact" hidden={activePaletteKeys.length >= 2}>Выберите минимум 2 цвета палитры. Они будут использоваться в текущей генерации.</div>
 

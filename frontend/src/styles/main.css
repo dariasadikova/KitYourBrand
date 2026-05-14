@@ -1730,7 +1730,10 @@ img {
 .editor-grid--narrow { grid-template-columns: repeat(3, minmax(0, 1fr)); }
 .editor-field { display: flex; flex-direction: column; gap: 8px; }
 .editor-field span, .editor-field-title { color: #ddd7ef; font-size: 0.92rem; }
-.editor-field input, .editor-field select, .editor-field textarea, .editor-field__compact {
+.editor-field input:not([type="checkbox"]):not([type="radio"]):not([type="hidden"]),
+.editor-field select,
+.editor-field textarea,
+.editor-field__compact {
     min-height: 46px; border-radius: 12px; border: 1px solid rgba(255,255,255,0.08); background: rgba(7, 3, 18, 0.78);
     color: var(--text); padding: 0 14px; font: inherit;
 }
@@ -1914,7 +1917,30 @@ img {
     padding: 8px 14px; border-radius: 12px; border: 1px solid rgba(255,255,255,0.1);
     background: rgba(7,3,18,0.32); font-size: 0.92rem; color: #e8e2f7;
 }
-.generation-provider-check input { margin: 0; accent-color: #8b5cf6; }
+.generation-provider-check input[type="checkbox"] {
+    -webkit-appearance: none;
+    appearance: none;
+    box-sizing: border-box;
+    width: 18px;
+    height: 18px;
+    margin: 0;
+    flex-shrink: 0;
+    border-radius: 4px;
+    border: 1px solid rgba(0, 0, 0, 0.22);
+    background: #fff;
+    cursor: pointer;
+}
+.generation-provider-check input[type="checkbox"]:checked {
+    background-color: #fff;
+    background-image: url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 24 24' fill='none'%3E%3Cpath stroke='%23000000' stroke-width='2.8' stroke-linecap='round' stroke-linejoin='round' d='M20 6 9 17l-5-5'/%3E%3C/svg%3E");
+    background-size: 12px 12px;
+    background-position: center;
+    background-repeat: no-repeat;
+}
+.generation-provider-check input[type="checkbox"]:focus-visible {
+    outline: 2px solid var(--primary);
+    outline-offset: 2px;
+}
 .generated-summary { margin: 0; padding: 20px; border-radius: 16px; background: rgba(7,3,18,0.38); border: 1px solid rgba(255,255,255,0.08); }
 .generated-summary h3 { margin: 0 0 14px; font-size: 1.2rem; }
 .generated-summary ul { margin: 0; padding-left: 20px; }
@@ -2181,9 +2207,25 @@ img {
     letter-spacing: 0.04em;
 }
 
-.palette-item--disabled .palette-swatch,
-.palette-item--disabled .editor-field__compact {
-    opacity: 0.45;
+/* Невыбранные роли палитры — визуально «выкл.»; чекбокс остаётся обычным (белым) */
+.palette-item--inactive .palette-item__label span {
+    color: var(--muted);
+    font-weight: 500;
+}
+.palette-item--inactive .palette-swatch,
+.palette-item--inactive .editor-field__compact {
+    opacity: 0.4;
+    filter: grayscale(0.55) brightness(0.82);
+    transition: opacity 0.22s ease, filter 0.22s ease;
+}
+.palette-item--inactive .palette-swatch {
+    cursor: not-allowed;
+    border-color: rgba(255, 255, 255, 0.06);
+}
+.palette-item--inactive .editor-field__compact {
+    border-color: rgba(255, 255, 255, 0.06);
+    color: rgba(221, 215, 239, 0.42);
+    cursor: not-allowed;
 }
 
 .palette-hint {
