@@ -6,6 +6,7 @@ from fastapi import APIRouter, Request, status
 from fastapi.responses import FileResponse, RedirectResponse
 
 from app.core.settings import settings
+from app.db import auth_service
 
 router = APIRouter()
 PROFILE_AVATARS_DIR = settings.data_dir / 'profile_avatars'
@@ -80,6 +81,7 @@ async def login_page(request: Request) -> RedirectResponse:
 
 @router.get('/logout')
 async def logout(request: Request) -> RedirectResponse:
+    auth_service.revoke_user_session(request.session.get('db_session_id'))
     request.session.clear()
     return RedirectResponse(url='/app', status_code=status.HTTP_303_SEE_OTHER)
 

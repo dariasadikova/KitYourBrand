@@ -73,7 +73,26 @@ class ProjectService:
     def _connect(self) -> sqlite3.Connection:
         conn = sqlite3.connect(self.db_path)
         conn.row_factory = sqlite3.Row
+        conn.execute('PRAGMA foreign_keys = ON')
         return conn
+
+    def _utc_now_iso(self) -> str:
+        return datetime.now(timezone.utc).isoformat()
+
+    _TERMINAL_PROVIDER_STATUSES = frozenset({'success', 'error', 'skipped', 'failed'})
+
+    def _delete_generation_job_related(self, conn: sqlite3.Connection, job_ids: list[str]) -> None:
+        if not job_ids:
+            return
+        placeholders = ', '.join(['?'] * len(job_ids))
+        conn.execute(
+            f'DELETE FROM generation_job_log_entries WHERE job_id IN ({placeholders})',
+            job_ids,
+        )
+        conn.execute(
+            f'DELETE FROM generation_provider_runs WHERE job_id IN ({placeholders})',
+            job_ids,
+        )
 
     def _table_columns(self, conn: sqlite3.Connection, table: str) -> set[str]:
         rows = conn.execute(f'PRAGMA table_info({table})').fetchall()
@@ -223,11 +242,19 @@ class ProjectService:
         self.ensure_project(user_id, slug)
         return True
 
-    def record_generation_job(self, *, user_id: int, job_id: str, project_slug: str) -> None:
+    def record_generation_job(
+        self,
+        *,
+        user_id: int,
+        job_id: str,
+        project_slug: str,
+        provider_statuses: dict[str, str] | None = None,
+        initial_logs: list[str] | None = None,
+    ) -> None:
         project = self.get_project(user_id, project_slug)
         if project is None:
             return
-        started = datetime.now(timezone.utc).isoformat()
+        started = self._utc_now_iso()
         tokens_snapshot: str | None = None
         try:
             tokens_snapshot = json.dumps(self.load_tokens(user_id, project_slug), ensure_ascii=False)
@@ -243,6 +270,225 @@ class ProjectService:
                 (user_id, job_id, project.id, project_slug, project.name, started, tokens_snapshot),
             )
             conn.commit()
+        if provider_statuses:
+            self.init_generation_provider_runs(job_id, provider_statuses)
+        for line in initial_logs or []:
+            self.append_generation_job_log(job_id, str(line))
+
+    def init_generation_provider_runs(self, job_id: str, statuses: dict[str, str]) -> None:
+        if not statuses:
+            return
+        try:
+            with self._connect() as conn:
+                for provider, status in statuses.items():
+                    slug = str(provider).strip()
+                    if not slug:
+                        continue
+                    conn.execute(
+                        """
+                        INSERT OR IGNORE INTO generation_provider_runs (job_id, provider, status)
+                        VALUES (?, ?, ?)
+                        """,
+                        (job_id, slug, str(status or 'pending')),
+                    )
+                conn.commit()
+        except Exception as exc:
+            logger.warning('generation_provider_runs init skipped: %s', exc)
+
+    def sync_generation_provider_runs(
+        self,
+        job_id: str,
+        statuses: dict[str, str],
+        *,
+        provider_errors: dict[str, Any] | None = None,
+    ) -> None:
+        if not statuses:
+            return
+        now = self._utc_now_iso()
+        errors = provider_errors or {}
+        try:
+            with self._connect() as conn:
+                for provider, status in statuses.items():
+                    slug = str(provider).strip()
+                    if not slug:
+                        continue
+                    normalized = str(status or 'pending')
+                    row = conn.execute(
+                        """
+                        SELECT id, status, started_at, finished_at
+                        FROM generation_provider_runs
+                        WHERE job_id = ? AND provider = ?
+                        LIMIT 1
+                        """,
+                        (job_id, slug),
+                    ).fetchone()
+                    err_payload = errors.get(slug) or errors.get(provider)
+                    err_msg: str | None = None
+                    if isinstance(err_payload, dict):
+                        err_msg = str(err_payload.get('message') or err_payload.get('error') or '') or None
+                    elif err_payload is not None:
+                        err_msg = str(err_payload)
+
+                    if row is None:
+                        started_at = now if normalized == 'running' else None
+                        finished_at = now if normalized in self._TERMINAL_PROVIDER_STATUSES else None
+                        conn.execute(
+                            """
+                            INSERT INTO generation_provider_runs (
+                                job_id, provider, status, started_at, finished_at, error_message
+                            ) VALUES (?, ?, ?, ?, ?, ?)
+                            """,
+                            (job_id, slug, normalized, started_at, finished_at, err_msg),
+                        )
+                        continue
+
+                    started_at = row['started_at']
+                    finished_at = row['finished_at']
+                    if normalized == 'running' and not started_at:
+                        started_at = now
+                    if normalized in self._TERMINAL_PROVIDER_STATUSES and not finished_at:
+                        finished_at = now
+                    conn.execute(
+                        """
+                        UPDATE generation_provider_runs
+                        SET status = ?, started_at = ?, finished_at = ?, error_message = ?
+                        WHERE id = ?
+                        """,
+                        (normalized, started_at, finished_at, err_msg, int(row['id'])),
+                    )
+                conn.commit()
+        except Exception as exc:
+            logger.warning('generation_provider_runs sync skipped: %s', exc)
+
+    def append_generation_job_log(self, job_id: str, message: str) -> None:
+        text = str(message or '').strip()
+        if not text:
+            return
+        created_at = self._utc_now_iso()
+        try:
+            with self._connect() as conn:
+                row = conn.execute(
+                    'SELECT COALESCE(MAX(seq), 0) AS max_seq FROM generation_job_log_entries WHERE job_id = ?',
+                    (job_id,),
+                ).fetchone()
+                next_seq = int(row['max_seq'] if row else 0) + 1
+                conn.execute(
+                    """
+                    INSERT INTO generation_job_log_entries (job_id, seq, message, created_at)
+                    VALUES (?, ?, ?, ?)
+                    """,
+                    (job_id, next_seq, text, created_at),
+                )
+                conn.commit()
+        except Exception as exc:
+            logger.warning('generation_job_log_entries insert skipped: %s', exc)
+
+    def list_reference_image_paths(self, user_id: int, slug: str) -> list[str]:
+        project = self.get_project(user_id, slug)
+        if project is None:
+            return []
+        self.sync_reference_images_from_tokens(user_id, slug)
+        with self._connect() as conn:
+            rows = conn.execute(
+                """
+                SELECT storage_path
+                FROM project_reference_images
+                WHERE project_id = ?
+                ORDER BY sort_order ASC, id ASC
+                """,
+                (project.id,),
+            ).fetchall()
+        return [str(row['storage_path']) for row in rows]
+
+    def sync_reference_images_from_tokens(self, user_id: int, slug: str) -> None:
+        project = self.get_project(user_id, slug)
+        if project is None:
+            return
+        try:
+            tokens = self.load_tokens(user_id, slug)
+        except Exception:
+            return
+        paths = tokens.get('references', {}).get('style_images', []) or []
+        if not isinstance(paths, list):
+            return
+        now = self._utc_now_iso()
+        try:
+            with self._connect() as conn:
+                existing = {
+                    str(row['storage_path']): int(row['id'])
+                    for row in conn.execute(
+                        'SELECT id, storage_path FROM project_reference_images WHERE project_id = ?',
+                        (project.id,),
+                    ).fetchall()
+                }
+                for index, raw in enumerate(paths):
+                    rel = str(raw).strip()
+                    if not rel.startswith('uploads/refs/'):
+                        continue
+                    if rel in existing:
+                        conn.execute(
+                            'UPDATE project_reference_images SET sort_order = ? WHERE id = ?',
+                            (index, existing[rel]),
+                        )
+                        continue
+                    original = Path(rel).name
+                    conn.execute(
+                        """
+                        INSERT INTO project_reference_images (
+                            project_id, storage_path, original_filename, sort_order, created_at
+                        ) VALUES (?, ?, ?, ?, ?)
+                        """,
+                        (project.id, rel, original, index, now),
+                    )
+                conn.commit()
+        except Exception as exc:
+            logger.warning('project_reference_images sync skipped: %s', exc)
+
+    def insert_reference_image(
+        self,
+        project_id: int,
+        storage_path: str,
+        *,
+        original_filename: str | None = None,
+        sort_order: int | None = None,
+    ) -> None:
+        rel = str(storage_path).strip()
+        if not rel:
+            return
+        now = self._utc_now_iso()
+        try:
+            with self._connect() as conn:
+                if sort_order is None:
+                    row = conn.execute(
+                        'SELECT COALESCE(MAX(sort_order), -1) AS max_order FROM project_reference_images WHERE project_id = ?',
+                        (project_id,),
+                    ).fetchone()
+                    sort_order = int(row['max_order'] if row else -1) + 1
+                conn.execute(
+                    """
+                    INSERT OR IGNORE INTO project_reference_images (
+                        project_id, storage_path, original_filename, sort_order, created_at
+                    ) VALUES (?, ?, ?, ?, ?)
+                    """,
+                    (project_id, rel, original_filename, int(sort_order), now),
+                )
+                conn.commit()
+        except Exception as exc:
+            logger.warning('project_reference_images insert skipped: %s', exc)
+
+    def delete_reference_image(self, project_id: int, storage_path: str) -> None:
+        rel = str(storage_path).strip()
+        if not rel:
+            return
+        try:
+            with self._connect() as conn:
+                conn.execute(
+                    'DELETE FROM project_reference_images WHERE project_id = ? AND storage_path = ?',
+                    (project_id, rel),
+                )
+                conn.commit()
+        except Exception as exc:
+            logger.warning('project_reference_images delete skipped: %s', exc)
 
     def project_has_successful_generation(self, user_id: int, project_slug: str) -> bool:
         """True if generation completed for this project (row finalized as success in history)."""
@@ -442,6 +688,7 @@ class ProjectService:
                     f'DELETE FROM error_logs WHERE user_id = ? AND generation_job_id IN ({placeholders})',
                     params,
                 )
+                self._delete_generation_job_related(conn, job_ids)
             conn.commit()
         self._delete_generation_result_snapshots(user_id, deleted_jobs)
         skipped = max(0, total - deleted)
@@ -495,6 +742,7 @@ class ProjectService:
                     f'DELETE FROM error_logs WHERE user_id = ? AND generation_job_id IN ({delete_placeholders})',
                     delete_params,
                 )
+                self._delete_generation_job_related(conn, deletable_ids)
             conn.commit()
         self._delete_generation_result_snapshots(user_id, deleted_jobs)
         skipped = max(0, len(unique_ids) - deleted)
@@ -814,6 +1062,9 @@ class ProjectService:
         return self.load_tokens(user_id, slug)
 
     def upload_refs(self, user_id: int, slug: str, files: list[tuple[str, bytes]]) -> list[str]:
+        project = self.get_project(user_id, slug)
+        if project is None:
+            raise FileNotFoundError('Проект не найден.')
         tokens = self.load_tokens(user_id, slug)
         uploads = self.uploads_dir(user_id, slug)
         added: list[str] = []
@@ -826,19 +1077,28 @@ class ProjectService:
             dest.write_bytes(content)
             rel = f'uploads/refs/{safe_name}'
             added.append(rel)
+            self.insert_reference_image(
+                project.id,
+                rel,
+                original_filename=(filename or safe_name),
+            )
         tokens.setdefault('references', {}).setdefault('style_images', [])
         tokens['references']['style_images'].extend(added)
         self.save_tokens(user_id, slug, tokens)
-        return sorted(list(dict.fromkeys(tokens['references']['style_images'])))
+        return self.list_reference_image_paths(user_id, slug)
 
     def delete_ref(self, user_id: int, slug: str, rel_path: str) -> list[str]:
+        project = self.get_project(user_id, slug)
+        if project is None:
+            raise FileNotFoundError('Проект не найден.')
         tokens = self.load_tokens(user_id, slug)
         if not rel_path.startswith('uploads/refs/'):
             raise ValueError('Некорректный путь референса.')
         file_path = self.project_dir(user_id, slug) / rel_path
         if file_path.exists():
             file_path.unlink()
+        self.delete_reference_image(project.id, rel_path)
         images = [item for item in tokens.get('references', {}).get('style_images', []) if item != rel_path]
         tokens.setdefault('references', {})['style_images'] = images
         self.save_tokens(user_id, slug, tokens)
-        return images
+        return self.list_reference_image_paths(user_id, slug)

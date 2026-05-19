@@ -54,9 +54,11 @@ def login(payload: LoginPayload, request: Request) -> JSONResponse:
     if not result.ok:
         return JSONResponse({'ok': False, 'error': result.error or 'Не удалось войти.'}, status_code=400)
 
+    session_id = auth_service.create_user_session(int(result.user_id or 0))
     request.session['user_id'] = result.user_id
     request.session['user_name'] = result.user_name
     request.session['user_email'] = result.user_email
+    request.session['db_session_id'] = session_id
 
     row = auth_service.get_user_by_id(int(result.user_id or 0))
     user = _user_dict_from_row(row)
@@ -84,5 +86,6 @@ def register(payload: RegisterPayload) -> JSONResponse:
 
 @router.post('/logout')
 def logout(request: Request) -> JSONResponse:
+    auth_service.revoke_user_session(request.session.get('db_session_id'))
     request.session.clear()
     return JSONResponse({'ok': True, 'authenticated': False, 'user': None})

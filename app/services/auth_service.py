@@ -5,12 +5,13 @@ import hmac
 import secrets
 import sqlite3
 from dataclasses import dataclass
-from datetime import datetime, timezone
+from datetime import datetime, timedelta, timezone
 from pathlib import Path
 from typing import Optional
 
 
 PBKDF2_ITERATIONS = 600_000
+SESSION_TTL_DAYS = 30
 
 
 @dataclass(slots=True)
@@ -36,7 +37,11 @@ class AuthService:
     def _connect(self) -> sqlite3.Connection:
         conn = sqlite3.connect(self.db_path)
         conn.row_factory = sqlite3.Row
+        conn.execute('PRAGMA foreign_keys = ON')
         return conn
+
+    def _utc_now_iso(self) -> str:
+        return datetime.now(timezone.utc).isoformat()
 
     def init_db(self) -> None:
         with self._connect() as conn:
@@ -203,3 +208,30 @@ class AuthService:
             user_name=str(row['name']),
             user_email=str(row['email']),
         )
+
+    def create_user_session(self, user_id: int) -> str:
+        session_id = secrets.token_urlsafe(32)
+        created_at = self._utc_now_iso()
+        expires_at = (datetime.now(timezone.utc) + timedelta(days=SESSION_TTL_DAYS)).isoformat()
+        with self._connect() as conn:
+            conn.execute(
+                """
+                INSERT INTO user_sessions (id, user_id, created_at, expires_at)
+                VALUES (?, ?, ?, ?)
+                """,
+                (session_id, int(user_id), created_at, expires_at),
+            )
+            conn.commit()
+        return session_id
+
+    def revoke_user_session(self, session_id: str | None) -> None:
+        token = (session_id or '').strip()
+        if not token:
+            return
+        now = self._utc_now_iso()
+        with self._connect() as conn:
+            conn.execute(
+                'UPDATE user_sessions SET expires_at = ? WHERE id = ?',
+                (now, token),
+            )
+            conn.commit()

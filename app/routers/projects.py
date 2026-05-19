@@ -241,8 +241,8 @@ async def upload_refs(request: Request, project_slug: str, files: list[UploadFil
 async def list_refs(request: Request, project_slug: str) -> JSONResponse:
     user_id = require_auth(request)
     project_or_404(user_id, project_slug)
-    tokens = project_service.load_tokens(user_id, project_slug)
-    return JSONResponse({'ok': True, 'images': tokens.get('references', {}).get('style_images', [])})
+    images = project_service.list_reference_image_paths(user_id, project_slug)
+    return JSONResponse({'ok': True, 'images': images})
 
 
 @router.post('/projects/{project_slug}/delete-ref')
@@ -374,7 +374,13 @@ async def start_generate_assets(request: Request, project_slug: str) -> JSONResp
         project_slug=project_slug,
         active_providers=active_providers,
     )
-    project_service.record_generation_job(user_id=user_id, job_id=job['id'], project_slug=project_slug)
+    project_service.record_generation_job(
+        user_id=user_id,
+        job_id=job['id'],
+        project_slug=project_slug,
+        provider_statuses=job.get('provider_statuses'),
+        initial_logs=job.get('logs'),
+    )
     generation_jobs.start_generation(
         job_id=job['id'],
         generation_service=generation_service,

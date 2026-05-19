@@ -1,4 +1,4 @@
-"""ORM-модели схемы SQLite: пользователи, проекты, история генераций, стиль, ассеты, манифесты, лог ошибок."""
+"""ORM-модели SQLite: пользователи, сессии, проекты, референсы, генерации, стиль, ассеты, логи."""
 
 from __future__ import annotations
 
@@ -121,4 +121,75 @@ class ErrorLog(Base):
     code: Mapped[str | None] = mapped_column(sa.Text, nullable=True)
     message: Mapped[str] = mapped_column(sa.Text, nullable=False)
     detail: Mapped[dict | list | None] = mapped_column(sa.JSON, nullable=True)
+    created_at: Mapped[str] = mapped_column(sa.Text, nullable=False)
+
+
+class UserSession(Base):
+    """Серверные записи сессий входа (дополнение к cookie Starlette)."""
+
+    __tablename__ = 'user_sessions'
+    __table_args__ = (sa.Index('ix_user_sessions_user_id', 'user_id'),)
+
+    id: Mapped[str] = mapped_column(sa.Text, primary_key=True)
+    user_id: Mapped[int] = mapped_column(sa.Integer, sa.ForeignKey('users.id'), nullable=False)
+    created_at: Mapped[str] = mapped_column(sa.Text, nullable=False)
+    expires_at: Mapped[str] = mapped_column(sa.Text, nullable=False)
+
+
+class ProjectReferenceImage(Base):
+    """Референсы стиля проекта (файлы uploads/refs)."""
+
+    __tablename__ = 'project_reference_images'
+    __table_args__ = (
+        sa.Index('ix_project_reference_images_project_sort', 'project_id', 'sort_order'),
+        sa.UniqueConstraint('project_id', 'storage_path', name='uq_project_reference_images_path'),
+    )
+
+    id: Mapped[int] = mapped_column(sa.Integer, primary_key=True, autoincrement=True)
+    project_id: Mapped[int] = mapped_column(sa.Integer, sa.ForeignKey('projects.id'), nullable=False)
+    storage_path: Mapped[str] = mapped_column(sa.Text, nullable=False)
+    original_filename: Mapped[str | None] = mapped_column(sa.Text, nullable=True)
+    sort_order: Mapped[int] = mapped_column(sa.Integer, nullable=False, server_default=sa.text('0'))
+    created_at: Mapped[str] = mapped_column(sa.Text, nullable=False)
+
+
+class GenerationProviderRun(Base):
+    """Запуск одного AI-провайдера в рамках job генерации."""
+
+    __tablename__ = 'generation_provider_runs'
+    __table_args__ = (
+        sa.UniqueConstraint('job_id', 'provider', name='uq_generation_provider_runs_job_provider'),
+        sa.Index('ix_generation_provider_runs_job_id', 'job_id'),
+    )
+
+    id: Mapped[int] = mapped_column(sa.Integer, primary_key=True, autoincrement=True)
+    job_id: Mapped[str] = mapped_column(
+        sa.Text,
+        sa.ForeignKey('generation_jobs_history.job_id'),
+        nullable=False,
+    )
+    provider: Mapped[str] = mapped_column(sa.Text, nullable=False)
+    status: Mapped[str] = mapped_column(sa.Text, nullable=False)
+    started_at: Mapped[str | None] = mapped_column(sa.Text, nullable=True)
+    finished_at: Mapped[str | None] = mapped_column(sa.Text, nullable=True)
+    error_message: Mapped[str | None] = mapped_column(sa.Text, nullable=True)
+
+
+class GenerationJobLogEntry(Base):
+    """Строки журнала операций в модалке генерации."""
+
+    __tablename__ = 'generation_job_log_entries'
+    __table_args__ = (
+        sa.UniqueConstraint('job_id', 'seq', name='uq_generation_job_log_entries_job_seq'),
+        sa.Index('ix_generation_job_log_entries_job_id', 'job_id'),
+    )
+
+    id: Mapped[int] = mapped_column(sa.Integer, primary_key=True, autoincrement=True)
+    job_id: Mapped[str] = mapped_column(
+        sa.Text,
+        sa.ForeignKey('generation_jobs_history.job_id'),
+        nullable=False,
+    )
+    seq: Mapped[int] = mapped_column(sa.Integer, nullable=False)
+    message: Mapped[str] = mapped_column(sa.Text, nullable=False)
     created_at: Mapped[str] = mapped_column(sa.Text, nullable=False)

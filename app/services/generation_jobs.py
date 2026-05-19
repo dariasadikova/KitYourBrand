@@ -1,10 +1,13 @@
 from __future__ import annotations
 
+import logging
 import threading
 import traceback
 import uuid
 from datetime import datetime
 from typing import TYPE_CHECKING, Any
+
+logger = logging.getLogger('kityourbrand.generation_jobs')
 
 if TYPE_CHECKING:
     from app.services.project_service import ProjectService
@@ -46,6 +49,29 @@ class GenerationJobStore:
     def _stamp(self) -> str:
         return datetime.now().strftime('%H:%M:%S')
 
+    def _persist_log(self, job_id: str, message: str) -> None:
+        try:
+            from app.db import project_service
+
+            project_service.append_generation_job_log(job_id, message)
+        except Exception as exc:
+            logger.warning('persist generation log skipped: %s', exc)
+
+    def _persist_provider_statuses(self, job_id: str, job: dict[str, Any]) -> None:
+        statuses = job.get('provider_statuses') or job.get('providers')
+        if not isinstance(statuses, dict) or not statuses:
+            return
+        try:
+            from app.db import project_service
+
+            project_service.sync_generation_provider_runs(
+                job_id,
+                statuses,
+                provider_errors=job.get('provider_errors') if isinstance(job.get('provider_errors'), dict) else None,
+            )
+        except Exception as exc:
+            logger.warning('persist provider runs skipped: %s', exc)
+
     def create_job(
         self,
         *,
@@ -86,8 +112,10 @@ class GenerationJobStore:
             if not job:
                 return
             job['logs'].append(f'[{self._stamp()}] {message}')
+        self._persist_log(job_id, message)
 
     def update(self, job_id: str, **changes: Any) -> None:
+        snapshot: dict[str, Any] | None = None
         with self._lock:
             job = self._jobs.get(job_id)
             if not job:
@@ -105,6 +133,10 @@ class GenerationJobStore:
                 job['provider_errors'].update(provider_errors)
 
             job.update(changes)
+            if merged_statuses or provider_errors:
+                snapshot = dict(job)
+        if snapshot is not None:
+            self._persist_provider_statuses(job_id, snapshot)
 
     def get_job(self, job_id: str) -> dict[str, Any] | None:
         with self._lock:
