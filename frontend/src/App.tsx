@@ -1394,6 +1394,74 @@ function dashboardOverlayPortal(content: ReactNode) {
   return createPortal(content, document.body)
 }
 
+function AppConfirmModal({
+  open,
+  title,
+  message,
+  confirmLabel = 'Ок',
+  cancelLabel = 'Отмена',
+  isBusy = false,
+  onConfirm,
+  onCancel,
+}: {
+  open: boolean
+  title?: string
+  message: ReactNode
+  confirmLabel?: string
+  cancelLabel?: string
+  isBusy?: boolean
+  onConfirm: () => void
+  onCancel: () => void
+}) {
+  useEffect(() => {
+    if (!open) return
+    document.body.classList.add('modal-open')
+    function onKeyDown(event: KeyboardEvent) {
+      if (event.key === 'Escape' && !isBusy) onCancel()
+    }
+    window.addEventListener('keydown', onKeyDown)
+    return () => {
+      document.body.classList.remove('modal-open')
+      window.removeEventListener('keydown', onKeyDown)
+    }
+  }, [open, isBusy, onCancel])
+
+  if (!open) return null
+
+  return dashboardOverlayPortal(
+    <div className="app-confirm-modal" role="presentation">
+      <button type="button" className="app-confirm-modal__backdrop" aria-label="Закрыть" disabled={isBusy} onClick={onCancel} />
+      <div
+        className={`app-confirm-modal__dialog${title ? '' : ' app-confirm-modal__dialog--message-only'}`}
+        role="alertdialog"
+        aria-modal="true"
+        aria-labelledby={title ? 'app-confirm-modal-title' : 'app-confirm-modal-message'}
+        aria-describedby={title ? 'app-confirm-modal-message' : undefined}
+      >
+        <button type="button" className="app-confirm-modal__close" aria-label="Закрыть" disabled={isBusy} onClick={onCancel}>
+          ×
+        </button>
+        {title ? (
+          <h2 className="app-confirm-modal__title" id="app-confirm-modal-title">
+            {title}
+          </h2>
+        ) : null}
+        <p className="app-confirm-modal__message" id="app-confirm-modal-message">
+          {message}
+        </p>
+        <div className="app-confirm-modal__actions">
+          <button type="button" className="btn btn-outline btn-inline app-confirm-modal__cancel" disabled={isBusy} onClick={onCancel}>
+            {cancelLabel}
+          </button>
+          <button type="button" className="btn btn-primary btn-inline" disabled={isBusy} onClick={onConfirm}>
+            {isBusy ? 'Подождите...' : confirmLabel}
+          </button>
+        </div>
+      </div>
+    </div>,
+  )
+}
+
 function ResultsGenerationModal({
   job,
   cancelRequested,
@@ -2933,6 +3001,8 @@ function ProjectsDashboard() {
   const [isLoading, setIsLoading] = useState(true)
   const [isCreating, setIsCreating] = useState(false)
   const [error, setError] = useState('')
+  const [projectPendingDelete, setProjectPendingDelete] = useState<ProjectSummary | null>(null)
+  const [isDeletingProject, setIsDeletingProject] = useState(false)
 
   useEffect(() => {
     let alive = true
@@ -2968,16 +3038,20 @@ function ProjectsDashboard() {
     }
   }
 
-  async function handleDeleteProject(project: ProjectSummary) {
-    if (!window.confirm(`Удалить проект "${project.name}"?`)) return
+  async function confirmDeleteProject() {
+    if (!projectPendingDelete) return
 
     setError('')
+    setIsDeletingProject(true)
     try {
-      await deleteProject(project.slug)
-      setProjects((items) => items.filter((item) => item.slug !== project.slug))
+      await deleteProject(projectPendingDelete.slug)
+      setProjects((items) => items.filter((item) => item.slug !== projectPendingDelete.slug))
       setShowGenerationHistory(true)
+      setProjectPendingDelete(null)
     } catch (err) {
       setError(err instanceof Error ? err.message : 'Не удалось удалить проект.')
+    } finally {
+      setIsDeletingProject(false)
     }
   }
 
@@ -3029,7 +3103,7 @@ function ProjectsDashboard() {
                     type="button"
                     className="project-card__action project-card__action--delete"
                     aria-label="Удалить проект"
-                    onClick={() => handleDeleteProject(project)}
+                    onClick={() => setProjectPendingDelete(project)}
                   >
                     <ProjectCardDeleteIcon />
                   </button>
@@ -3046,6 +3120,18 @@ function ProjectsDashboard() {
           <p>У вас пока нет проектов. Создайте первый проект и сразу перейдите к его редактированию.</p>
         </div>
       )}
+
+      <AppConfirmModal
+        open={projectPendingDelete !== null}
+        message={projectPendingDelete ? `Удалить проект «${projectPendingDelete.name}»?` : ''}
+        confirmLabel="Ок"
+        cancelLabel="Отмена"
+        isBusy={isDeletingProject}
+        onConfirm={() => void confirmDeleteProject()}
+        onCancel={() => {
+          if (!isDeletingProject) setProjectPendingDelete(null)
+        }}
+      />
     </section>
   )
 }
