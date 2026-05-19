@@ -7,7 +7,8 @@ import {
   useRef,
   useState,
 } from 'react'
-import { Link, Navigate, Route, Routes, useNavigate, useParams, useSearchParams } from 'react-router-dom'
+import { createPortal } from 'react-dom'
+import { Link, Navigate, Route, Routes, useLocation, useNavigate, useParams, useSearchParams } from 'react-router-dom'
 import { cancelGenerationJob, deleteGenerationHistorySelected, getGenerationHistory } from './services/generationHistoryApi'
 import { getCurrentSession, login, logout, register } from './services/authApi'
 import { getProfile, updateProfile } from './services/profileApi'
@@ -112,14 +113,14 @@ function App() {
 
 function ProtectedDashboard({ session, onLogout }: { session: AuthMeResponse | null; onLogout: () => Promise<void> }) {
   if (session === null) return null
-  if (!session.authenticated) return <Navigate to="/login" replace />
+  if (!session.authenticated) return <Navigate to="/" replace />
 
   return <MigrationShell session={session} onLogout={onLogout} />
 }
 
 function ProtectedProfile({ session, onLogout, onSessionRefresh }: { session: AuthMeResponse | null; onLogout: () => Promise<void>; onSessionRefresh: () => Promise<void> }) {
   if (session === null) return null
-  if (!session.authenticated) return <Navigate to="/login" replace />
+  if (!session.authenticated) return <Navigate to="/" replace />
 
   return (
     <MigrationShell session={session} activePath="/profile" mainClassName="profile-main" onLogout={onLogout}>
@@ -130,7 +131,7 @@ function ProtectedProfile({ session, onLogout, onSessionRefresh }: { session: Au
 
 function ProtectedGenerationHistory({ session, onLogout }: { session: AuthMeResponse | null; onLogout: () => Promise<void> }) {
   if (session === null) return null
-  if (!session.authenticated) return <Navigate to="/login" replace />
+  if (!session.authenticated) return <Navigate to="/" replace />
 
   return (
     <MigrationShell session={session} activePath="/generation-history" onLogout={onLogout}>
@@ -143,7 +144,7 @@ function ProtectedResults({ session, onLogout }: { session: AuthMeResponse | nul
   const { projectSlug = '' } = useParams()
 
   if (session === null) return null
-  if (!session.authenticated) return <Navigate to="/login" replace />
+  if (!session.authenticated) return <Navigate to="/" replace />
 
   return (
     <MigrationShell session={session} activePath="/dashboard" mainClassName="results-main" onLogout={onLogout}>
@@ -157,7 +158,7 @@ function ProtectedEditor({ session, onLogout }: { session: AuthMeResponse | null
   const [searchParams] = useSearchParams()
 
   if (session === null) return null
-  if (!session.authenticated) return <Navigate to="/login" replace />
+  if (!session.authenticated) return <Navigate to="/" replace />
 
   return (
     <MigrationShell session={session} activePath="/dashboard" mainClassName="project-main" onLogout={onLogout}>
@@ -168,37 +169,94 @@ function ProtectedEditor({ session, onLogout }: { session: AuthMeResponse | null
 
 function LandingHeader({ session, onLogout }: { session: AuthMeResponse | null; onLogout?: () => Promise<void> }) {
   const navigate = useNavigate()
+  const [menuOpen, setMenuOpen] = useState(false)
+
+  useEffect(() => {
+    function onKeyDown(event: KeyboardEvent) {
+      if (event.key === 'Escape') setMenuOpen(false)
+    }
+    window.addEventListener('keydown', onKeyDown)
+    return () => window.removeEventListener('keydown', onKeyDown)
+  }, [])
+
+  useEffect(() => {
+    if (!menuOpen) return
+    const prev = document.body.style.overflow
+    document.body.style.overflow = 'hidden'
+    return () => {
+      document.body.style.overflow = prev
+    }
+  }, [menuOpen])
 
   async function handleLogoutClick(event: MouseEvent<HTMLAnchorElement>) {
     event.preventDefault()
     if (!onLogout) return
+    setMenuOpen(false)
+    navigate('/', { replace: true })
     await onLogout()
-    navigate('/')
+  }
+
+  function closeMenu() {
+    setMenuOpen(false)
   }
 
   return (
-    <header className="site-header">
-      <div className="container header-inner">
-        <Link to="/" className="brand-mark" aria-label="KYBBY home">
-          <img className="brand-mark__logo" src="/app/static/img/kybby-logo.png" alt="KYBBY" />
-          <span className="brand-mark__text">KYBBY</span>
+    <header className={`site-header landing-header${menuOpen ? ' landing-header--open' : ''}`}>
+      <div className="container header-inner landing-header__inner">
+        <Link to="/" className="brand-mark landing-header__brand" aria-label="KYBBY home" onClick={closeMenu}>
+          <img className="brand-mark__logo" src="/app/static/img/kybby-logo.png" alt="" />
+          <span className="brand-mark__text landing-header__brand-text">KYBBY</span>
         </Link>
 
-        <nav className="header-actions">
+        <button
+          type="button"
+          className="landing-header__burger"
+          aria-expanded={menuOpen}
+          aria-controls="landing-menu"
+          aria-label={menuOpen ? 'Закрыть меню' : 'Открыть меню'}
+          onClick={() => setMenuOpen((open) => !open)}
+        >
+          <span className="landing-header__burger-lines" aria-hidden="true">
+            <span className="landing-header__burger-line" />
+            <span className="landing-header__burger-line" />
+            <span className="landing-header__burger-line" />
+          </span>
+        </button>
+
+        <nav className="header-actions landing-header__nav" id="landing-menu">
           {session?.authenticated ? (
             <>
-              <Link to="/dashboard" className="btn btn-primary">Мои проекты</Link>
-              <Link to="/profile" className="header-user-pill header-user-pill--link">{session.user?.name || 'Пользователь'}</Link>
-              <a href="/logout" className="btn btn-outline" onClick={handleLogoutClick}>Выйти</a>
+              <Link to="/dashboard" className="btn btn-primary" onClick={closeMenu}>
+                Мои проекты
+              </Link>
+              <Link to="/profile" className="header-user-pill header-user-pill--link" onClick={closeMenu}>
+                {session.user?.name || 'Пользователь'}
+              </Link>
+              <a href="/logout" className="btn btn-outline" onClick={handleLogoutClick}>
+                Выйти
+              </a>
             </>
           ) : (
             <>
-              <Link to="/login" className="btn btn-outline">Вход</Link>
-              <Link to="/register" className="btn btn-primary">Регистрация</Link>
+              <Link to="/login" className="btn btn-outline" onClick={closeMenu}>
+                Вход
+              </Link>
+              <Link to="/register" className="btn btn-primary" onClick={closeMenu}>
+                Регистрация
+              </Link>
             </>
           )}
         </nav>
       </div>
+      {menuOpen ? (
+        <button
+          type="button"
+          className="landing-header__overlay"
+          tabIndex={-1}
+          aria-label="Закрыть меню"
+          onClick={() => setMenuOpen(false)}
+        />
+      ) : null}
     </header>
   )
 }
@@ -501,6 +559,69 @@ function RegisterPage() {
   )
 }
 
+type DashboardShellActivePath = '/dashboard' | '/profile' | '/generation-history'
+
+function DashboardShellNav({
+  activePath,
+  mobileNavId,
+  className,
+  onItemNavigate,
+  onLogoutClick,
+}: {
+  activePath: DashboardShellActivePath
+  mobileNavId?: string
+  className?: string
+  onItemNavigate?: () => void
+  onLogoutClick: (event: MouseEvent<HTMLAnchorElement>) => void
+}) {
+  const navClass = [className, 'dashboard-nav'].filter(Boolean).join(' ')
+
+  return (
+    <nav className={navClass} id={mobileNavId} aria-label="Основная навигация">
+      <Link
+        to="/dashboard"
+        className={`dashboard-nav__item${activePath === '/dashboard' || activePath === '/generation-history' ? ' dashboard-nav__item--active' : ''}`}
+        onClick={onItemNavigate}
+      >
+        <span className="dashboard-nav__icon" aria-hidden="true">
+          <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.2" strokeLinecap="round" strokeLinejoin="round">
+            <path d="M3 7a2 2 0 0 1 2-2h4l2 2h8a2 2 0 0 1 2 2v8a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2Z" />
+          </svg>
+        </span>
+        <span>Мои проекты</span>
+      </Link>
+      <Link to="/profile" className={`dashboard-nav__item${activePath === '/profile' ? ' dashboard-nav__item--active' : ''}`} onClick={onItemNavigate}>
+        <span className="dashboard-nav__icon" aria-hidden="true">
+          <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.2" strokeLinecap="round" strokeLinejoin="round">
+            <circle cx="12" cy="8" r="4" />
+            <path d="M4 20a8 8 0 0 1 16 0" />
+          </svg>
+        </span>
+        <span>Профиль</span>
+      </Link>
+      <a href="#" className="dashboard-nav__item" onClick={(event) => { event.preventDefault(); onItemNavigate?.() }}>
+        <span className="dashboard-nav__icon" aria-hidden="true">
+          <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.2" strokeLinecap="round" strokeLinejoin="round">
+            <circle cx="12" cy="12" r="3" />
+            <path d="M19.4 15a1.7 1.7 0 0 0 .3 1.9l.1.1a2 2 0 0 1 0 2.8 2 2 0 0 1-2.8 0l-.1-.1a1.7 1.7 0 0 0-1.9-.3 1.7 1.7 0 0 0-1 1.6V21a2 2 0 1 1-4 0v-.2a1.7 1.7 0 0 0-1-1.6 1.7 1.7 0 0 0-1.9.3l-.1.1a2 2 0 1 1-2.8-2.8l.1-.1a1.7 1.7 0 0 0 .3-1.9 1.7 1.7 0 0 0-1.6-1H3a2 2 0 1 1 0-4h.2a1.7 1.7 0 0 0 1.6-1 1.7 1.7 0 0 0-.3-1.9l-.1-.1a2 2 0 1 1 2.8-2.8l.1.1a1.7 1.7 0 0 0 1.9.3H9a1.7 1.7 0 0 0 1-1.6V3a2 2 0 1 1 4 0v.2a1.7 1.7 0 0 0 1 1.6h.1a1.7 1.7 0 0 0 1.9-.3l.1-.1a2 2 0 1 1 2.8 2.8l-.1.1a1.7 1.7 0 0 0-.3 1.9v.1a1.7 1.7 0 0 0 1.6 1H21a2 2 0 1 1 0 4h-.2a1.7 1.7 0 0 0-1.6 1Z" />
+          </svg>
+        </span>
+        <span>Настройки</span>
+      </a>
+      <a href="/logout" className="dashboard-nav__item" onClick={(event) => { onItemNavigate?.(); onLogoutClick(event) }}>
+        <span className="dashboard-nav__icon" aria-hidden="true">
+          <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.2" strokeLinecap="round" strokeLinejoin="round">
+            <path d="M9 4H5a2 2 0 0 0-2 2v12a2 2 0 0 0 2 2h4" />
+            <path d="M16 17l5-5-5-5" />
+            <path d="M21 12H9" />
+          </svg>
+        </span>
+        <span>Выход</span>
+      </a>
+    </nav>
+  )
+}
+
 function MigrationShell({
   session,
   activePath = '/dashboard',
@@ -509,12 +630,14 @@ function MigrationShell({
   children,
 }: {
   session: AuthMeResponse | null
-  activePath?: '/dashboard' | '/profile' | '/generation-history'
+  activePath?: DashboardShellActivePath
   mainClassName?: string
   onLogout: () => Promise<void>
   children?: ReactNode
 }) {
   const navigate = useNavigate()
+  const location = useLocation()
+  const [mobileNavOpen, setMobileNavOpen] = useState(false)
   const userName = session?.user?.name || 'Пользователь'
   const userEmail = session?.user?.email || ''
   const userId = session?.user?.id
@@ -531,6 +654,27 @@ function MigrationShell({
 
   const hasUnreadProviderNews = userId != null && seenProviderNewsVersion < PROVIDER_NEWS_VERSION
 
+  useEffect(() => {
+    setMobileNavOpen(false)
+  }, [location.pathname])
+
+  useEffect(() => {
+    function onKeyDown(event: KeyboardEvent) {
+      if (event.key === 'Escape') setMobileNavOpen(false)
+    }
+    window.addEventListener('keydown', onKeyDown)
+    return () => window.removeEventListener('keydown', onKeyDown)
+  }, [])
+
+  useEffect(() => {
+    if (!mobileNavOpen) return
+    const prev = document.body.style.overflow
+    document.body.style.overflow = 'hidden'
+    return () => {
+      document.body.style.overflow = prev
+    }
+  }, [mobileNavOpen])
+
   function markProviderNewsSeen() {
     if (userId == null || seenProviderNewsVersion >= PROVIDER_NEWS_VERSION) return
     try {
@@ -543,8 +687,9 @@ function MigrationShell({
 
   async function handleLogoutClick(event: MouseEvent<HTMLAnchorElement>) {
     event.preventDefault()
+    setMobileNavOpen(false)
+    navigate('/', { replace: true })
     await onLogout()
-    navigate('/login')
   }
 
   useEffect(() => {
@@ -554,10 +699,10 @@ function MigrationShell({
 
   return (
     <div className="dashboard-page page-dashboard">
-      <header className="dashboard-page-header">
+      <header className={`dashboard-page-header${mobileNavOpen ? ' landing-header--open' : ''}`}>
         <div className="dashboard-page-header__brand">
           <Link to="/dashboard" className="dashboard-brand dashboard-brand--header" aria-label="KYBBY dashboard">
-            <img className="brand-mark__logo" src="/app/static/img/kybby-logo.png" alt="KYBBY" />
+            <img className="brand-mark__logo" src="/app/static/img/kybby-logo.png" alt="" />
             <span className="brand-mark__text">KYBBY</span>
           </Link>
         </div>
@@ -595,49 +740,40 @@ function MigrationShell({
                 )}
               </span>
             </div>
+            <button
+              type="button"
+              className="landing-header__burger"
+              aria-expanded={mobileNavOpen}
+              aria-controls="dashboard-mobile-nav"
+              aria-label={mobileNavOpen ? 'Закрыть меню навигации' : 'Открыть меню навигации'}
+              onClick={() => setMobileNavOpen((open) => !open)}
+            >
+              <span className="landing-header__burger-lines" aria-hidden="true">
+                <span className="landing-header__burger-line" />
+                <span className="landing-header__burger-line" />
+                <span className="landing-header__burger-line" />
+              </span>
+            </button>
           </div>
         </div>
       </header>
+      {mobileNavOpen ? (
+        <>
+          <button type="button" className="dashboard-mobile-nav-overlay" aria-label="Закрыть меню" onClick={() => setMobileNavOpen(false)} />
+          <div className="dashboard-mobile-nav-panel" role="dialog" aria-modal="true" aria-label="Меню навигации">
+            <DashboardShellNav
+              activePath={activePath}
+              mobileNavId="dashboard-mobile-nav"
+              className="dashboard-mobile-nav-panel__nav"
+              onItemNavigate={() => setMobileNavOpen(false)}
+              onLogoutClick={handleLogoutClick}
+            />
+          </div>
+        </>
+      ) : null}
       <div className="dashboard-shell">
-        <aside className="dashboard-sidebar">
-          <nav className="dashboard-nav" aria-label="Основная навигация">
-            <Link to="/dashboard" className={`dashboard-nav__item${activePath === '/dashboard' || activePath === '/generation-history' ? ' dashboard-nav__item--active' : ''}`}>
-              <span className="dashboard-nav__icon" aria-hidden="true">
-                <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.2" strokeLinecap="round" strokeLinejoin="round">
-                  <path d="M3 7a2 2 0 0 1 2-2h4l2 2h8a2 2 0 0 1 2 2v8a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2Z" />
-                </svg>
-              </span>
-              <span>Мои проекты</span>
-            </Link>
-            <Link to="/profile" className={`dashboard-nav__item${activePath === '/profile' ? ' dashboard-nav__item--active' : ''}`}>
-              <span className="dashboard-nav__icon" aria-hidden="true">
-                <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.2" strokeLinecap="round" strokeLinejoin="round">
-                  <circle cx="12" cy="8" r="4" />
-                  <path d="M4 20a8 8 0 0 1 16 0" />
-                </svg>
-              </span>
-              <span>Профиль</span>
-            </Link>
-            <a href="#" className="dashboard-nav__item">
-              <span className="dashboard-nav__icon" aria-hidden="true">
-                <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.2" strokeLinecap="round" strokeLinejoin="round">
-                  <circle cx="12" cy="12" r="3" />
-                  <path d="M19.4 15a1.7 1.7 0 0 0 .3 1.9l.1.1a2 2 0 0 1 0 2.8 2 2 0 0 1-2.8 0l-.1-.1a1.7 1.7 0 0 0-1.9-.3 1.7 1.7 0 0 0-1 1.6V21a2 2 0 1 1-4 0v-.2a1.7 1.7 0 0 0-1-1.6 1.7 1.7 0 0 0-1.9.3l-.1.1a2 2 0 1 1-2.8-2.8l.1-.1a1.7 1.7 0 0 0 .3-1.9 1.7 1.7 0 0 0-1.6-1H3a2 2 0 1 1 0-4h.2a1.7 1.7 0 0 0 1.6-1 1.7 1.7 0 0 0-.3-1.9l-.1-.1a2 2 0 1 1 2.8-2.8l.1.1a1.7 1.7 0 0 0 1.9.3H9a1.7 1.7 0 0 0 1-1.6V3a2 2 0 1 1 4 0v.2a1.7 1.7 0 0 0 1 1.6h.1a1.7 1.7 0 0 0 1.9-.3l.1-.1a2 2 0 1 1 2.8 2.8l-.1.1a1.7 1.7 0 0 0-.3 1.9v.1a1.7 1.7 0 0 0 1.6 1H21a2 2 0 1 1 0 4h-.2a1.7 1.7 0 0 0-1.6 1Z" />
-                </svg>
-              </span>
-              <span>Настройки</span>
-            </a>
-            <a href="/logout" className="dashboard-nav__item" onClick={handleLogoutClick}>
-              <span className="dashboard-nav__icon" aria-hidden="true">
-                <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.2" strokeLinecap="round" strokeLinejoin="round">
-                  <path d="M9 4H5a2 2 0 0 0-2 2v12a2 2 0 0 0 2 2h4" />
-                  <path d="M16 17l5-5-5-5" />
-                  <path d="M21 12H9" />
-                </svg>
-              </span>
-              <span>Выход</span>
-            </a>
-          </nav>
+        <aside className="dashboard-sidebar" aria-label="Боковая панель">
+          <DashboardShellNav activePath={activePath} onLogoutClick={handleLogoutClick} />
         </aside>
         <main className={`dashboard-main${mainClassName ? ` ${mainClassName}` : ''}`}>
           {children || <ProjectsDashboard />}
@@ -685,6 +821,12 @@ function GenerationHistoryPage() {
     loadHistory(initialPage)
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [])
+
+  useEffect(() => {
+    if (!statsOpen && !errorRow) return
+    document.body.classList.add('generation-history-modal-open')
+    return () => document.body.classList.remove('generation-history-modal-open')
+  }, [statsOpen, errorRow])
 
   const rows = history?.rows || []
   const selectableRows = rows.filter((row) => row.status_key !== 'running')
@@ -839,8 +981,9 @@ function GenerationHistoryPage() {
         )}
       </div>
 
-      {statsOpen && history ? (
-        <div className="generation-history-modal">
+      {statsOpen && history
+        ? dashboardOverlayPortal(
+            <div className="generation-history-modal">
           <div className="generation-history-modal__backdrop" onClick={() => setStatsOpen(false)}></div>
           <div className="generation-history-modal__dialog" role="dialog" aria-modal="true" aria-labelledby="generation-history-stats-title">
             <button type="button" className="generation-history-modal__close" aria-label="Закрыть статистику" onClick={() => setStatsOpen(false)}>×</button>
@@ -1246,6 +1389,11 @@ function GenerationLogView({ logs }: { logs: string[] | undefined }) {
   )
 }
 
+function dashboardOverlayPortal(content: ReactNode) {
+  if (typeof document === 'undefined') return null
+  return createPortal(content, document.body)
+}
+
 function ResultsGenerationModal({
   job,
   cancelRequested,
@@ -1265,7 +1413,7 @@ function ResultsGenerationModal({
     return () => document.body.classList.remove('modal-open')
   }, [])
 
-  return (
+  return dashboardOverlayPortal(
     <div className="generation-modal">
       <div className="generation-modal__backdrop"></div>
       <div className="generation-modal__dialog" role="dialog" aria-modal="true" aria-labelledby="results-generation-modal-title">
@@ -1289,7 +1437,7 @@ function ResultsGenerationModal({
           ) : null}
         </div>
       </div>
-    </div>
+    </div>,
   )
 }
 
@@ -2302,7 +2450,7 @@ function ProjectGenerationModal({
     return () => document.body.classList.remove('modal-open')
   }, [])
 
-  return (
+  return dashboardOverlayPortal(
     <>
       <div className="generation-modal">
         <div className="generation-modal__backdrop" onClick={onClose}></div>
@@ -2361,7 +2509,7 @@ function ProjectGenerationModal({
           </div>
         </div>
       ) : null}
-    </>
+    </>,
   )
 }
 
@@ -2648,6 +2796,11 @@ function ProfilePage({ onSessionRefresh }: { onSessionRefresh: () => Promise<voi
                 )}
               </div>
               <label className="btn btn-outline btn-inline profile-upload-btn">
+                <svg className="profile-upload-btn__icon" xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round" aria-hidden="true">
+                  <path d="M21 15v4a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2v-4" />
+                  <polyline points="17 8 12 3 7 8" />
+                  <line x1="12" x2="12" y1="3" y2="15" />
+                </svg>
                 Загрузить фото
                 <input type="file" name="avatar" accept=".png,.jpg,.jpeg,.webp" hidden onChange={(event) => setAvatar(event.target.files?.[0] || null)} />
               </label>
@@ -2656,11 +2809,21 @@ function ProfilePage({ onSessionRefresh }: { onSessionRefresh: () => Promise<voi
             <div className="profile-fields">
               <label className="editor-field">
                 <span>ФИО</span>
-                <input type="text" name="name" value={name} minLength={2} required onChange={(event) => setName(event.target.value)} />
+                <span className="profile-input-wrap">
+                  <span className="profile-input-icon" aria-hidden="true">
+                    <UserIcon />
+                  </span>
+                  <input type="text" name="name" value={name} minLength={2} required onChange={(event) => setName(event.target.value)} />
+                </span>
               </label>
               <label className="editor-field">
                 <span>Email</span>
-                <input type="email" className="profile-email-input" value={profile?.email || ''} disabled />
+                <span className="profile-input-wrap">
+                  <span className="profile-input-icon" aria-hidden="true">
+                    <EmailIcon />
+                  </span>
+                  <input type="email" className="profile-email-input" value={profile?.email || ''} disabled />
+                </span>
               </label>
               <p className="profile-field-hint">Email нельзя изменить</p>
               <div className="profile-role-row">
@@ -2677,11 +2840,21 @@ function ProfilePage({ onSessionRefresh }: { onSessionRefresh: () => Promise<voi
             <div className="profile-password-grid">
               <label className="editor-field">
                 <span>Текущий пароль</span>
-                <input type="password" className="profile-current-password" value="••••••••••••" disabled />
+                <span className="profile-input-wrap">
+                  <span className="profile-input-icon" aria-hidden="true">
+                    <LockIcon />
+                  </span>
+                  <input type="password" className="profile-current-password" value="••••••••••••" disabled />
+                </span>
               </label>
               <label className="editor-field">
                 <span>Новый пароль</span>
-                <input type="password" name="new_password" placeholder="Введите новый пароль" value={newPassword} onChange={(event) => setNewPassword(event.target.value)} />
+                <span className="profile-input-wrap">
+                  <span className="profile-input-icon" aria-hidden="true">
+                    <LockIcon />
+                  </span>
+                  <input type="password" name="new_password" placeholder="Введите новый пароль" value={newPassword} onChange={(event) => setNewPassword(event.target.value)} />
+                </span>
                 <p className="profile-field-hint">Минимум 8 символов</p>
               </label>
             </div>
@@ -2809,16 +2982,21 @@ function ProjectsDashboard() {
   }
 
   return (
-    <section className="dashboard-content">
-      <div className="dashboard-head">
+    <section className="dashboard-content projects-dashboard">
+      <div className="dashboard-head projects-head">
         <h1>Мои проекты</h1>
-        <div className="dashboard-head__actions">
+        <div className="projects-actions dashboard-head__actions">
           {showGenerationHistory ? (
-            <Link to="/generation-history" className="btn btn-outline dashboard-history-btn">Посмотреть историю генераций</Link>
+            <Link
+              to="/generation-history"
+              className="btn btn-outline dashboard-history-btn projects-history-btn"
+            >
+              Посмотреть историю генераций
+            </Link>
           ) : null}
-          <form className="dashboard-create-form" onSubmit={(event) => event.preventDefault()}>
+          <form className="dashboard-create-form projects-create-form" onSubmit={(event) => event.preventDefault()}>
             <input type="hidden" name="name" value="Новый проект" />
-            <button type="button" className="btn btn-primary dashboard-create-btn" disabled={isCreating} onClick={handleCreateProject}>
+            <button type="button" className="btn btn-primary dashboard-create-btn projects-create-btn" disabled={isCreating} onClick={handleCreateProject}>
               {isCreating ? 'Создаём...' : 'Создать проект'}
             </button>
           </form>
@@ -2832,7 +3010,7 @@ function ProjectsDashboard() {
           <p>Загружаем проекты...</p>
         </div>
       ) : projects.length > 0 ? (
-        <div className="project-grid">
+        <div className="project-grid projects-grid">
           {projects.map((project) => (
             <article className="project-card" key={project.slug}>
               <Link to={`/projects/${project.slug}/results`} className="project-card__main-link" aria-label={`Открыть результаты генерации ${project.name}`}></Link>
@@ -2853,10 +3031,12 @@ function ProjectsDashboard() {
                     aria-label="Удалить проект"
                     onClick={() => handleDeleteProject(project)}
                   >
-                    🗑
+                    <ProjectCardDeleteIcon />
                   </button>
                 </form>
-                <Link to={`/projects/${project.slug}`} className="project-card__action" aria-label="Открыть редактор проекта">✎</Link>
+                <Link to={`/projects/${project.slug}`} className="project-card__action project-card__action--edit" aria-label="Открыть редактор проекта">
+                  <ProjectCardEditIcon />
+                </Link>
               </div>
             </article>
           ))}
@@ -2867,6 +3047,27 @@ function ProjectsDashboard() {
         </div>
       )}
     </section>
+  )
+}
+
+function ProjectCardDeleteIcon() {
+  return (
+    <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="1.75" strokeLinecap="round" strokeLinejoin="round" aria-hidden="true">
+      <path d="M3 6h18" />
+      <path d="M8 6V4.8A1.8 1.8 0 0 1 9.8 3h4.4A1.8 1.8 0 0 1 16 4.8V6" />
+      <path d="M19 6l-.8 13.2a1.8 1.8 0 0 1-1.8 1.6H7.6a1.8 1.8 0 0 1-1.8-1.6L5 6" />
+      <path d="M10 11v5" />
+      <path d="M14 11v5" />
+    </svg>
+  )
+}
+
+function ProjectCardEditIcon() {
+  return (
+    <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="1.75" strokeLinecap="round" strokeLinejoin="round" aria-hidden="true">
+      <path d="M12 20h9" />
+      <path d="M16.5 3.5a2.12 2.12 0 0 1 3 3L7 19l-4 1 1-4Z" />
+    </svg>
   )
 }
 
