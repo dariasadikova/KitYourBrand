@@ -1,10 +1,15 @@
 from __future__ import annotations
 
+import logging
+
 from pydantic import BaseModel
-from fastapi import APIRouter, Request
+from fastapi import APIRouter, Query, Request
 from fastapi.responses import JSONResponse
 
+from app.core.settings import settings
 from app.db import auth_service
+
+logger = logging.getLogger(__name__)
 
 router = APIRouter(prefix='/api/auth', tags=['api-auth'])
 
@@ -17,6 +22,16 @@ class LoginPayload(BaseModel):
 class RegisterPayload(BaseModel):
     name: str
     email: str
+    password: str
+    password_confirm: str
+
+
+class ForgotPasswordPayload(BaseModel):
+    email: str
+
+
+class ResetPasswordPayload(BaseModel):
+    token: str
     password: str
     password_confirm: str
 
@@ -89,3 +104,44 @@ def logout(request: Request) -> JSONResponse:
     auth_service.revoke_user_session(request.session.get('db_session_id'))
     request.session.clear()
     return JSONResponse({'ok': True, 'authenticated': False, 'user': None})
+
+
+@router.post('/forgot-password')
+def forgot_password(payload: ForgotPasswordPayload) -> JSONResponse:
+    token = auth_service.create_password_reset_token(payload.email)
+    body: dict = {
+        'ok': True,
+        'message': (
+            'Если аккаунт с таким email зарегистрирован, '
+            'мы отправили инструкции по сбросу пароля на почту.'
+        ),
+    }
+    if token and settings.debug:
+        reset_url = f'/app/reset-password?token={token}'
+        body['dev_reset_url'] = reset_url
+        logger.info('Password reset link (debug): %s', reset_url)
+    return JSONResponse(body)
+
+
+@router.get('/reset-password/validate')
+def validate_reset_password_token(token: str = Query(..., min_length=8)) -> JSONResponse:
+    row = auth_service.get_valid_password_reset_token(token)
+    if row is None:
+        return JSONResponse(
+            {'ok': False, 'valid': False, 'error': 'Ссылка недействительна или устарела.'},
+            status_code=400,
+        )
+    return JSONResponse({'ok': True, 'valid': True})
+
+
+@router.post('/reset-password')
+def reset_password(payload: ResetPasswordPayload) -> JSONResponse:
+    if payload.password != payload.password_confirm:
+        return JSONResponse({'ok': False, 'error': 'Пароли не совпадают.'}, status_code=400)
+
+    try:
+        auth_service.reset_password_with_token(payload.token, payload.password)
+    except ValueError as exc:
+        return JSONResponse({'ok': False, 'error': str(exc)}, status_code=400)
+
+    return JSONResponse({'ok': True, 'message': 'Пароль обновлён. Войдите с новым паролем.'})

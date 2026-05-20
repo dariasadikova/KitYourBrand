@@ -193,3 +193,16 @@ class GenerationJobLogEntry(Base):
     seq: Mapped[int] = mapped_column(sa.Integer, nullable=False)
     message: Mapped[str] = mapped_column(sa.Text, nullable=False)
     created_at: Mapped[str] = mapped_column(sa.Text, nullable=False)
+
+
+class PasswordResetToken(Base):
+    """Одноразовые токены сброса пароля (ссылка из письма или dev-режим)."""
+
+    __tablename__ = 'password_reset_tokens'
+    __table_args__ = (sa.Index('ix_password_reset_tokens_user_id', 'user_id'),)
+
+    token: Mapped[str] = mapped_column(sa.Text, primary_key=True)
+    user_id: Mapped[int] = mapped_column(sa.Integer, sa.ForeignKey('users.id'), nullable=False)
+    created_at: Mapped[str] = mapped_column(sa.Text, nullable=False)
+    expires_at: Mapped[str] = mapped_column(sa.Text, nullable=False)
+    used_at: Mapped[str | None] = mapped_column(sa.Text, nullable=True)

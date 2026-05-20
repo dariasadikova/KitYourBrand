@@ -24,3 +24,15 @@ export type RegisterPayload = {
   password: string
   password_confirm: string
 }
+
+export type ForgotPasswordResponse = {
+  ok: boolean
+  message: string
+  dev_reset_url?: string
+}
+
+export type ResetPasswordPayload = {
+  token: string
+  password: string
+  password_confirm: string
+}

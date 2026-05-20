@@ -92,3 +92,19 @@ async def register_page(request: Request) -> RedirectResponse:
         return RedirectResponse(url='/app/dashboard', status_code=status.HTTP_303_SEE_OTHER)
 
     return redirect_to_react(request, '/register')
+
+
+@router.get('/forgot-password')
+async def forgot_password_page(request: Request) -> RedirectResponse:
+    if request.session.get('user_id'):
+        return RedirectResponse(url='/app/dashboard', status_code=status.HTTP_303_SEE_OTHER)
+
+    return redirect_to_react(request, '/forgot-password')
+
+
+@router.get('/reset-password')
+async def reset_password_page(request: Request) -> RedirectResponse:
+    if request.session.get('user_id'):
+        return RedirectResponse(url='/app/dashboard', status_code=status.HTTP_303_SEE_OTHER)
+
+    return redirect_to_react(request, '/reset-password')

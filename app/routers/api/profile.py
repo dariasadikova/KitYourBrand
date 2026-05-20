@@ -71,7 +71,9 @@ def get_profile(request: Request) -> JSONResponse:
 async def update_profile(
     request: Request,
     name: str = Form(''),
+    current_password: str = Form(''),
     new_password: str = Form(''),
+    new_password_confirm: str = Form(''),
     remove_avatar: str = Form('0'),
     recraft_api_key: str = Form(''),
     openrouter_api_key: str = Form(''),
@@ -116,8 +118,28 @@ async def update_profile(
             recraft_api_key=recraft_api_key.strip() or None,
             openrouter_api_key=openrouter_api_key.strip() or None,
         )
-        if new_password.strip():
-            auth_service.change_password(user_id, new_password=new_password)
+        current_raw = current_password.strip()
+        new_raw = new_password.strip()
+        confirm_raw = new_password_confirm.strip()
+
+        if new_raw or confirm_raw:
+            if not current_raw:
+                raise ValueError('Введите текущий пароль.')
+            if not new_raw:
+                raise ValueError('Введите новый пароль.')
+            if new_raw != confirm_raw:
+                raise ValueError('Новый пароль и подтверждение не совпадают.')
+            auth_service.change_password(
+                user_id,
+                new_password=new_raw,
+                current_password=current_raw,
+            )
+            auth_service.revoke_other_user_sessions(
+                user_id,
+                keep_session_id=request.session.get('db_session_id'),
+            )
+        elif current_raw:
+            raise ValueError('Введите новый пароль и подтверждение.')
     except ValueError as exc:
         return JSONResponse({'ok': False, 'error': str(exc)}, status_code=400)
 

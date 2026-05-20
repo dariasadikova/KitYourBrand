@@ -12,6 +12,7 @@ from typing import Optional
 
 PBKDF2_ITERATIONS = 600_000
 SESSION_TTL_DAYS = 30
+PASSWORD_RESET_TTL_HOURS = 1
 
 
 @dataclass(slots=True)
@@ -117,11 +118,13 @@ class AuthService:
             'openrouter_api_key': str(row['openrouter_api_key'] or '').strip(),
         }
 
-    def change_password(self, user_id: int, *, new_password: str, current_password: str | None = None) -> None:
+    def change_password(self, user_id: int, *, new_password: str, current_password: str) -> None:
         row = self.get_user_by_id(user_id)
         if row is None:
             raise ValueError("Пользователь не найден.")
-        if current_password is not None and not self.verify_password(current_password or "", str(row["password_hash"])):
+        if not (current_password or "").strip():
+            raise ValueError("Введите текущий пароль.")
+        if not self.verify_password(current_password, str(row["password_hash"])):
             raise ValueError("Текущий пароль введен неверно.")
         if len((new_password or "").strip()) < 8:
             raise ValueError("Новый пароль должен содержать минимум 8 символов.")
@@ -235,3 +238,113 @@ class AuthService:
                 (now, token),
             )
             conn.commit()
+
+    def revoke_other_user_sessions(self, user_id: int, *, keep_session_id: str | None = None) -> None:
+        """Завершает остальные серверные сессии пользователя (например, после смены пароля)."""
+        now = self._utc_now_iso()
+        keep = (keep_session_id or '').strip()
+        try:
+            with self._connect() as conn:
+                if keep:
+                    conn.execute(
+                        'UPDATE user_sessions SET expires_at = ? WHERE user_id = ? AND id != ?',
+                        (now, int(user_id), keep),
+                    )
+                else:
+                    conn.execute(
+                        'UPDATE user_sessions SET expires_at = ? WHERE user_id = ?',
+                        (now, int(user_id)),
+                    )
+                conn.commit()
+        except sqlite3.OperationalError:
+            return
+
+    def create_password_reset_token(self, email: str) -> Optional[str]:
+        """Создаёт токен сброса. None, если email не зарегистрирован (без утечки в API)."""
+        normalized_email = email.strip().lower()
+        if '@' not in normalized_email:
+            return None
+
+        row = self.get_user_by_email(normalized_email)
+        if row is None or not row['is_active']:
+            return None
+
+        user_id = int(row['id'])
+        token = secrets.token_urlsafe(32)
+        created_at = self._utc_now_iso()
+        expires_at = (
+            datetime.now(timezone.utc) + timedelta(hours=PASSWORD_RESET_TTL_HOURS)
+        ).isoformat()
+
+        with self._connect() as conn:
+            conn.execute(
+                'DELETE FROM password_reset_tokens WHERE user_id = ? AND used_at IS NULL',
+                (user_id,),
+            )
+            conn.execute(
+                """
+                INSERT INTO password_reset_tokens (token, user_id, created_at, expires_at, used_at)
+                VALUES (?, ?, ?, ?, NULL)
+                """,
+                (token, user_id, created_at, expires_at),
+            )
+            conn.commit()
+
+        return token
+
+    def get_valid_password_reset_token(self, token: str) -> Optional[sqlite3.Row]:
+        normalized = (token or '').strip()
+        if not normalized:
+            return None
+
+        now = datetime.now(timezone.utc)
+        with self._connect() as conn:
+            row = conn.execute(
+                """
+                SELECT token, user_id, created_at, expires_at, used_at
+                FROM password_reset_tokens
+                WHERE token = ?
+                LIMIT 1
+                """,
+                (normalized,),
+            ).fetchone()
+
+        if row is None or row['used_at']:
+            return None
+
+        try:
+            expires_at = datetime.fromisoformat(str(row['expires_at']))
+            if expires_at.tzinfo is None:
+                expires_at = expires_at.replace(tzinfo=timezone.utc)
+        except ValueError:
+            return None
+
+        if expires_at <= now:
+            return None
+
+        return row
+
+    def reset_password_with_token(self, token: str, new_password: str) -> None:
+        row = self.get_valid_password_reset_token(token)
+        if row is None:
+            raise ValueError('Ссылка для сброса пароля недействительна или устарела.')
+
+        if len((new_password or '').strip()) < 8:
+            raise ValueError('Пароль должен содержать минимум 8 символов.')
+
+        user_id = int(row['user_id'])
+        new_hash = self.hash_password(new_password)
+        used_at = self._utc_now_iso()
+
+        with self._connect() as conn:
+            conn.execute(
+                'UPDATE users SET password_hash = ? WHERE id = ?',
+                (new_hash, user_id),
+            )
+            conn.execute(
+                'UPDATE password_reset_tokens SET used_at = ? WHERE token = ?',
+                (used_at, str(row['token'])),
+            )
+            conn.commit()
+
+        self.revoke_other_user_sessions(user_id)

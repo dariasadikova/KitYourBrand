@@ -10,7 +10,15 @@ import {
 import { createPortal } from 'react-dom'
 import { Link, Navigate, Route, Routes, useLocation, useNavigate, useParams, useSearchParams } from 'react-router-dom'
 import { cancelGenerationJob, deleteGenerationHistorySelected, getGenerationHistory } from './services/generationHistoryApi'
-import { getCurrentSession, login, logout, register } from './services/authApi'
+import {
+  getCurrentSession,
+  login,
+  logout,
+  register,
+  requestPasswordReset,
+  resetPasswordWithToken,
+  validatePasswordResetToken,
+} from './services/authApi'
 import { getProfile, updateProfile } from './services/profileApi'
 import { createProject, deleteProject, listProjects, restoreProject } from './services/projectsApi'
 import {
@@ -102,6 +110,8 @@ function App() {
       <Route path="/" element={<LandingPage session={session} onLogout={handleLogout} />} />
       <Route path="/login" element={<LoginPage session={session} onSessionChange={setSession} />} />
       <Route path="/register" element={<RegisterPage />} />
+      <Route path="/forgot-password" element={<ForgotPasswordPage />} />
+      <Route path="/reset-password" element={<ResetPasswordPage />} />
       <Route path="/dashboard" element={<ProtectedDashboard session={session} onLogout={handleLogout} />} />
       <Route path="/profile" element={<ProtectedProfile session={session} onLogout={handleLogout} onSessionRefresh={refreshSession} />} />
       <Route path="/generation-history" element={<ProtectedGenerationHistory session={session} onLogout={handleLogout} />} />
@@ -449,6 +459,9 @@ function LoginPage({
         {searchParams.get('registered') === '1' ? (
           <div className="callout callout-success" role="status">Регистрация прошла успешно. Войдите, используя email и пароль.</div>
         ) : null}
+        {searchParams.get('reset') === '1' ? (
+          <div className="callout callout-success" role="status">Пароль обновлён. Войдите с новым паролем.</div>
+        ) : null}
         {error || queryError ? <div className="error">{error || queryError}</div> : null}
         <form className="auth-modal-form" onSubmit={handleSubmit}>
           <label className="auth-input-wrap" htmlFor="email">
@@ -457,12 +470,25 @@ function LoginPage({
             </span>
             <input id="email" type="email" name="email" placeholder="Почта" value={email} autoComplete="email" required onChange={(event) => setEmail(event.target.value)} />
           </label>
-          <label className="auth-input-wrap" htmlFor="password">
+          <div className="auth-input-wrap">
             <span className="auth-input-icon" aria-hidden="true">
               <LockIcon />
             </span>
             <input id="password" type="password" name="password" placeholder="Пароль" value={password} autoComplete="current-password" required onChange={(event) => setPassword(event.target.value)} />
-          </label>
+            <Link
+              to="/forgot-password"
+              className="auth-password-help"
+              aria-label="Забыли пароль?"
+              onClick={(event) => event.stopPropagation()}
+            >
+              <span className="auth-password-help__icon" aria-hidden="true">
+                <QuestionIcon />
+              </span>
+              <span className="auth-password-help__tooltip" role="tooltip">
+                Забыли пароль?
+              </span>
+            </Link>
+          </div>
           <button type="submit" className="btn auth-submit-btn" disabled={isSubmitting}>
             {isSubmitting ? 'Вход...' : 'Войти'}
           </button>
@@ -554,6 +580,236 @@ function RegisterPage() {
         </form>
 
         <p className="auth-switch">Уже есть аккаунт? <Link to="/login">Войти</Link></p>
+      </div>
+    </div>
+  )
+}
+
+function ForgotPasswordPage() {
+  const [email, setEmail] = useState('')
+  const [error, setError] = useState('')
+  const [isSubmitting, setIsSubmitting] = useState(false)
+  const [successMessage, setSuccessMessage] = useState('')
+  const [devResetUrl, setDevResetUrl] = useState('')
+
+  async function handleSubmit(event: FormEvent<HTMLFormElement>) {
+    event.preventDefault()
+    setError('')
+    setSuccessMessage('')
+    setDevResetUrl('')
+    setIsSubmitting(true)
+
+    try {
+      const result = await requestPasswordReset(email)
+      setSuccessMessage(result.message)
+      if (result.dev_reset_url) {
+        setDevResetUrl(result.dev_reset_url)
+      }
+    } catch (err) {
+      setError(err instanceof Error ? err.message : 'Не удалось отправить запрос.')
+    } finally {
+      setIsSubmitting(false)
+    }
+  }
+
+  return (
+    <div className="auth-screen">
+      <div className="auth-backdrop-content" aria-hidden="true">
+        <h1 className="auth-backdrop-title">
+          <span>Создайте бренд-стиль</span>
+          <span className="auth-backdrop-title-accent">за минуты</span>
+        </h1>
+      </div>
+      <div className="auth-backdrop-blur"></div>
+      <div className="auth-modal" role="dialog" aria-modal="true" aria-labelledby="forgot-password-title">
+        <Link className="auth-modal-close" to="/login" aria-label="Закрыть">×</Link>
+        <div className="auth-modal-brand">
+          <img className="auth-modal-brand-logo" src="/app/static/img/kybby-logo.png" alt="" />
+          <span>KYBBY</span>
+        </div>
+        <h1 className="auth-modal-title" id="forgot-password-title">Сброс пароля</h1>
+        <p className="auth-modal-lead">
+          Укажите email аккаунта. Мы отправим ссылку для установки нового пароля.
+        </p>
+        {successMessage ? (
+          <div className="callout callout-success" role="status">{successMessage}</div>
+        ) : null}
+        {devResetUrl ? (
+          <div className="callout auth-dev-reset" role="status">
+            <p className="auth-dev-reset__label">Режим разработки (письмо не отправляется):</p>
+            <Link className="auth-dev-reset__link" to={devResetUrl.replace(/^\/app/, '')}>
+              Открыть ссылку сброса
+            </Link>
+          </div>
+        ) : null}
+        {error ? <div className="error">{error}</div> : null}
+        {successMessage ? (
+          <p className="auth-switch">
+            <Link to="/login">Вернуться ко входу</Link>
+          </p>
+        ) : (
+          <form className="auth-modal-form" onSubmit={handleSubmit}>
+            <label className="auth-input-wrap" htmlFor="forgot-email">
+              <span className="auth-input-icon" aria-hidden="true">
+                <EmailIcon />
+              </span>
+              <input
+                id="forgot-email"
+                type="email"
+                name="email"
+                placeholder="Почта"
+                value={email}
+                autoComplete="email"
+                required
+                onChange={(event) => setEmail(event.target.value)}
+              />
+            </label>
+            <button type="submit" className="btn auth-submit-btn" disabled={isSubmitting}>
+              {isSubmitting ? 'Отправка...' : 'Отправить ссылку'}
+            </button>
+          </form>
+        )}
+        {!successMessage ? (
+          <p className="auth-switch">
+            Вспомнили пароль? <Link to="/login">Войти</Link>
+          </p>
+        ) : null}
+      </div>
+    </div>
+  )
+}
+
+function ResetPasswordPage() {
+  const [searchParams] = useSearchParams()
+  const navigate = useNavigate()
+  const token = (searchParams.get('token') || '').trim()
+  const [password, setPassword] = useState('')
+  const [passwordConfirm, setPasswordConfirm] = useState('')
+  const [error, setError] = useState('')
+  const [isSubmitting, setIsSubmitting] = useState(false)
+  const [tokenState, setTokenState] = useState<'checking' | 'valid' | 'invalid'>('checking')
+
+  useEffect(() => {
+    let alive = true
+
+    if (!token) {
+      setTokenState('invalid')
+      setError('Ссылка для сброса пароля не найдена.')
+      return () => {
+        alive = false
+      }
+    }
+
+    setTokenState('checking')
+    setError('')
+
+    validatePasswordResetToken(token)
+      .then(() => {
+        if (alive) setTokenState('valid')
+      })
+      .catch(() => {
+        if (alive) {
+          setTokenState('invalid')
+          setError('Ссылка для сброса пароля недействительна или устарела.')
+        }
+      })
+
+    return () => {
+      alive = false
+    }
+  }, [token])
+
+  async function handleSubmit(event: FormEvent<HTMLFormElement>) {
+    event.preventDefault()
+    if (tokenState !== 'valid') return
+
+    setError('')
+    setIsSubmitting(true)
+
+    try {
+      await resetPasswordWithToken({
+        token,
+        password,
+        password_confirm: passwordConfirm,
+      })
+      navigate('/login?reset=1', { replace: true })
+    } catch (err) {
+      setError(err instanceof Error ? err.message : 'Не удалось обновить пароль.')
+    } finally {
+      setIsSubmitting(false)
+    }
+  }
+
+  return (
+    <div className="auth-screen">
+      <div className="auth-backdrop-content" aria-hidden="true">
+        <h1 className="auth-backdrop-title">
+          <span>Создайте бренд-стиль</span>
+          <span className="auth-backdrop-title-accent">за минуты</span>
+        </h1>
+      </div>
+      <div className="auth-backdrop-blur"></div>
+      <div className="auth-modal" role="dialog" aria-modal="true" aria-labelledby="reset-password-title">
+        <Link className="auth-modal-close" to="/login" aria-label="Закрыть">×</Link>
+        <div className="auth-modal-brand">
+          <img className="auth-modal-brand-logo" src="/app/static/img/kybby-logo.png" alt="" />
+          <span>KYBBY</span>
+        </div>
+        <h1 className="auth-modal-title" id="reset-password-title">Новый пароль</h1>
+        {tokenState === 'checking' ? (
+          <p className="auth-modal-lead" role="status">Проверяем ссылку...</p>
+        ) : null}
+        {error ? <div className="error">{error}</div> : null}
+        {tokenState === 'valid' ? (
+          <form className="auth-modal-form" onSubmit={handleSubmit}>
+            <label className="auth-input-wrap" htmlFor="reset-password">
+              <span className="auth-input-icon" aria-hidden="true">
+                <LockIcon />
+              </span>
+              <input
+                id="reset-password"
+                type="password"
+                name="password"
+                placeholder="Новый пароль"
+                value={password}
+                autoComplete="new-password"
+                minLength={8}
+                required
+                onChange={(event) => setPassword(event.target.value)}
+              />
+            </label>
+            <label className="auth-input-wrap" htmlFor="reset-password-confirm">
+              <span className="auth-input-icon" aria-hidden="true">
+                <LockIcon />
+              </span>
+              <input
+                id="reset-password-confirm"
+                type="password"
+                name="password_confirm"
+                placeholder="Подтверждение пароля"
+                value={passwordConfirm}
+                autoComplete="new-password"
+                minLength={8}
+                required
+                onChange={(event) => setPasswordConfirm(event.target.value)}
+              />
+            </label>
+            <button type="submit" className="btn auth-submit-btn" disabled={isSubmitting}>
+              {isSubmitting ? 'Сохранение...' : 'Сохранить пароль'}
+            </button>
+          </form>
+        ) : null}
+        {tokenState === 'invalid' ? (
+          <p className="auth-switch">
+            <Link to="/forgot-password">Запросить новую ссылку</Link>
+            {' · '}
+            <Link to="/login">Войти</Link>
+          </p>
+        ) : (
+          <p className="auth-switch">
+            <Link to="/login">Вернуться ко входу</Link>
+          </p>
+        )}
       </div>
     </div>
   )
@@ -2740,7 +2996,9 @@ function normalizeHexColor(value: string): string {
 function ProfilePage({ onSessionRefresh }: { onSessionRefresh: () => Promise<void> }) {
   const [profile, setProfile] = useState<Profile | null>(null)
   const [name, setName] = useState('')
+  const [currentPassword, setCurrentPassword] = useState('')
   const [newPassword, setNewPassword] = useState('')
+  const [newPasswordConfirm, setNewPasswordConfirm] = useState('')
   const [recraftApiKey, setRecraftApiKey] = useState('')
   const [openrouterApiKey, setOpenrouterApiKey] = useState('')
   const [avatar, setAvatar] = useState<File | null>(null)
@@ -2748,6 +3006,7 @@ function ProfilePage({ onSessionRefresh }: { onSessionRefresh: () => Promise<voi
   const [error, setError] = useState('')
   const [isLoading, setIsLoading] = useState(true)
   const [isSaving, setIsSaving] = useState(false)
+  const [highlightMissingCurrentPassword, setHighlightMissingCurrentPassword] = useState(false)
 
   useEffect(() => {
     let alive = true
@@ -2774,11 +3033,41 @@ function ProfilePage({ onSessionRefresh }: { onSessionRefresh: () => Promise<voi
     event.preventDefault()
     setError('')
     setSuccess('')
+    setHighlightMissingCurrentPassword(false)
+
+    const form = event.currentTarget
+    const submittedCurrent = String(new FormData(form).get('current_password') ?? '').trim()
+    const submittedNew = String(new FormData(form).get('new_password') ?? '').trim()
+    const submittedConfirm = String(new FormData(form).get('new_password_confirm') ?? '').trim()
+
+    const wantsPasswordChange = Boolean(submittedCurrent || submittedNew || submittedConfirm)
+    if (wantsPasswordChange) {
+      if (!submittedCurrent) {
+        setHighlightMissingCurrentPassword(true)
+        setError('Введите текущий пароль.')
+        return
+      }
+      if (!submittedNew) {
+        setError('Введите новый пароль.')
+        return
+      }
+      if (submittedNew.length < 8) {
+        setError('Новый пароль должен содержать минимум 8 символов.')
+        return
+      }
+      if (submittedNew !== submittedConfirm) {
+        setError('Новый пароль и подтверждение не совпадают.')
+        return
+      }
+    }
+
     setIsSaving(true)
 
     const formData = new FormData()
     formData.append('name', name)
-    formData.append('new_password', newPassword)
+    formData.append('current_password', submittedCurrent)
+    formData.append('new_password', submittedNew)
+    formData.append('new_password_confirm', submittedConfirm)
     formData.append('remove_avatar', '0')
     formData.append('recraft_api_key', recraftApiKey)
     formData.append('openrouter_api_key', openrouterApiKey)
@@ -2788,14 +3077,21 @@ function ProfilePage({ onSessionRefresh }: { onSessionRefresh: () => Promise<voi
       const payload = await updateProfile(formData)
       setProfile(payload.profile)
       setName(payload.profile.name)
+      setCurrentPassword('')
       setNewPassword('')
+      setNewPasswordConfirm('')
       setRecraftApiKey('')
       setOpenrouterApiKey('')
       setAvatar(null)
       setSuccess('Изменения сохранены')
+      setHighlightMissingCurrentPassword(false)
       await onSessionRefresh()
     } catch (err) {
-      setError(err instanceof Error ? err.message : 'Не удалось сохранить профиль.')
+      const message = err instanceof Error ? err.message : 'Не удалось сохранить профиль.'
+      setError(message)
+      if (/текущий пароль/i.test(message)) {
+        setHighlightMissingCurrentPassword(true)
+      }
     } finally {
       setIsSaving(false)
     }
@@ -2807,7 +3103,9 @@ function ProfilePage({ onSessionRefresh }: { onSessionRefresh: () => Promise<voi
 
     const formData = new FormData()
     formData.append('name', name)
+    formData.append('current_password', '')
     formData.append('new_password', '')
+    formData.append('new_password_confirm', '')
     formData.append('remove_avatar', '1')
     formData.append('recraft_api_key', '')
     formData.append('openrouter_api_key', '')
@@ -2903,16 +3201,32 @@ function ProfilePage({ onSessionRefresh }: { onSessionRefresh: () => Promise<voi
         </article>
 
         <div className="profile-credentials-row">
-          <article className="profile-card">
+          <article className="profile-card profile-card--password-change">
             <h2>Смена пароля</h2>
-            <div className="profile-password-grid">
+            <p className="profile-field-hint profile-card__intro-hint">
+              Чтобы сменить пароль, заполните все три поля. Оставьте пустыми, если пароль менять не нужно.
+            </p>
+            <div className="profile-password-grid profile-password-grid--change-password">
               <label className="editor-field">
                 <span>Текущий пароль</span>
-                <span className="profile-input-wrap">
+                <span
+                  className={`profile-input-wrap${highlightMissingCurrentPassword ? ' profile-input-wrap--error' : ''}`}
+                >
                   <span className="profile-input-icon" aria-hidden="true">
                     <LockIcon />
                   </span>
-                  <input type="password" className="profile-current-password" value="••••••••••••" disabled />
+                  <input
+                    type="password"
+                    name="current_password"
+                    placeholder="Введите текущий пароль"
+                    value={currentPassword}
+                    autoComplete="current-password"
+                    aria-invalid={highlightMissingCurrentPassword}
+                    onChange={(event) => {
+                      setCurrentPassword(event.target.value)
+                      if (event.target.value.trim()) setHighlightMissingCurrentPassword(false)
+                    }}
+                  />
                 </span>
               </label>
               <label className="editor-field">
@@ -2921,9 +3235,34 @@ function ProfilePage({ onSessionRefresh }: { onSessionRefresh: () => Promise<voi
                   <span className="profile-input-icon" aria-hidden="true">
                     <LockIcon />
                   </span>
-                  <input type="password" name="new_password" placeholder="Введите новый пароль" value={newPassword} onChange={(event) => setNewPassword(event.target.value)} />
+                  <input
+                    type="password"
+                    name="new_password"
+                    placeholder="Введите новый пароль"
+                    value={newPassword}
+                    autoComplete="new-password"
+                    minLength={8}
+                    onChange={(event) => setNewPassword(event.target.value)}
+                  />
                 </span>
                 <p className="profile-field-hint">Минимум 8 символов</p>
+              </label>
+              <label className="editor-field">
+                <span>Подтвердите новый пароль</span>
+                <span className="profile-input-wrap">
+                  <span className="profile-input-icon" aria-hidden="true">
+                    <LockIcon />
+                  </span>
+                  <input
+                    type="password"
+                    name="new_password_confirm"
+                    placeholder="Повторите новый пароль"
+                    value={newPasswordConfirm}
+                    autoComplete="new-password"
+                    minLength={8}
+                    onChange={(event) => setNewPasswordConfirm(event.target.value)}
+                  />
+                </span>
               </label>
             </div>
           </article>
@@ -3180,6 +3519,16 @@ function LockIcon() {
     <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.2" strokeLinecap="round" strokeLinejoin="round">
       <rect x="4" y="11" width="16" height="9" rx="2.6" />
       <path d="M8 11V8.3a4 4 0 1 1 8 0V11" />
+    </svg>
+  )
+}
+
+function QuestionIcon() {
+  return (
+    <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="1.5" strokeLinecap="round" strokeLinejoin="round">
+      <circle cx="12" cy="12" r="9" />
+      <path d="M9.5 9.4a2.6 2.6 0 0 1 4.6 1.3c0 1.6-2.1 2-2.1 3.7" />
+      <circle cx="12" cy="17.2" r="0.9" fill="currentColor" stroke="none" />
     </svg>
   )
 }
