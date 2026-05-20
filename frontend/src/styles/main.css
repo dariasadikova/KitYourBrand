@@ -4281,6 +4281,88 @@ body.generation-history-modal-open .dashboard-shell {
     border-color: #f3f4f6;
 }
 
+.results-figma-guide {
+    margin: 0 0 20px;
+    padding: 16px 18px;
+    border-radius: 14px;
+    border: 1px solid rgba(255, 255, 255, 0.12);
+    background: rgba(255, 255, 255, 0.04);
+}
+
+.results-figma-guide__lead {
+    margin: 0 0 14px;
+    color: #d7d0eb;
+    font-size: 0.95rem;
+    line-height: 1.45;
+}
+
+.results-figma-guide__params {
+    margin: 0 0 14px;
+    display: grid;
+    gap: 12px;
+}
+
+.results-figma-guide__param {
+    display: grid;
+    gap: 6px;
+}
+
+.results-figma-guide__param dt {
+    margin: 0;
+    font-size: 0.8rem;
+    font-weight: 600;
+    letter-spacing: 0.04em;
+    text-transform: uppercase;
+    color: #9ca3af;
+}
+
+.results-figma-guide__param dd {
+    margin: 0;
+    display: flex;
+    flex-wrap: wrap;
+    align-items: center;
+    gap: 8px;
+}
+
+.results-figma-guide__code {
+    padding: 4px 8px;
+    border-radius: 8px;
+    background: rgba(0, 0, 0, 0.25);
+    color: #f3f4f6;
+    font-size: 0.9rem;
+    word-break: break-all;
+}
+
+.results-figma-guide__note {
+    color: #9ca3af;
+    font-size: 0.85rem;
+}
+
+.results-figma-guide__copy-hint {
+    color: #16a34a;
+    font-size: 0.85rem;
+}
+
+.results-figma-guide__steps {
+    margin: 0 0 12px;
+    padding-left: 1.25rem;
+    color: #d7d0eb;
+    font-size: 0.92rem;
+    line-height: 1.5;
+}
+
+.results-figma-guide__manifest {
+    margin: 0;
+    color: #9ca3af;
+    font-size: 0.85rem;
+    line-height: 1.45;
+    word-break: break-all;
+}
+
+.results-figma-guide__manifest a {
+    color: #67ccff;
+}
+
 .results-export__subtitle {
     margin: 0;
     color: var(--muted);

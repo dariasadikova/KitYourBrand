@@ -1335,6 +1335,72 @@ function HistoryStatCard({ label, value }: { label: string; value: string }) {
   )
 }
 
+function resolveAppPublicUrl(path: string): string {
+  if (!path) return ''
+  if (/^https?:\/\//i.test(path)) return path
+  if (typeof window === 'undefined') return path
+  return `${window.location.origin}${path.startsWith('/') ? path : `/${path}`}`
+}
+
+function ResultsFigmaImportGuide({
+  brandId,
+  manifestUrl,
+}: {
+  brandId: string
+  manifestUrl: string
+}) {
+  const [copyHint, setCopyHint] = useState('')
+  const baseUrl = typeof window !== 'undefined' ? window.location.origin : 'http://localhost:8000'
+  const manifestPublicUrl = manifestUrl
+    ? resolveAppPublicUrl(manifestUrl)
+    : resolveAppPublicUrl(`/assets/${encodeURIComponent(brandId)}/figma_plugin_manifest.json`)
+
+  async function copyBrandId() {
+    try {
+      await navigator.clipboard.writeText(brandId)
+      setCopyHint('Скопировано')
+      window.setTimeout(() => setCopyHint(''), 2000)
+    } catch {
+      setCopyHint('Не удалось скопировать')
+    }
+  }
+
+  return (
+    <div className="results-figma-guide">
+      <p className="results-figma-guide__lead">
+        Импорт в Figma через плагин <strong>KYBBY BrandKit Importer</strong> (Plugins → Development → Import plugin from manifest… → папка <code>brandkit_figma_plugin_provider</code>).
+      </p>
+      <dl className="results-figma-guide__params">
+        <div className="results-figma-guide__param">
+          <dt>Brand ID</dt>
+          <dd>
+            <code className="results-figma-guide__code">{brandId}</code>
+            <button type="button" className="btn btn-secondary btn-inline results-figma-guide__copy" onClick={() => void copyBrandId()}>
+              Копировать
+            </button>
+            {copyHint ? <span className="results-figma-guide__copy-hint">{copyHint}</span> : null}
+          </dd>
+        </div>
+        <div className="results-figma-guide__param">
+          <dt>Base URL</dt>
+          <dd>
+            <code className="results-figma-guide__code">{baseUrl}</code>
+            <span className="results-figma-guide__note">без <code>/app</code></span>
+          </dd>
+        </div>
+      </dl>
+      <ol className="results-figma-guide__steps">
+        <li>Нажмите «Экспорт бренд-комплекта» — сервер соберёт manifest и раздаст ассеты по HTTP.</li>
+        <li>Откройте плагин в Figma и вставьте Brand ID и Base URL.</li>
+        <li>Выберите провайдера (All / Recraft / Seedream / Flux) и нажмите Import.</li>
+      </ol>
+      <p className="results-figma-guide__manifest">
+        URL manifest: <a href={manifestPublicUrl} target="_blank" rel="noreferrer">{manifestPublicUrl}</a>
+      </p>
+    </div>
+  )
+}
+
 function ResultsPage({ projectSlug }: { projectSlug: string }) {
   const [searchParams] = useSearchParams()
   const selectedJobId = searchParams.get('job')?.trim() || ''
@@ -1407,7 +1473,7 @@ function ResultsPage({ projectSlug }: { projectSlug: string }) {
     try {
       const payload = await generateFigmaManifest(projectSlug, results.project.brand_id, jobIdForExport || undefined)
       setManifestUrl(payload.download_url || payload.manifest_url || '')
-      setExportStatus('Manifest готов. Теперь его можно скачать и использовать в Figma plugin.')
+      setExportStatus('Manifest готов. Откройте плагин Figma и импортируйте по Brand ID ниже.')
       setExportTone('success')
       window.setTimeout(() => setIsExporting(false), 1600)
     } catch (err) {
@@ -1511,15 +1577,19 @@ function ResultsPage({ projectSlug }: { projectSlug: string }) {
                 <h2>Экспорт в Figma</h2>
               </div>
             </div>
-            <details className="results-manifest" id="results-manifest-panel" open={Boolean(manifestUrl)}>
-              <summary className="results-manifest__summary">
-                <span>Манифест</span>
-              </summary>
-              <div className="results-manifest__content">
-                <p className="results-export__subtitle">Dev-блок: ручная пересборка Figma manifest при отладке.</p>
-                {manifestUrl ? <a href={manifestUrl} className="btn results-manifest__download-link">Скачать manifest</a> : null}
-              </div>
-            </details>
+            <ResultsFigmaImportGuide brandId={results.project.brand_id} manifestUrl={manifestUrl} />
+            {manifestUrl ? (
+              <details className="results-manifest" id="results-manifest-panel">
+                <summary className="results-manifest__summary">
+                  <span>Скачать JSON manifest</span>
+                </summary>
+                <div className="results-manifest__content">
+                  <a href={resolveAppPublicUrl(manifestUrl)} className="btn results-manifest__download-link" download>
+                    Скачать файл manifest
+                  </a>
+                </div>
+              </details>
+            ) : null}
             <div className="results-export__actions">
               <button type="button" className="btn btn-primary" disabled={isExporting} onClick={handleGenerateFigma}>
                 {isExporting ? 'Генерируем Figma JSON…' : manifestUrl ? 'Manifest готов ✓' : 'Экспорт бренд-комплекта'}
