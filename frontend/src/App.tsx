@@ -114,6 +114,7 @@ function App() {
       <Route path="/reset-password" element={<ResetPasswordPage />} />
       <Route path="/dashboard" element={<ProtectedDashboard session={session} onLogout={handleLogout} />} />
       <Route path="/profile" element={<ProtectedProfile session={session} onLogout={handleLogout} onSessionRefresh={refreshSession} />} />
+      <Route path="/figma-plugin" element={<ProtectedFigmaPlugin session={session} onLogout={handleLogout} />} />
       <Route path="/generation-history" element={<ProtectedGenerationHistory session={session} onLogout={handleLogout} />} />
       <Route path="/projects/:projectSlug" element={<ProtectedEditor session={session} onLogout={handleLogout} />} />
       <Route path="/projects/:projectSlug/results" element={<ProtectedResults session={session} onLogout={handleLogout} />} />
@@ -135,6 +136,17 @@ function ProtectedProfile({ session, onLogout, onSessionRefresh }: { session: Au
   return (
     <MigrationShell session={session} activePath="/profile" mainClassName="profile-main" onLogout={onLogout}>
       <ProfilePage onSessionRefresh={onSessionRefresh} />
+    </MigrationShell>
+  )
+}
+
+function ProtectedFigmaPlugin({ session, onLogout }: { session: AuthMeResponse | null; onLogout: () => Promise<void> }) {
+  if (session === null) return null
+  if (!session.authenticated) return <Navigate to="/" replace />
+
+  return (
+    <MigrationShell session={session} activePath="/figma-plugin" mainClassName="profile-main" onLogout={onLogout}>
+      <FigmaPluginPage />
     </MigrationShell>
   )
 }
@@ -815,7 +827,7 @@ function ResetPasswordPage() {
   )
 }
 
-type DashboardShellActivePath = '/dashboard' | '/profile' | '/generation-history'
+type DashboardShellActivePath = '/dashboard' | '/profile' | '/generation-history' | '/figma-plugin'
 
 function DashboardShellNav({
   activePath,
@@ -846,6 +858,17 @@ function DashboardShellNav({
         </span>
         <span>Мои проекты</span>
       </Link>
+      <Link to="/figma-plugin" className={`dashboard-nav__item${activePath === '/figma-plugin' ? ' dashboard-nav__item--active' : ''}`} onClick={onItemNavigate}>
+        <span className="dashboard-nav__icon" aria-hidden="true">
+          <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.2" strokeLinecap="round" strokeLinejoin="round">
+            <rect x="3" y="3" width="7" height="7" rx="1.5" />
+            <rect x="14" y="3" width="7" height="7" rx="1.5" />
+            <rect x="3" y="14" width="7" height="7" rx="1.5" />
+            <rect x="14" y="14" width="7" height="7" rx="1.5" />
+          </svg>
+        </span>
+        <span>Figma-плагин</span>
+      </Link>
       <Link to="/profile" className={`dashboard-nav__item${activePath === '/profile' ? ' dashboard-nav__item--active' : ''}`} onClick={onItemNavigate}>
         <span className="dashboard-nav__icon" aria-hidden="true">
           <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.2" strokeLinecap="round" strokeLinejoin="round">
@@ -855,15 +878,6 @@ function DashboardShellNav({
         </span>
         <span>Профиль</span>
       </Link>
-      <a href="#" className="dashboard-nav__item" onClick={(event) => { event.preventDefault(); onItemNavigate?.() }}>
-        <span className="dashboard-nav__icon" aria-hidden="true">
-          <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.2" strokeLinecap="round" strokeLinejoin="round">
-            <circle cx="12" cy="12" r="3" />
-            <path d="M19.4 15a1.7 1.7 0 0 0 .3 1.9l.1.1a2 2 0 0 1 0 2.8 2 2 0 0 1-2.8 0l-.1-.1a1.7 1.7 0 0 0-1.9-.3 1.7 1.7 0 0 0-1 1.6V21a2 2 0 1 1-4 0v-.2a1.7 1.7 0 0 0-1-1.6 1.7 1.7 0 0 0-1.9.3l-.1.1a2 2 0 1 1-2.8-2.8l.1-.1a1.7 1.7 0 0 0 .3-1.9 1.7 1.7 0 0 0-1.6-1H3a2 2 0 1 1 0-4h.2a1.7 1.7 0 0 0 1.6-1 1.7 1.7 0 0 0-.3-1.9l-.1-.1a2 2 0 1 1 2.8-2.8l.1.1a1.7 1.7 0 0 0 1.9.3H9a1.7 1.7 0 0 0 1-1.6V3a2 2 0 1 1 4 0v.2a1.7 1.7 0 0 0 1 1.6h.1a1.7 1.7 0 0 0 1.9-.3l.1-.1a2 2 0 1 1 2.8 2.8l-.1.1a1.7 1.7 0 0 0-.3 1.9v.1a1.7 1.7 0 0 0 1.6 1H21a2 2 0 1 1 0 4h-.2a1.7 1.7 0 0 0-1.6 1Z" />
-          </svg>
-        </span>
-        <span>Настройки</span>
-      </a>
       <a href="/logout" className="dashboard-nav__item" onClick={(event) => { onItemNavigate?.(); onLogoutClick(event) }}>
         <span className="dashboard-nav__icon" aria-hidden="true">
           <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.2" strokeLinecap="round" strokeLinejoin="round">
@@ -1342,61 +1356,80 @@ function resolveAppPublicUrl(path: string): string {
   return `${window.location.origin}${path.startsWith('/') ? path : `/${path}`}`
 }
 
-function ResultsFigmaImportGuide({
-  brandId,
-  manifestUrl,
-}: {
-  brandId: string
-  manifestUrl: string
-}) {
-  const [copyHint, setCopyHint] = useState('')
-  const baseUrl = typeof window !== 'undefined' ? window.location.origin : 'http://localhost:8000'
-  const manifestPublicUrl = manifestUrl
-    ? resolveAppPublicUrl(manifestUrl)
-    : resolveAppPublicUrl(`/assets/${encodeURIComponent(brandId)}/figma_plugin_manifest.json`)
+function ResultsFigmaImportGuide({ brandId }: { brandId: string }) {
+  const [brandCopyHint, setBrandCopyHint] = useState('')
+  const [addressCopyHint, setAddressCopyHint] = useState('')
+  const kybbAddress = typeof window !== 'undefined' ? window.location.origin : ''
 
   async function copyBrandId() {
     try {
       await navigator.clipboard.writeText(brandId)
-      setCopyHint('Скопировано')
-      window.setTimeout(() => setCopyHint(''), 2000)
+      setBrandCopyHint('Скопировано')
+      window.setTimeout(() => setBrandCopyHint(''), 2000)
     } catch {
-      setCopyHint('Не удалось скопировать')
+      setBrandCopyHint('Не удалось скопировать')
+    }
+  }
+
+  async function copyKybbAddress() {
+    try {
+      await navigator.clipboard.writeText(kybbAddress)
+      setAddressCopyHint('Скопировано')
+      window.setTimeout(() => setAddressCopyHint(''), 2000)
+    } catch {
+      setAddressCopyHint('Не удалось скопировать')
     }
   }
 
   return (
     <div className="results-figma-guide">
       <p className="results-figma-guide__lead">
-        Импорт в Figma через плагин <strong>KYBBY BrandKit Importer</strong> (Plugins → Development → Import plugin from manifest… → папка <code>brandkit_figma_plugin_provider</code>).
+        Для переноса в Figma сначала установите плагин KYBBY —{' '}
+        <Link to="/figma-plugin">инструкция в разделе «Figma-плагин»</Link>.
       </p>
       <dl className="results-figma-guide__params">
         <div className="results-figma-guide__param">
-          <dt>Brand ID</dt>
+          <dt>Brand ID этого проекта</dt>
           <dd>
-            <code className="results-figma-guide__code">{brandId}</code>
-            <button type="button" className="btn btn-secondary btn-inline results-figma-guide__copy" onClick={() => void copyBrandId()}>
-              Копировать
-            </button>
-            {copyHint ? <span className="results-figma-guide__copy-hint">{copyHint}</span> : null}
+            <div className="results-figma-guide__copy-field">
+              <code className="results-figma-guide__copy-field-value">{brandId}</code>
+              <button
+                type="button"
+                className="results-figma-guide__copy-btn"
+                aria-label="Копировать Brand ID"
+                title="Копировать"
+                onClick={() => void copyBrandId()}
+              >
+                <CopyIcon />
+              </button>
+            </div>
+            {brandCopyHint ? <span className="results-figma-guide__copy-hint">{brandCopyHint}</span> : null}
           </dd>
         </div>
         <div className="results-figma-guide__param">
-          <dt>Base URL</dt>
+          <dt>Адрес KYBBY</dt>
           <dd>
-            <code className="results-figma-guide__code">{baseUrl}</code>
-            <span className="results-figma-guide__note">без <code>/app</code></span>
+            <div className="results-figma-guide__copy-field">
+              <code className="results-figma-guide__copy-field-value">{kybbAddress}</code>
+              <button
+                type="button"
+                className="results-figma-guide__copy-btn"
+                aria-label="Копировать адрес KYBBY"
+                title="Копировать"
+                onClick={() => void copyKybbAddress()}
+              >
+                <CopyIcon />
+              </button>
+            </div>
+            {addressCopyHint ? <span className="results-figma-guide__copy-hint">{addressCopyHint}</span> : null}
           </dd>
         </div>
       </dl>
       <ol className="results-figma-guide__steps">
-        <li>Нажмите «Экспорт бренд-комплекта» — сервер соберёт manifest и раздаст ассеты по HTTP.</li>
-        <li>Откройте плагин в Figma и вставьте Brand ID и Base URL.</li>
-        <li>Выберите провайдера (All / Recraft / Seedream / Flux) и нажмите Import.</li>
+        <li>Нажмите «Экспорт бренд-комплекта» на этой странице.</li>
+        <li>Откройте плагин KYBBY в Figma и вставьте Brand ID и адрес KYBBY.</li>
+        <li>Выберите провайдера и нажмите Import.</li>
       </ol>
-      <p className="results-figma-guide__manifest">
-        URL manifest: <a href={manifestPublicUrl} target="_blank" rel="noreferrer">{manifestPublicUrl}</a>
-      </p>
     </div>
   )
 }
@@ -1473,7 +1506,7 @@ function ResultsPage({ projectSlug }: { projectSlug: string }) {
     try {
       const payload = await generateFigmaManifest(projectSlug, results.project.brand_id, jobIdForExport || undefined)
       setManifestUrl(payload.download_url || payload.manifest_url || '')
-      setExportStatus('Manifest готов. Откройте плагин Figma и импортируйте по Brand ID ниже.')
+      setExportStatus('Экспорт готов. Скопируйте Brand ID и импортируйте проект через плагин Figma.')
       setExportTone('success')
       window.setTimeout(() => setIsExporting(false), 1600)
     } catch (err) {
@@ -1577,7 +1610,7 @@ function ResultsPage({ projectSlug }: { projectSlug: string }) {
                 <h2>Экспорт в Figma</h2>
               </div>
             </div>
-            <ResultsFigmaImportGuide brandId={results.project.brand_id} manifestUrl={manifestUrl} />
+            <ResultsFigmaImportGuide brandId={results.project.brand_id} />
             {manifestUrl ? (
               <details className="results-manifest" id="results-manifest-panel">
                 <summary className="results-manifest__summary">
@@ -3063,6 +3096,64 @@ function normalizeHexColor(value: string): string {
   return ''
 }
 
+function FigmaPluginPage() {
+  return (
+    <section className="figma-plugin-page profile-page">
+      <div className="profile-page__head">
+        <h1>Figma-плагин KYBBY</h1>
+        <p>Перенесите сгенерированный бренд-комплект из KYBBY в ваш файл Figma</p>
+      </div>
+
+      <article className="profile-card figma-plugin-hero">
+        <p className="figma-plugin-hero__eyebrow">Интеграция</p>
+        <h2>KYBBY BrandKit Importer</h2>
+        <p className="figma-plugin-hero__text">
+          Плагин создаёт в Figma страницу с логотипами, иконками, паттернами и иллюстрациями вашего бренда —
+          в удобной структуре, готовой к дальнейшей работе дизайнером.
+        </p>
+        <ul className="figma-plugin-tags" aria-label="Что импортируется">
+          <li>Логотипы</li>
+          <li>Иконки</li>
+          <li>Паттерны</li>
+          <li>Иллюстрации</li>
+        </ul>
+      </article>
+
+      <article className="profile-card">
+        <h2>Установка в Figma</h2>
+        <ol className="figma-plugin-steps">
+          <li>Скачайте архив плагина KYBBY и распакуйте его на компьютер.</li>
+          <li>Откройте Figma и перейдите в раздел <strong>Плагины</strong>.</li>
+          <li>Выберите <strong>Управление плагинами</strong> → пункт добавления плагина → <strong>Импорт</strong>.</li>
+          <li>Укажите файл описания плагина из распакованного архива и подтвердите установку.</li>
+          <li>Запустите <strong>KYBBY BrandKit Importer</strong> из списка ваших плагинов.</li>
+        </ol>
+        <div className="figma-plugin-actions">
+          <a href="/figma-plugin/download" className="btn btn-primary">
+            Скачать плагин KYBBY
+          </a>
+        </div>
+        <p className="figma-plugin-note">
+          Плагин устанавливается в ваш аккаунт Figma и остаётся доступным для повторного использования.
+        </p>
+      </article>
+
+      <article className="profile-card">
+        <h2>Как импортировать проект</h2>
+        <ol className="figma-plugin-steps">
+          <li>Создайте или откройте проект в KYBBY и дождитесь генерации бренд-комплекта.</li>
+          <li>На странице <strong>Результаты</strong> нажмите «Экспорт бренд-комплекта».</li>
+          <li>Скопируйте <strong>Brand ID</strong> и <strong>адрес KYBBY</strong> на той же странице.</li>
+          <li>В плагине вставьте эти значения, выберите провайдера и нажмите Import.</li>
+        </ol>
+        <p className="figma-plugin-note">
+          Brand ID у каждого проекта свой. Копировать данные для плагина удобнее на странице <strong>Результаты</strong> — там они собраны в одном месте.
+        </p>
+      </article>
+    </section>
+  )
+}
+
 function ProfilePage({ onSessionRefresh }: { onSessionRefresh: () => Promise<void> }) {
   const [profile, setProfile] = useState<Profile | null>(null)
   const [name, setName] = useState('')
@@ -3599,6 +3690,15 @@ function QuestionIcon() {
       <circle cx="12" cy="12" r="9" />
       <path d="M9.5 9.4a2.6 2.6 0 0 1 4.6 1.3c0 1.6-2.1 2-2.1 3.7" />
       <circle cx="12" cy="17.2" r="0.9" fill="currentColor" stroke="none" />
+    </svg>
+  )
+}
+
+function CopyIcon() {
+  return (
+    <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round" aria-hidden="true">
+      <rect x="9" y="9" width="11" height="11" rx="2" />
+      <path d="M5 15V5a2 2 0 0 1 2-2h10" />
     </svg>
   )
 }

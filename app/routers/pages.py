@@ -1,10 +1,13 @@
 from __future__ import annotations
 
+import io
+import zipfile
 from pathlib import Path
 
 from fastapi import APIRouter, Request, status
-from fastapi.responses import FileResponse, RedirectResponse
+from fastapi.responses import FileResponse, RedirectResponse, Response
 
+from app.core.paths import FIGMA_PLUGIN_DIR
 from app.core.settings import settings
 from app.db import auth_service
 
@@ -108,3 +111,36 @@ async def reset_password_page(request: Request) -> RedirectResponse:
         return RedirectResponse(url='/app/dashboard', status_code=status.HTTP_303_SEE_OTHER)
 
     return redirect_to_react(request, '/reset-password')
+
+
+@router.get('/figma-plugin')
+async def figma_plugin_page(request: Request) -> RedirectResponse:
+    auth_redirect = require_auth(request)
+    if auth_redirect:
+        return auth_redirect
+
+    return redirect_to_react(request, '/figma-plugin')
+
+
+@router.get('/figma-plugin/download')
+async def figma_plugin_download(request: Request) -> Response:
+    auth_redirect = require_auth(request)
+    if auth_redirect:
+        return auth_redirect
+
+    plugin_dir = FIGMA_PLUGIN_DIR.resolve()
+    if not plugin_dir.is_dir():
+        return Response(status_code=404, content='Плагин Figma пока недоступен для скачивания.')
+
+    buffer = io.BytesIO()
+    with zipfile.ZipFile(buffer, 'w', compression=zipfile.ZIP_DEFLATED) as archive:
+        for file_path in plugin_dir.rglob('*'):
+            if not file_path.is_file():
+                continue
+            archive.write(file_path, file_path.relative_to(plugin_dir.parent).as_posix())
+
+    return Response(
+        content=buffer.getvalue(),
+        media_type='application/zip',
+        headers={'Content-Disposition': 'attachment; filename="kybby-figma-plugin.zip"'},
+    )

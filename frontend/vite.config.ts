@@ -15,6 +15,7 @@ export default defineConfig({
       '/generation-jobs': 'http://127.0.0.1:8000',
       '/generation-history': 'http://127.0.0.1:8000',
       '/logout': 'http://127.0.0.1:8000',
+      '/figma-plugin': 'http://127.0.0.1:8000',
     },
   },
 })
