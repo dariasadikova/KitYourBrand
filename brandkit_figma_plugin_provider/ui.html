@@ -1,0 +1,142 @@
+<!doctype html>
+<html>
+<head>
+  <meta charset="utf-8" />
+  <meta name="viewport" content="width=device-width,initial-scale=1" />
+  <title>BrandKit Importer</title>
+  <style>
+    :root{ --bg:#111; --panel:#1b1b1b; --txt:#eaeaea; --mut:#b7b7b7; --br:#2c2c2c; --acc:#6b6bff; }
+    body{ margin:0; font:12px/1.4 Inter, system-ui, -apple-system, Segoe UI, Roboto, sans-serif; color:var(--txt); background:var(--bg); }
+    .wrap{ padding:12px; }
+    .card{ background:var(--panel); border:1px solid var(--br); border-radius:10px; padding:12px; }
+    h1{ font-size:14px; margin:0 0 8px 0; }
+    .row{ display:flex; gap:8px; }
+    .col{ flex:1; }
+    label{ display:block; color:var(--mut); margin:8px 0 4px; }
+    input, select{ width:100%; box-sizing:border-box; border-radius:8px; border:1px solid var(--br); background:#0f0f0f; color:var(--txt); padding:8px; outline:none; }
+    input:focus, select:focus{ border-color:var(--acc); }
+    .btns{ display:flex; gap:8px; margin-top:12px; }
+    button{ flex:1; border-radius:10px; border:1px solid var(--br); background:#0f0f0f; color:var(--txt); padding:10px; cursor:pointer; }
+    button.primary{ background:var(--acc); border-color:var(--acc); color:white; font-weight:600; }
+    button:disabled{ opacity:.5; cursor:not-allowed; }
+    .hint{ color:var(--mut); margin-top:10px; }
+    .log{ margin-top:10px; padding:10px; border-radius:10px; border:1px solid var(--br); background:#0f0f0f; color:var(--mut); white-space:pre-wrap; max-height:180px; overflow:auto; }
+    .ok{ color:#86efac; }
+    .err{ color:#fca5a5; }
+    .tiny{ font-size:11px; color:var(--mut); margin-top:6px; }
+  </style>
+</head>
+<body>
+  <div class="wrap">
+    <div class="card">
+      <h1>KYBBY → Figma</h1>
+
+      <label for="brandId">Brand ID</label>
+      <input id="brandId" placeholder="Например: Brand123" />
+
+      <div class="row">
+        <div class="col">
+          <label for="provider">Provider</label>
+          <select id="provider">
+            <option value="both" selected>All</option>
+            <option value="recraft">Recraft</option>
+            <option value="seedream">Seedream</option>
+            <option value="flux">Flux</option>
+          </select>
+        </div>
+        <div class="col">
+          <label for="baseUrl">Base URL</label>
+          <input id="baseUrl" placeholder="http://localhost:8000" />
+        </div>
+      </div>
+
+      <div class="btns">
+        <button class="primary" id="importBtn">Import</button>
+        <button id="cancelBtn">Close</button>
+      </div>
+
+      <div class="hint">Импорт из веб-приложения KYBBY: укажите <b>Brand ID</b> со страницы результатов и <b>Base URL</b> сервера (без <code>/app</code>).</div>
+      <div class="tiny">По умолчанию — <code>http://localhost:8000</code>. Сначала в вебе нажмите «Экспорт бренд-комплекта».</div>
+
+      <div id="log" class="log">Готово. Введите Brand ID и нажмите Import.</div>
+    </div>
+  </div>
+
+  <script>
+    const brandIdEl = document.getElementById('brandId');
+    const providerEl = document.getElementById('provider');
+    const baseUrlEl = document.getElementById('baseUrl');
+    const importBtn = document.getElementById('importBtn');
+    const cancelBtn = document.getElementById('cancelBtn');
+    const logEl = document.getElementById('log');
+
+    function setLog(text, cls=''){
+      logEl.className = 'log ' + cls;
+      logEl.textContent = text;
+    }
+
+    // Receive init/progress from plugin code
+    window.onmessage = (event) => {
+      const msg = event.data && event.data.pluginMessage;
+      if (!msg) return;
+
+      if (msg.type === 'init'){
+        if (msg.lastBrandId) brandIdEl.value = msg.lastBrandId;
+        if (msg.lastProvider) providerEl.value = msg.lastProvider;
+        if (msg.lastBaseUrl) baseUrlEl.value = msg.lastBaseUrl;
+        if (!baseUrlEl.value) baseUrlEl.value = 'http://localhost:8000';
+        return;
+      }
+
+      if (msg.type === 'progress'){
+        setLog(msg.text);
+        return;
+      }
+
+      if (msg.type === 'done'){
+        importBtn.disabled = false;
+        setLog(msg.text, 'ok');
+        return;
+      }
+
+      if (msg.type === 'error'){
+        importBtn.disabled = false;
+        setLog(msg.text, 'err');
+        return;
+      }
+    };
+
+    function sendImport(){
+      const brandId = (brandIdEl.value || '').trim();
+      const provider = providerEl.value;
+      const baseUrl = (baseUrlEl.value || '').trim() || 'http://localhost:8000';
+
+      if (!brandId){
+        setLog('Brand ID пустой. Введите Brand ID.', 'err');
+        return;
+      }
+
+      importBtn.disabled = true;
+      setLog('Запускаю импорт...', '');
+
+      parent.postMessage({
+        pluginMessage: {
+          type: 'import',
+          brandId,
+          provider,
+          baseUrl
+        }
+      }, '*');
+    }
+
+    importBtn.onclick = sendImport;
+    cancelBtn.onclick = () => parent.postMessage({ pluginMessage: { type: 'close' } }, '*');
+
+    // Enter to import
+    brandIdEl.addEventListener('keydown', (e) => { if (e.key === 'Enter') sendImport(); });
+
+    // Ask for init data
+    parent.postMessage({ pluginMessage: { type: 'ui-ready' } }, '*');
+  </script>
+</body>
+</html>

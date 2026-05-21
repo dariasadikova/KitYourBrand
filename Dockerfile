@@ -40,6 +40,7 @@ COPY app ./app
 COPY alembic ./alembic
 COPY alembic.ini ./alembic.ini
 COPY providers ./providers
+COPY brandkit_figma_plugin_provider ./brandkit_figma_plugin_provider
 COPY ./.env.example ./
 COPY frontend ./frontend
 COPY --from=frontend-build /build/frontend/dist ./frontend/dist

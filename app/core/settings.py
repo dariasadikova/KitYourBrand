@@ -19,7 +19,7 @@ class Settings(BaseSettings):
     recraft_dir: Path = BASE_DIR / 'providers' / 'brandkit_recraft'
     seedream_dir: Path = BASE_DIR / 'providers' / 'brandkit_seedream'
     flux_dir: Path = BASE_DIR / 'providers' / 'brandkit_flux2'
-    figma_plugin_dir: Path = BASE_DIR.parent / 'brandkit_figma_plugin_provider'
+    figma_plugin_dir: Path = BASE_DIR / 'brandkit_figma_plugin_provider'
     legacy_flask_dir: Path = BASE_DIR.parent / 'brandkit_tokens_ui_three_providers'
     data_dir: Path = BASE_DIR / 'data'
 
