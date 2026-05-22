@@ -1986,6 +1986,13 @@ const ASSET_PLACEHOLDERS: Record<AssetType, string> = {
   illustrations: 'Опишите, какую иллюстрацию хотите получить…',
 }
 
+const ASSET_REF_LABELS: Record<AssetType, string> = {
+  logos: 'Референсы для логотипа',
+  icons: 'Референсы для иконок',
+  patterns: 'Референсы для паттернов',
+  illustrations: 'Референсы для иллюстраций',
+}
+
 const DEFAULT_ASSET_COUNTS: Record<AssetType, number> = {
   logos: 4,
   icons: 8,
@@ -2026,8 +2033,13 @@ function ProjectEditorPage({ projectSlug, isNewProjectFlow }: { projectSlug: str
   const [iconCorner, setIconCorner] = useState('rounded')
   const [iconFill, setIconFill] = useState('outline')
   const [illustrationFormat, setIllustrationFormat] = useState<'vector' | 'raster'>('raster')
-  const [styleRefs, setStyleRefs] = useState<StyleRef[]>([])
-  const [isRefsLoading, setIsRefsLoading] = useState(false)
+  const [assetRefs, setAssetRefs] = useState<Record<AssetType, StyleRef[]>>(() => ({
+    logos: [],
+    icons: [],
+    patterns: [],
+    illustrations: [],
+  }))
+  const [refsLoadingType, setRefsLoadingType] = useState<AssetType | null>(null)
   const [buildStyle, setBuildStyle] = useState(true)
   const [selectedGenerationProviders, setSelectedGenerationProviders] = useState<string[]>(() => [...GENERATION_PROVIDERS.map((p) => p.slug)])
   const [generationJob, setGenerationJob] = useState<GenerationJob | null>(null)
@@ -2078,7 +2090,7 @@ function ProjectEditorPage({ projectSlug, isNewProjectFlow }: { projectSlug: str
       setIconCorner(getNestedTokenString(nextTokens, 'icon', 'corner', 'rounded'))
       setIconFill(getNestedTokenString(nextTokens, 'icon', 'fill', 'outline'))
       setIllustrationFormat(illustrationFormatFromTokens(nextTokens))
-      setStyleRefs(normalizeStyleRefs(getNestedTokenArray(nextTokens, 'references', 'style_images'), projectSlug))
+      setAssetRefs(referencesToAssetRefs(nextTokens, projectSlug))
       setBuildStyle(getNestedTokenBoolean(nextTokens, 'generation', 'build_style', true))
       setSelectedGenerationProviders(getGenerationProviderSlugsFromTokens(nextTokens))
     }
@@ -2150,47 +2162,65 @@ function ProjectEditorPage({ projectSlug, isNewProjectFlow }: { projectSlug: str
     setAssetCounts((current) => ({ ...current, [type]: clampAssetCount(value, DEFAULT_ASSET_COUNTS[type]) }))
   }
 
-  function syncStyleRefs(nextRefs: StyleRef[]) {
-    setStyleRefs(nextRefs)
+  function syncAssetRefs(nextRefs: Record<AssetType, StyleRef[]>) {
+    setAssetRefs(nextRefs)
     setTokens((current) => ({
       ...current,
       references: {
         ...getTokenRecord(current, 'references'),
-        style_images: nextRefs.map((ref) => ref.path),
+        ...ASSET_TYPES.reduce<Record<AssetType, string[]>>((acc, type) => {
+          acc[type] = nextRefs[type].map((ref) => ref.path)
+          return acc
+        }, {} as Record<AssetType, string[]>),
       },
     }))
   }
 
-  async function handleUploadRefs(files: FileList | null) {
+  function applyReferencesResponse(payload: { references?: Record<AssetType, string[]> }) {
+    if (!payload.references) return
+    syncAssetRefs(
+      ASSET_TYPES.reduce<Record<AssetType, StyleRef[]>>((acc, type) => {
+        acc[type] = normalizeStyleRefs(payload.references?.[type], projectSlug)
+        return acc
+      }, {
+        logos: [],
+        icons: [],
+        patterns: [],
+        illustrations: [],
+      }),
+    )
+  }
+
+  async function handleUploadRefs(assetType: AssetType, files: FileList | null) {
     if (!files?.length) return
-    setIsRefsLoading(true)
+    setRefsLoadingType(assetType)
     setStatus('')
     setError('')
 
     try {
-      const payload = await uploadProjectEditorRefs(projectSlug, files)
-      syncStyleRefs(normalizeStyleRefs(payload.images, projectSlug))
+      const payload = await uploadProjectEditorRefs(projectSlug, files, assetType)
+      applyReferencesResponse(payload)
       setStatus('Референсы загружены.')
     } catch (err) {
       setError(err instanceof Error ? err.message : 'Не удалось загрузить референсы.')
     } finally {
-      setIsRefsLoading(false)
+      setRefsLoadingType(null)
     }
   }
 
-  async function handleDeleteRef(path: string) {
-    setIsRefsLoading(true)
+  async function handleDeleteRef(assetType: AssetType, path: string) {
+    setRefsLoadingType(assetType)
     setStatus('')
     setError('')
 
     try {
-      const payload = await deleteProjectEditorRef(projectSlug, path)
-      syncStyleRefs(normalizeStyleRefs(payload.images, projectSlug))
+      const payload = await deleteProjectEditorRef(projectSlug, path, assetType)
+      applyReferencesResponse(payload)
       setStatus('Референс удалён.')
     } catch (err) {
       setError(err instanceof Error ? err.message : 'Не удалось удалить референс.')
     } finally {
-      setIsRefsLoading(false)
+      setRefsLoadingType(null)
     }
   }
 
@@ -2240,7 +2270,10 @@ function ProjectEditorPage({ projectSlug, isNewProjectFlow }: { projectSlug: str
     }
     next.references = {
       ...getTokenRecord(next, 'references'),
-      style_images: styleRefs.map((ref) => ref.path),
+      ...ASSET_TYPES.reduce<Record<AssetType, string[]>>((acc, type) => {
+        acc[type] = assetRefs[type].map((ref) => ref.path)
+        return acc
+      }, {} as Record<AssetType, string[]>),
     }
 
     return next
@@ -2396,7 +2429,7 @@ function ProjectEditorPage({ projectSlug, isNewProjectFlow }: { projectSlug: str
       setIconCorner(getNestedTokenString(payload.tokens, 'icon', 'corner', 'rounded'))
       setIconFill(getNestedTokenString(payload.tokens, 'icon', 'fill', 'outline'))
       setIllustrationFormat(illustrationFormatFromTokens(payload.tokens))
-      setStyleRefs(normalizeStyleRefs(getNestedTokenArray(payload.tokens, 'references', 'style_images'), projectSlug))
+      setAssetRefs(referencesToAssetRefs(payload.tokens, projectSlug))
       setBuildStyle(getNestedTokenBoolean(payload.tokens, 'generation', 'build_style', true))
       setSelectedGenerationProviders(getGenerationProviderSlugsFromTokens(payload.tokens))
       setStatus('Проект сброшен.')
@@ -2447,7 +2480,7 @@ function ProjectEditorPage({ projectSlug, isNewProjectFlow }: { projectSlug: str
           <div className="editor-card__head">
             <span className="step-badge">1</span>
             <div>
-              <div className="step-progress-caption">Шаг 1 из 6</div>
+              <div className="step-progress-caption">Шаг 1 из 5</div>
               <h2>Бренд</h2>
               <p>Основные параметры вашего бренда</p>
             </div>
@@ -2475,7 +2508,7 @@ function ProjectEditorPage({ projectSlug, isNewProjectFlow }: { projectSlug: str
           <div className="editor-card__head">
             <span className="step-badge">2</span>
             <div>
-              <div className="step-progress-caption">Шаг 2 из 6</div>
+              <div className="step-progress-caption">Шаг 2 из 5</div>
               <h2>Визуальный стиль</h2>
               <p>Цветовая палитра: в генерацию попадают отмеченные цвета из сетки ниже</p>
             </div>
@@ -2587,9 +2620,9 @@ function ProjectEditorPage({ projectSlug, isNewProjectFlow }: { projectSlug: str
           <div className="editor-card__head">
             <span className="step-badge">3</span>
             <div>
-              <div className="step-progress-caption">Шаг 3 из 6</div>
+              <div className="step-progress-caption">Шаг 3 из 5</div>
               <h2>Генерируемые ассеты</h2>
-              <p>Настройте параметры для логотипов, иконок, паттернов и иллюстраций</p>
+              <p>Промпты, референсы и параметры для логотипов, иконок, паттернов и иллюстраций</p>
             </div>
           </div>
           <div className="asset-tabs" role="tablist" aria-label="Тип ассетов">
@@ -2685,6 +2718,46 @@ function ProjectEditorPage({ projectSlug, isNewProjectFlow }: { projectSlug: str
                   <input type="number" min="1" max="20" value={assetCounts[type]} onChange={(event) => setAssetCount(type, event.target.value)} />
                 </label>
               </div>
+
+              <div className="asset-panel-refs">
+                <div className="asset-panel-refs__head">
+                  <span className="asset-panel-refs__title">{ASSET_REF_LABELS[type]}</span>
+                  <label className="btn btn-primary btn-upload btn-upload--compact">
+                    <input
+                      type="file"
+                      multiple
+                      accept=".png,.jpg,.jpeg,.webp,.gif,.bmp"
+                      hidden
+                      disabled={refsLoadingType === type}
+                      onChange={(event) => {
+                        void handleUploadRefs(type, event.target.files)
+                        event.currentTarget.value = ''
+                      }}
+                    />
+                    <span>{refsLoadingType === type ? 'Загружаем...' : 'Загрузить'}</span>
+                  </label>
+                </div>
+                <p className="asset-panel-refs__hint">Изображения, которые задают желаемую эстетику для этого типа ассетов.</p>
+                <div className="refs-grid refs-grid--compact">
+                  {refsLoadingType === type && !assetRefs[type].length ? <div className="refs-empty">Загрузка...</div> : null}
+                  {refsLoadingType !== type && !assetRefs[type].length ? <div className="refs-empty">Референсы пока не загружены</div> : null}
+                  {assetRefs[type].map((ref) => (
+                    <div className="ref-card" key={`${type}-${ref.path}`}>
+                      <a href={ref.url} target="_blank" rel="noopener" className="ref-card__preview">
+                        <img src={ref.url} alt={ref.name} className="ref-card__image" />
+                      </a>
+                      <button
+                        type="button"
+                        className="ref-delete"
+                        disabled={refsLoadingType === type}
+                        onClick={() => void handleDeleteRef(type, ref.path)}
+                      >
+                        Удалить
+                      </button>
+                    </div>
+                  ))}
+                </div>
+              </div>
             </div>
           ))}
         </section>
@@ -2693,51 +2766,7 @@ function ProjectEditorPage({ projectSlug, isNewProjectFlow }: { projectSlug: str
           <div className="editor-card__head">
             <span className="step-badge">4</span>
             <div>
-              <div className="step-progress-caption">Шаг 4 из 6</div>
-              <h2>Референсы стиля</h2>
-              <p>Загружайте изображения, которые отражают желаемую эстетику вашего бренда.</p>
-            </div>
-          </div>
-          <div className="refs-upload-row">
-            <label className="btn btn-primary btn-upload">
-              <input
-                type="file"
-                multiple
-                accept=".png,.jpg,.jpeg,.webp,.gif,.bmp"
-                hidden
-                disabled={isRefsLoading}
-                onChange={(event) => {
-                  void handleUploadRefs(event.target.files)
-                  event.currentTarget.value = ''
-                }}
-              />
-              <svg className="btn-upload__icon" xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round" aria-hidden="true">
-                <path d="M21 15v4a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2v-4" />
-                <polyline points="17 8 12 3 7 8" />
-                <line x1="12" y1="3" x2="12" y2="15" />
-              </svg>
-              <span>{isRefsLoading ? 'Загружаем...' : 'Загрузить изображения'}</span>
-            </label>
-          </div>
-          <div className="refs-grid">
-            {isRefsLoading && !styleRefs.length ? <div className="refs-empty">Загрузка...</div> : null}
-            {!isRefsLoading && !styleRefs.length ? <div className="refs-empty">Референсы пока не загружены</div> : null}
-            {styleRefs.map((ref) => (
-              <div className="ref-card" key={ref.path}>
-                <a href={ref.url} target="_blank" rel="noopener" className="ref-card__preview">
-                  <img src={ref.url} alt={ref.name} className="ref-card__image" />
-                </a>
-                <button type="button" className="ref-delete" disabled={isRefsLoading} onClick={() => void handleDeleteRef(ref.path)}>Удалить</button>
-              </div>
-            ))}
-          </div>
-        </section>
-
-        <section className="editor-card editor-card--progressive" data-progress-step="5">
-          <div className="editor-card__head">
-            <span className="step-badge">5</span>
-            <div>
-              <div className="step-progress-caption">Шаг 5 из 6</div>
+              <div className="step-progress-caption">Шаг 4 из 5</div>
               <h2>Параметры генерации</h2>
               <p>Финальные настройки перед запуском генерации бренд-комплекта</p>
             </div>
@@ -2755,8 +2784,8 @@ function ProjectEditorPage({ projectSlug, isNewProjectFlow }: { projectSlug: str
               }}
             />
             <div>
-              <strong>Создать новый стиль по текущим референсам</strong>
-              <span>Если включено, система проанализирует загруженные референсные изображения и создаст новый Style ID.</span>
+              <strong>Создать новый стиль по загруженным референсам</strong>
+              <span>Если включено, Recraft проанализирует все референсы с вкладок ассетов и создаст новый Style ID.</span>
             </div>
           </label>
 
@@ -2791,8 +2820,8 @@ function ProjectEditorPage({ projectSlug, isNewProjectFlow }: { projectSlug: str
           </div>
         </section>
 
-        <section className="editor-card editor-card--cta editor-card--progressive" data-progress-step="6">
-          <div className="step-progress-caption step-progress-caption--center">Шаг 6 из 6</div>
+        <section className="editor-card editor-card--cta editor-card--progressive" data-progress-step="5">
+          <div className="step-progress-caption step-progress-caption--center">Шаг 5 из 5</div>
           <div className="cta-icon">✧</div>
           <h2>Готово к генерации?</h2>
           <p>Все параметры настроены. Нажмите кнопку ниже, чтобы запустить генерацию бренд-комплекта.</p>
@@ -3081,6 +3110,32 @@ function normalizeStyleRefs(raw: unknown, projectSlug: string): StyleRef[] {
       return { path, name, url }
     })
     .filter((item): item is StyleRef => Boolean(item))
+}
+
+function referencesToAssetRefs(tokens: ProjectTokens, projectSlug: string): Record<AssetType, StyleRef[]> {
+  const perType = ASSET_TYPES.reduce<Record<AssetType, StyleRef[]>>((acc, type) => {
+    acc[type] = normalizeStyleRefs(getNestedTokenArray(tokens, 'references', type), projectSlug)
+    return acc
+  }, {
+    logos: [],
+    icons: [],
+    patterns: [],
+    illustrations: [],
+  })
+  const hasPerType = ASSET_TYPES.some((type) => perType[type].length > 0)
+  const legacy = normalizeStyleRefs(getNestedTokenArray(tokens, 'references', 'style_images'), projectSlug)
+  if (!hasPerType && legacy.length) {
+    return ASSET_TYPES.reduce<Record<AssetType, StyleRef[]>>((acc, type) => {
+      acc[type] = legacy
+      return acc
+    }, {
+      logos: [],
+      icons: [],
+      patterns: [],
+      illustrations: [],
+    })
+  }
+  return perType
 }
 
 function capitalizePaletteLabel(key: PaletteKey): string {

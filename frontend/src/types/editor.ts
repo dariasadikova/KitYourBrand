@@ -2,11 +2,16 @@ import type { ProjectSummary } from './project'
 
 export type ProjectTokens = Record<string, unknown>
 
+export type AssetReferenceKind = 'logos' | 'icons' | 'patterns' | 'illustrations'
+
+export type AssetReferencesMap = Record<AssetReferenceKind, string[]>
+
 export type ProjectEditorResponse = {
   ok: boolean
   project: ProjectSummary
   tokens: ProjectTokens
   refs: string[]
+  references?: AssetReferencesMap
   is_new_project_flow: boolean
   error?: string
 }
@@ -20,6 +25,8 @@ export type ProjectEditorSaveResponse = {
 export type ProjectEditorRefsResponse = {
   ok: boolean
   images: string[]
+  references?: AssetReferencesMap
+  asset_type?: AssetReferenceKind
   error?: string
 }
 

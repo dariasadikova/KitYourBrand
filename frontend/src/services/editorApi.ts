@@ -1,5 +1,6 @@
 import { apiClient } from './apiClient'
 import type {
+  AssetReferenceKind,
   PaletteRole,
   PaletteSuggestResponse,
   ProjectEditorRefsResponse,
@@ -31,8 +32,13 @@ export function listProjectEditorRefs(projectSlug: string): Promise<ProjectEdito
   return apiClient<ProjectEditorRefsResponse>(`/api/projects/${projectSlug}/editor/refs`)
 }
 
-export function uploadProjectEditorRefs(projectSlug: string, files: FileList | File[]): Promise<ProjectEditorRefsResponse> {
+export function uploadProjectEditorRefs(
+  projectSlug: string,
+  files: FileList | File[],
+  assetType: AssetReferenceKind,
+): Promise<ProjectEditorRefsResponse> {
   const formData = new FormData()
+  formData.append('asset_type', assetType)
   Array.from(files).forEach((file) => formData.append('files', file))
 
   return apiClient<ProjectEditorRefsResponse>(`/api/projects/${projectSlug}/editor/refs`, {
@@ -41,11 +47,15 @@ export function uploadProjectEditorRefs(projectSlug: string, files: FileList | F
   })
 }
 
-export function deleteProjectEditorRef(projectSlug: string, path: string): Promise<ProjectEditorRefsResponse> {
+export function deleteProjectEditorRef(
+  projectSlug: string,
+  path: string,
+  assetType: AssetReferenceKind,
+): Promise<ProjectEditorRefsResponse> {
   return apiClient<ProjectEditorRefsResponse>(`/api/projects/${projectSlug}/editor/refs/delete`, {
     method: 'POST',
     headers: { 'Content-Type': 'application/json' },
-    body: JSON.stringify({ path }),
+    body: JSON.stringify({ path, asset_type: assetType }),
   })
 }
 

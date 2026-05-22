@@ -2468,7 +2468,36 @@ img {
 }
 .ref-empty { min-height: 120px; border-radius: 16px; display: flex; align-items: center; justify-content: center; color: var(--muted); background: rgba(7,3,18,0.62); border: 1px dashed rgba(255,255,255,0.16); }
 .btn-upload { min-height: 48px; cursor: pointer; gap: 10px; padding-inline: 22px; border-radius: 12px; }
+.btn-upload--compact { min-height: 38px; padding-inline: 14px; font-size: 0.875rem; }
 .btn-upload__icon { width: 20px; height: 20px; flex-shrink: 0; }
+.asset-panel-refs {
+    margin-top: 18px;
+    padding-top: 18px;
+    border-top: 1px solid rgba(255,255,255,0.08);
+}
+.asset-panel-refs__head {
+    display: flex;
+    align-items: center;
+    justify-content: space-between;
+    gap: 12px;
+    flex-wrap: wrap;
+}
+.asset-panel-refs__title {
+    font-weight: 600;
+    color: var(--text);
+}
+.asset-panel-refs__hint {
+    margin: 0 0 12px;
+    color: var(--muted);
+    font-size: 0.875rem;
+}
+.refs-grid--compact {
+    grid-template-columns: repeat(auto-fill, minmax(120px, 1fr));
+    gap: 10px;
+}
+.refs-grid--compact .ref-card {
+    height: 112px;
+}
 .build-style-box {
     display: flex; align-items: flex-start; gap: 12px; padding: 20px; border-radius: 16px; border: 1px solid rgba(255,255,255,0.08); background: rgba(7,3,18,0.38);
 }

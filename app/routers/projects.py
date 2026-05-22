@@ -231,10 +231,14 @@ async def upload_refs(request: Request, project_slug: str, files: list[UploadFil
     for file in files:
         payload.append((file.filename or '', await file.read()))
     try:
-        images = project_service.upload_refs(user_id, project_slug, payload)
+        refs = project_service.upload_refs(user_id, project_slug, payload)
     except Exception as exc:
         return JSONResponse({'ok': False, 'error': str(exc)}, status_code=400)
-    return JSONResponse({'ok': True, 'images': images})
+    return JSONResponse({
+        'ok': True,
+        'images': project_service.collect_reference_paths(refs),
+        'references': refs,
+    })
 
 
 @router.get('/projects/{project_slug}/list-refs')
@@ -251,10 +255,14 @@ async def delete_ref(request: Request, project_slug: str) -> JSONResponse:
     project_or_404(user_id, project_slug)
     data = await request.json()
     try:
-        images = project_service.delete_ref(user_id, project_slug, str(data.get('path', '')))
+        refs = project_service.delete_ref(user_id, project_slug, str(data.get('path', '')))
     except Exception as exc:
         return JSONResponse({'ok': False, 'error': str(exc)}, status_code=400)
-    return JSONResponse({'ok': True, 'images': images})
+    return JSONResponse({
+        'ok': True,
+        'images': project_service.collect_reference_paths(refs),
+        'references': refs,
+    })
 
 
 @router.get('/projects/{project_slug}/refs/{filename}')

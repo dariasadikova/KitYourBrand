@@ -42,12 +42,17 @@ DEFAULT_TOKENS = {
         "illustrations": [],
     },
     "references": {
+        "logos": [],
+        "icons": [],
+        "patterns": [],
+        "illustrations": [],
         "style_images": [],
     },
     "style_id": "",
 }
 
 ALLOWED_EXT = {".png", ".jpg", ".jpeg", ".webp", ".gif", ".bmp"}
+REFERENCE_ASSET_KINDS = ('logos', 'icons', 'patterns', 'illustrations')
 
 logger = logging.getLogger('kityourbrand.project')
 
@@ -408,7 +413,7 @@ class ProjectService:
             tokens = self.load_tokens(user_id, slug)
         except Exception:
             return
-        paths = tokens.get('references', {}).get('style_images', []) or []
+        paths = self.collect_reference_paths(tokens.get('references', {}) or {})
         if not isinstance(paths, list):
             return
         now = self._utc_now_iso()
@@ -881,10 +886,55 @@ class ProjectService:
         data['prompts'].setdefault('patterns', [])
         data['prompts'].setdefault('illustrations', [])
         data.setdefault('references', {})
-        refs = data['references']
-        refs.setdefault('style_images', [])
-        refs['style_images'] = sorted(list(dict.fromkeys([str(x) for x in refs['style_images']])))
+        data['references'] = self.normalize_references_block(data['references'])
         return data
+
+    @staticmethod
+    def collect_reference_paths(references: dict[str, Any]) -> list[str]:
+        seen: set[str] = set()
+        ordered: list[str] = []
+        for kind in REFERENCE_ASSET_KINDS:
+            raw = references.get(kind, [])
+            if not isinstance(raw, list):
+                continue
+            for item in raw:
+                path = str(item).strip()
+                if path and path not in seen:
+                    seen.add(path)
+                    ordered.append(path)
+        legacy = references.get('style_images', [])
+        if isinstance(legacy, list):
+            for item in legacy:
+                path = str(item).strip()
+                if path and path not in seen:
+                    seen.add(path)
+                    ordered.append(path)
+        return ordered
+
+    def normalize_references_block(self, references: dict[str, Any]) -> dict[str, Any]:
+        refs = dict(references or {})
+        for kind in REFERENCE_ASSET_KINDS:
+            raw = refs.get(kind, [])
+            if not isinstance(raw, list):
+                raw = []
+            refs[kind] = list(dict.fromkeys(str(item).strip() for item in raw if str(item).strip()))
+
+        legacy = refs.get('style_images', [])
+        legacy_list = (
+            [str(item).strip() for item in legacy if str(item).strip()]
+            if isinstance(legacy, list)
+            else []
+        )
+        has_per_type = any(refs[kind] for kind in REFERENCE_ASSET_KINDS)
+        if legacy_list and not has_per_type:
+            refs['logos'] = list(dict.fromkeys(legacy_list))
+
+        refs['style_images'] = self.collect_reference_paths(refs)
+        return refs
+
+    def references_by_asset(self, tokens: dict[str, Any]) -> dict[str, list[str]]:
+        block = self.normalize_references_block(tokens.get('references', {}) or {})
+        return {kind: list(block.get(kind, [])) for kind in REFERENCE_ASSET_KINDS}
 
     def insert_style_profile_version(
         self,
@@ -1061,7 +1111,15 @@ class ProjectService:
         shutil.copyfile(backup, self.tokens_path(user_id, slug))
         return self.load_tokens(user_id, slug)
 
-    def upload_refs(self, user_id: int, slug: str, files: list[tuple[str, bytes]]) -> list[str]:
+    def upload_refs(
+        self,
+        user_id: int,
+        slug: str,
+        files: list[tuple[str, bytes]],
+        asset_type: str = 'logos',
+    ) -> dict[str, list[str]]:
+        if asset_type not in REFERENCE_ASSET_KINDS:
+            raise ValueError('Некорректный тип ассета для референса.')
         project = self.get_project(user_id, slug)
         if project is None:
             raise FileNotFoundError('Проект не найден.')
@@ -1082,23 +1140,36 @@ class ProjectService:
                 rel,
                 original_filename=(filename or safe_name),
             )
-        tokens.setdefault('references', {}).setdefault('style_images', [])
-        tokens['references']['style_images'].extend(added)
+        ref_block = dict(tokens.get('references', {}) or {})
+        for kind in REFERENCE_ASSET_KINDS:
+            ref_block.setdefault(kind, [])
+        ref_block[asset_type] = list(dict.fromkeys([*ref_block.get(asset_type, []), *added]))
+        ref_block = self.normalize_references_block(ref_block)
+        tokens['references'] = ref_block
         self.save_tokens(user_id, slug, tokens)
-        return self.list_reference_image_paths(user_id, slug)
+        return self.references_by_asset(tokens)
 
-    def delete_ref(self, user_id: int, slug: str, rel_path: str) -> list[str]:
+    def delete_ref(self, user_id: int, slug: str, rel_path: str, asset_type: str | None = None) -> dict[str, list[str]]:
+        if asset_type is not None and asset_type not in REFERENCE_ASSET_KINDS:
+            raise ValueError('Некорректный тип ассета для референса.')
         project = self.get_project(user_id, slug)
         if project is None:
             raise FileNotFoundError('Проект не найден.')
         tokens = self.load_tokens(user_id, slug)
         if not rel_path.startswith('uploads/refs/'):
             raise ValueError('Некорректный путь референса.')
-        file_path = self.project_dir(user_id, slug) / rel_path
-        if file_path.exists():
-            file_path.unlink()
-        self.delete_reference_image(project.id, rel_path)
-        images = [item for item in tokens.get('references', {}).get('style_images', []) if item != rel_path]
-        tokens.setdefault('references', {})['style_images'] = images
+        ref_block = dict(tokens.get('references', {}) or {})
+        for kind in REFERENCE_ASSET_KINDS:
+            ref_block.setdefault(kind, [])
+            if asset_type is None or asset_type == kind:
+                ref_block[kind] = [item for item in ref_block.get(kind, []) if item != rel_path]
+        ref_block = self.normalize_references_block(ref_block)
+        tokens['references'] = ref_block
+        still_used = rel_path in self.collect_reference_paths(ref_block)
+        if not still_used:
+            file_path = self.project_dir(user_id, slug) / rel_path
+            if file_path.exists():
+                file_path.unlink()
+            self.delete_reference_image(project.id, rel_path)
         self.save_tokens(user_id, slug, tokens)
-        return self.list_reference_image_paths(user_id, slug)
+        return self.references_by_asset(tokens)

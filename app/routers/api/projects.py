@@ -1,11 +1,11 @@
 from __future__ import annotations
 
-from fastapi import APIRouter, File, HTTPException, Request, UploadFile, status
+from fastapi import APIRouter, File, Form, HTTPException, Request, UploadFile, status
 from fastapi.responses import JSONResponse
 from pydantic import BaseModel
 
 from app.db import auth_service, project_service
-from app.services.project_service import ProjectRecord
+from app.services.project_service import ProjectRecord, REFERENCE_ASSET_KINDS
 
 router = APIRouter(prefix='/api/projects', tags=['api-projects'])
 
@@ -16,6 +16,14 @@ class CreateProjectPayload(BaseModel):
 
 class DeleteRefPayload(BaseModel):
     path: str = ''
+    asset_type: str | None = None
+
+
+def _refs_payload(refs: dict[str, list[str]], asset_type: str | None = None) -> dict:
+    payload: dict = {'ok': True, 'references': refs, 'images': project_service.collect_reference_paths(refs)}
+    if asset_type:
+        payload['asset_type'] = asset_type
+    return payload
 
 
 def _require_user_id(request: Request) -> int:
@@ -100,14 +108,15 @@ def get_project_editor(request: Request, project_slug: str) -> JSONResponse:
     user_id = _require_user_id(request)
     project = _project_or_404(user_id, project_slug)
     tokens = project_service.load_tokens(user_id, project_slug)
-    refs = tokens.get('references', {}).get('style_images', [])
+    refs = project_service.references_by_asset(tokens)
 
     return JSONResponse(
         {
             'ok': True,
             'project': _project_payload(project),
             'tokens': tokens,
-            'refs': refs if isinstance(refs, list) else [],
+            'refs': project_service.collect_reference_paths(tokens.get('references', {}) or {}),
+            'references': refs,
             'is_new_project_flow': request.query_params.get('new') == '1',
         }
     )
@@ -141,14 +150,21 @@ def list_project_editor_refs(request: Request, project_slug: str) -> JSONRespons
     user_id = _require_user_id(request)
     _project_or_404(user_id, project_slug)
     tokens = project_service.load_tokens(user_id, project_slug)
-    refs = tokens.get('references', {}).get('style_images', [])
-    return JSONResponse({'ok': True, 'images': refs if isinstance(refs, list) else []})
+    refs = project_service.references_by_asset(tokens)
+    return JSONResponse(_refs_payload(refs))
 
 
 @router.post('/{project_slug}/editor/refs')
-async def upload_project_editor_refs(request: Request, project_slug: str, files: list[UploadFile] = File(...)) -> JSONResponse:
+async def upload_project_editor_refs(
+    request: Request,
+    project_slug: str,
+    files: list[UploadFile] = File(...),
+    asset_type: str = Form('logos'),
+) -> JSONResponse:
     user_id = _require_user_id(request)
     _project_or_404(user_id, project_slug)
+    if asset_type not in REFERENCE_ASSET_KINDS:
+        return JSONResponse({'ok': False, 'error': 'Некорректный тип ассета.'}, status_code=400)
     if not files:
         return JSONResponse({'ok': False, 'error': 'Файлы не переданы.'}, status_code=400)
 
@@ -157,10 +173,10 @@ async def upload_project_editor_refs(request: Request, project_slug: str, files:
         payload.append((file.filename or '', await file.read()))
 
     try:
-        images = project_service.upload_refs(user_id, project_slug, payload)
+        refs = project_service.upload_refs(user_id, project_slug, payload, asset_type=asset_type)
     except Exception as exc:
         return JSONResponse({'ok': False, 'error': str(exc)}, status_code=400)
-    return JSONResponse({'ok': True, 'images': images})
+    return JSONResponse(_refs_payload(refs, asset_type=asset_type))
 
 
 @router.post('/{project_slug}/editor/refs/delete')
@@ -168,7 +184,12 @@ def delete_project_editor_ref(request: Request, project_slug: str, payload: Dele
     user_id = _require_user_id(request)
     _project_or_404(user_id, project_slug)
     try:
-        images = project_service.delete_ref(user_id, project_slug, payload.path)
+        refs = project_service.delete_ref(
+            user_id,
+            project_slug,
+            payload.path,
+            asset_type=payload.asset_type,
+        )
     except Exception as exc:
         return JSONResponse({'ok': False, 'error': str(exc)}, status_code=400)
-    return JSONResponse({'ok': True, 'images': images})
+    return JSONResponse(_refs_payload(refs, asset_type=payload.asset_type))
