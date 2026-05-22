@@ -2720,24 +2720,22 @@ function ProjectEditorPage({ projectSlug, isNewProjectFlow }: { projectSlug: str
               </div>
 
               <div className="asset-panel-refs">
-                <div className="asset-panel-refs__head">
-                  <span className="asset-panel-refs__title">{ASSET_REF_LABELS[type]}</span>
-                  <label className="btn btn-primary btn-upload btn-upload--compact">
-                    <input
-                      type="file"
-                      multiple
-                      accept=".png,.jpg,.jpeg,.webp,.gif,.bmp"
-                      hidden
-                      disabled={refsLoadingType === type}
-                      onChange={(event) => {
-                        void handleUploadRefs(type, event.target.files)
-                        event.currentTarget.value = ''
-                      }}
-                    />
-                    <span>{refsLoadingType === type ? 'Загружаем...' : 'Загрузить'}</span>
-                  </label>
-                </div>
+                <span className="asset-panel-refs__title">{ASSET_REF_LABELS[type]}</span>
                 <p className="asset-panel-refs__hint">Изображения, которые задают желаемую эстетику для этого типа ассетов.</p>
+                <label className="btn btn-primary btn-upload btn-upload--compact asset-panel-refs__upload">
+                  <input
+                    type="file"
+                    multiple
+                    accept=".png,.jpg,.jpeg,.webp,.gif,.bmp"
+                    hidden
+                    disabled={refsLoadingType === type}
+                    onChange={(event) => {
+                      void handleUploadRefs(type, event.target.files)
+                      event.currentTarget.value = ''
+                    }}
+                  />
+                  <span>{refsLoadingType === type ? 'Загружаем...' : 'Загрузить'}</span>
+                </label>
                 <div className="refs-grid refs-grid--compact">
                   {refsLoadingType === type && !assetRefs[type].length ? <div className="refs-empty">Загрузка...</div> : null}
                   {refsLoadingType !== type && !assetRefs[type].length ? <div className="refs-empty">Референсы пока не загружены</div> : null}
