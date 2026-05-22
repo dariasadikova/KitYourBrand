@@ -6,13 +6,13 @@
 
 1. В KYBBY: сгенерируйте бренд-комплект → страница **Результаты** → **Экспорт бренд-комплекта**.
 2. Скопируйте **Brand ID** и **Base URL** с той же страницы.
-3. В Figma: **Plugins → Development → Import plugin from manifest…** → выберите `manifest.json` из этой папки.
-4. Запустите плагин, вставьте Brand ID и Base URL, нажмите **Import**.
+3. В Figma: **Plugins** → **Development** → **Import plugin from manifest…** → выберите `manifest.json` из распакованного архива.
+4. Запустите плагин, вставьте Brand ID и адрес KYBBY (`http://localhost:8000` локально), нажмите **Import**.
 
 ## Поля плагина
 
 - **Brand ID** — идентификатор набора ассетов (`/assets/<brand_id>/...`)
-- **Provider** — `All` (по умолчанию), `Recraft`, `Seedream` или `Flux`
+- **Provider** — `All` (по умолчанию), `Recraft`, `Seedream`, `Flux`, `Nano Banana`, `GPT-5 Image`
 - **Base URL** — корень сервера KYBBY, например `http://localhost:8000` (без суффикса `/app`)
 
 ## Manifest (HTTP)
@@ -20,9 +20,7 @@
 В зависимости от провайдера плагин запрашивает:
 
 - `.../assets/<brand_id>/figma_plugin_manifest.json` (All)
-- `.../assets/<brand_id>/figma_plugin_manifest_recraft.json`
-- `.../assets/<brand_id>/figma_plugin_manifest_seedream.json`
-- `.../assets/<brand_id>/figma_plugin_manifest_flux.json`
+- `.../assets/<brand_id>/figma_plugin_manifest_<provider>.json` — recraft, seedream, flux, nano_banana, gpt5_image
 
 Сервер должен отдавать CORS для `/assets/*` (в KYBBY уже настроено).
 

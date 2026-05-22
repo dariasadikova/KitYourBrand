@@ -3123,18 +3123,22 @@ function FigmaPluginPage() {
         <h2>Установка в Figma</h2>
         <ol className="figma-plugin-steps">
           <li>Скачайте архив плагина KYBBY и распакуйте его на компьютер.</li>
-          <li>Откройте Figma и перейдите в раздел <strong>Плагины</strong>.</li>
-          <li>Выберите <strong>Управление плагинами</strong> → пункт добавления плагина → <strong>Импорт</strong>.</li>
-          <li>Укажите файл описания плагина из распакованного архива и подтвердите установку.</li>
-          <li>Запустите <strong>KYBBY BrandKit Importer</strong> из списка ваших плагинов.</li>
+          <li>Убедитесь, что в одной папке лежат три файла: <strong>manifest.json</strong>, <strong>code.js</strong>, <strong>ui.html</strong>.</li>
+          <li>Откройте Figma → меню <strong>Плагины</strong> (Plugins).</li>
+          <li>Выберите <strong>Development</strong> → <strong>Import plugin from manifest…</strong> (не «New plugin»).</li>
+          <li>Укажите <strong>manifest.json</strong> из этой папки и подтвердите установку.</li>
+          <li>Запустите <strong>KYBBY BrandKit Importer</strong> из списка плагинов.</li>
         </ol>
+        <p className="figma-plugin-note">
+          Если окно плагина белое и пустое — Figma не нашла <strong>ui.html</strong>. Скачайте архив заново и импортируйте manifest из папки со всеми файлами. При необходимости распакуйте в путь без кириллицы, например <code>C:\kybby-plugin</code>.
+        </p>
         <div className="figma-plugin-actions">
           <a href="/figma-plugin/download" className="btn btn-primary">
             Скачать плагин KYBBY
           </a>
         </div>
         <p className="figma-plugin-note">
-          Плагин устанавливается в ваш аккаунт Figma и остаётся доступным для повторного использования.
+          Плагин устанавливается в ваш аккаунт Figma и остаётся доступным для повторного использования. В поле адреса KYBBY используйте <strong>http://localhost:8000</strong> (не 127.0.0.1), если работаете локально.
         </p>
       </article>
 

@@ -1,8 +1,29 @@
 // BrandKit Importer (Provider-aware)
-// - Provider mode: recraft | seedream | flux | both (default)
-// - Fetches manifest from Flask and imports images into grouped frames
+// - Provider mode: recraft | seedream | flux | nano_banana | gpt5_image | both (All)
+// - Fetches manifest from KYBBY and imports images into grouped frames
 
-figma.showUI(__html__, { width: 380, height: 520 });
+const PROVIDER_SLUGS = ['recraft', 'seedream', 'flux', 'nano_banana', 'gpt5_image'];
+
+const PROVIDER_LABELS = {
+  recraft: 'Recraft',
+  seedream: 'Seedream',
+  flux: 'Flux',
+  nano_banana: 'Nano Banana',
+  gpt5_image: 'GPT-5 Image',
+};
+
+// ui.html is linked in manifest.json — Figma injects it as __html__
+var uiHtml = typeof __html__ !== 'undefined' ? __html__ : '';
+if (!uiHtml || !String(uiHtml).trim()) {
+  uiHtml = [
+    '<body style="margin:0;font:12px/1.4 Inter,sans-serif;background:#111;color:#eaeaea;padding:12px">',
+    '<p><strong>KYBBY:</strong> не найден ui.html рядом с manifest.json.</p>',
+    '<p>Переимпортируйте плагин: распакуйте архив заново и выберите manifest.json из папки,',
+    ' где лежат <code>code.js</code> и <code>ui.html</code>.</p>',
+    '</body>'
+  ].join('');
+}
+figma.showUI(uiHtml, { width: 380, height: 520 });
 
 const STORAGE_KEY = 'brandkit_importer_settings';
 const DEFAULT_SETTINGS = {
@@ -21,11 +42,15 @@ function safeUpper(s) {
 }
 
 function providerLabel(p) {
-  if (p === 'recraft') return 'Recraft';
-  if (p === 'seedream') return 'Seedream';
-  if (p === 'flux') return 'Flux';
   if (p === 'both') return 'All';
-  return safeUpper(String(p));
+  return PROVIDER_LABELS[p] || safeUpper(String(p).replace(/_/g, ' '));
+}
+
+function providerManifestFile(provider) {
+  if (provider === 'both' || PROVIDER_SLUGS.indexOf(provider) === -1) {
+    return 'figma_plugin_manifest.json';
+  }
+  return 'figma_plugin_manifest_' + provider + '.json';
 }
 
 async function initUI() {
@@ -126,12 +151,13 @@ function maxRootY(page) {
 }
 
 function groupByProvider(items) {
-  const groups = { recraft: [], seedream: [], flux: [], unknown: [] };
+  const groups = { unknown: [] };
+  for (var i = 0; i < PROVIDER_SLUGS.length; i++) {
+    groups[PROVIDER_SLUGS[i]] = [];
+  }
   for (const it of items || []) {
     const p = (it && it.provider) ? String(it.provider).toLowerCase() : 'unknown';
-    if (p === 'recraft') groups.recraft.push(it);
-    else if (p === 'seedream') groups.seedream.push(it);
-    else if (p === 'flux') groups.flux.push(it);
+    if (groups[p]) groups[p].push(it);
     else groups.unknown.push(it);
   }
   return groups;
@@ -260,7 +286,10 @@ async function placeAssetsGrid(parentFrame, items, opts) {
       r.y = 0;
 
       if (image) {
-        const scaleMode = it.tile ? 'TILE' : 'FIT';
+        // Seamless patterns are tileable in Figma, but TILE uses native px size —
+        // a 1024×1024 tile in a 320×320 frame shows only a cropped corner.
+        // FIT shows the full pattern like the KYBBY results page; switch to Tile in Figma if needed.
+        const scaleMode = 'FIT';
         r.fills = [{ type: 'IMAGE', imageHash: image.hash, scaleMode }];
       } else {
         r.fills = [];
@@ -293,14 +322,7 @@ async function importBrandKit({ brandId, provider, baseUrl }) {
 
   if (!brandId) throw new Error('Brand ID is empty');
 
-  // Pick manifest
-  const manifestFile = provider === 'recraft'
-    ? 'figma_plugin_manifest_recraft.json'
-    : provider === 'seedream'
-      ? 'figma_plugin_manifest_seedream.json'
-      : provider === 'flux'
-        ? 'figma_plugin_manifest_flux.json'
-        : 'figma_plugin_manifest.json';
+  const manifestFile = providerManifestFile(provider);
 
   const manifestUrl = `${baseUrl}/assets/${encodeURIComponent(brandId)}/${manifestFile}`;
 
@@ -411,7 +433,7 @@ async function importBrandKit({ brandId, provider, baseUrl }) {
     const groups = groupByProvider(items);
 
     let providersToRender;
-    if (provider === 'both') providersToRender = ['recraft', 'seedream', 'flux'];
+    if (provider === 'both') providersToRender = PROVIDER_SLUGS.slice();
     else providersToRender = [provider];
 
     // If manifest is provider-specific and doesn't include provider field, treat as unknown
@@ -482,4 +504,8 @@ figma.ui.onmessage = async (msg) => {
   }
 };
 
-initUI();
+initUI().catch((err) => {
+  const text = err && err.message ? err.message : String(err);
+  figma.ui.postMessage({ type: 'error', text: `Init failed: ${text}` });
+  figma.notify(`KYBBY plugin init failed: ${text}`);
+});

@@ -137,7 +137,7 @@ async def figma_plugin_download(request: Request) -> Response:
         for file_path in plugin_dir.rglob('*'):
             if not file_path.is_file():
                 continue
-            archive.write(file_path, file_path.relative_to(plugin_dir.parent).as_posix())
+            archive.write(file_path, file_path.relative_to(plugin_dir).as_posix())
 
     return Response(
         content=buffer.getvalue(),
