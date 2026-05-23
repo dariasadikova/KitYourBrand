@@ -1,4 +1,4 @@
-import { type CSSProperties, useCallback, useEffect, useMemo, useState } from 'react'
+import { type CSSProperties, useCallback, useEffect, useMemo, useState, type ImgHTMLAttributes } from 'react'
 import { GENERATION_PROVIDERS, providerLabel } from '../../constants/generationProviders'
 import type { ProjectResultsResponse } from '../../types/results'
 import { MockupConstructor } from './MockupConstructor'
@@ -10,6 +10,7 @@ import {
   type MockupSelection,
 } from './mockupAssets'
 import { buildMockupCopy, type MockupCopy } from './mockupCopy'
+import { TrimmedMockupLogo } from './TrimmedMockupLogo'
 
 type MockupKind = 'landing' | 'business-card' | 'instagram'
 type AssetKind = 'logos' | 'icons' | 'patterns' | 'illustrations'
@@ -100,34 +101,85 @@ function brandStyle(brand: BrandPreviewData): CSSProperties {
   } as CSSProperties
 }
 
-function BrandLogoOrName({ brand, className }: { brand: BrandPreviewData; className?: string }) {
-  if (brand.logo) {
-    return <img src={brand.logo} alt="" className={className} />
+function MockupIcon({
+  src,
+  className,
+  ...props
+}: {
+  src: string
+  className?: string
+} & Omit<ImgHTMLAttributes<HTMLImageElement>, 'src' | 'className'>) {
+  return (
+    <img
+      src={src}
+      alt=""
+      className={className ? `brand-mockup-icon ${className}` : 'brand-mockup-icon'}
+      {...props}
+    />
+  )
+}
+
+function LandingBrandMark({ brand }: { brand: BrandPreviewData }) {
+  const src = brand.logo || brand.icon
+  const iconOnly = !brand.logo && Boolean(brand.icon)
+  if (src) {
+    return (
+      <TrimmedMockupLogo
+        src={src}
+        className={`brand-mockup-landing__logo${iconOnly ? ' brand-mockup-landing__logo--icon-only' : ''}`}
+        wrapClassName="brand-mockup-landing__logo-wrap"
+      />
+    )
   }
-  return <strong className={className}>{brand.name}</strong>
+  return <strong className="brand-mockup-landing__logo">{brand.name}</strong>
+}
+
+function InstagramAvatar({ brand }: { brand: BrandPreviewData }) {
+  if (brand.logo) {
+    return <img src={brand.logo} alt="" className="brand-mockup-instagram__avatar brand-mockup-instagram__avatar--logo" />
+  }
+  if (brand.icon) {
+    return (
+      <span className="brand-mockup-instagram__avatar-ring">
+        <MockupIcon src={brand.icon} />
+      </span>
+    )
+  }
+  return <strong className="brand-mockup-instagram__avatar">{brand.name}</strong>
+}
+
+function BusinessCardBrandMark({ brand }: { brand: BrandPreviewData }) {
+  if (brand.logo) {
+    return <img src={brand.logo} alt="" className="brand-mockup-card__logo" />
+  }
+  if (brand.icon) {
+    return <MockupIcon src={brand.icon} className="brand-mockup-card__icon-mark" />
+  }
+  return <strong className="brand-mockup-card__logo">{brand.name}</strong>
 }
 
 function LandingMockup({ brand }: { brand: BrandPreviewData }) {
+  const showNavIcon = Boolean(brand.icon && brand.logo && brand.icon !== brand.logo)
+
   return (
     <div className="brand-mockup brand-mockup--landing" style={brandStyle(brand)}>
-      <div className="brand-mockup-landing__nav">
-        <BrandLogoOrName brand={brand} className="brand-mockup-landing__logo" />
+      <LandingBrandMark brand={brand} />
+      <nav className="brand-mockup-landing__nav" aria-label="Навигация">
+        {showNavIcon ? <MockupIcon src={brand.icon} className="brand-mockup-landing__nav-icon" aria-hidden="true" /> : null}
         <span>Product</span>
         <span>Pricing</span>
         <span>Contact</span>
+      </nav>
+      <div className="brand-mockup-landing__copy">
+        <p className="brand-mockup-eyebrow">{brand.name}</p>
+        <h3>{brand.copy.landingHeadline}</h3>
+        <button type="button">{brand.copy.landingButton}</button>
       </div>
-      <div className="brand-mockup-landing__hero">
-        <div className="brand-mockup-landing__copy">
-          <p className="brand-mockup-eyebrow">{brand.name}</p>
-          <h3>{brand.copy.landingHeadline}</h3>
-          <button type="button">{brand.copy.landingButton}</button>
-        </div>
-        <div
-          className="brand-mockup-landing__visual"
-          style={brand.pattern ? { backgroundImage: `url(${brand.pattern})`, backgroundSize: 'cover' } : undefined}
-        >
-          {brand.illustration ? <img src={brand.illustration} alt="" /> : brand.icon ? <img src={brand.icon} alt="" className="brand-mockup-landing__icon-fallback" /> : null}
-        </div>
+      <div
+        className="brand-mockup-landing__visual"
+        style={brand.pattern ? { backgroundImage: `url(${brand.pattern})`, backgroundSize: 'cover' } : undefined}
+      >
+        {brand.illustration ? <img src={brand.illustration} alt="" /> : null}
       </div>
     </div>
   )
@@ -141,7 +193,7 @@ function BusinessCardMockup({ brand }: { brand: BrandPreviewData }) {
         style={brand.pattern ? { backgroundImage: `linear-gradient(rgba(255,255,255,0.92), rgba(255,255,255,0.92)), url(${brand.pattern})`, backgroundSize: 'cover' } : undefined}
       >
         <div className="brand-mockup-card__accent" aria-hidden="true" />
-        <BrandLogoOrName brand={brand} className="brand-mockup-card__logo" />
+        <BusinessCardBrandMark brand={brand} />
         <p className="brand-mockup-card__name">{brand.name}</p>
         <p className="brand-mockup-card__role">{brand.copy.businessRole}</p>
         <div className="brand-mockup-card__contacts">
@@ -158,14 +210,14 @@ function InstagramMockup({ brand }: { brand: BrandPreviewData }) {
     <div className="brand-mockup brand-mockup--instagram" style={brandStyle(brand)}>
       <div className="brand-mockup-instagram__phone">
         <div className="brand-mockup-instagram__top">
-          <BrandLogoOrName brand={brand} className="brand-mockup-instagram__avatar" />
+          <InstagramAvatar brand={brand} />
           <span>{brand.name.toLowerCase().replace(/\s+/g, '_')}</span>
         </div>
         <div
           className="brand-mockup-instagram__media"
           style={brand.pattern ? { backgroundImage: `url(${brand.pattern})`, backgroundSize: 'cover' } : undefined}
         >
-          {brand.illustration ? <img src={brand.illustration} alt="" /> : brand.icon ? <img src={brand.icon} alt="" className="brand-mockup-instagram__icon-fallback" /> : null}
+          {brand.illustration ? <img src={brand.illustration} alt="" /> : brand.icon ? <MockupIcon src={brand.icon} /> : null}
         </div>
         <div className="brand-mockup-instagram__actions" aria-hidden="true">
           <span>♡</span>

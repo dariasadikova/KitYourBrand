@@ -4520,7 +4520,17 @@ body.generation-history-modal-open .dashboard-shell {
     --brand-accent: #1e2a33;
     --brand-tertiary: #8fa3b8;
     --brand-neutral: #111827;
+    --mockup-icon-size: 44px;
     color: var(--brand-neutral);
+}
+
+.brand-mockup-icon {
+    width: var(--mockup-icon-size);
+    height: var(--mockup-icon-size);
+    object-fit: contain;
+    object-position: center;
+    flex-shrink: 0;
+    display: block;
 }
 
 .brand-mockup-eyebrow {
@@ -4538,6 +4548,11 @@ body.generation-history-modal-open .dashboard-shell {
     margin: 0 auto;
     border-radius: 22px;
     padding: 28px;
+    display: grid;
+    grid-template-columns: minmax(0, 1fr) minmax(220px, 280px);
+    column-gap: 28px;
+    row-gap: 48px;
+    align-items: center;
     background:
         radial-gradient(circle at top right, color-mix(in srgb, var(--brand-secondary) 70%, white), transparent 42%),
         linear-gradient(135deg, #ffffff, #f8fafc);
@@ -4545,6 +4560,9 @@ body.generation-history-modal-open .dashboard-shell {
 }
 
 .brand-mockup-landing__nav {
+    grid-column: 2;
+    grid-row: 1;
+    justify-self: end;
     display: flex;
     align-items: center;
     gap: 18px;
@@ -4552,23 +4570,47 @@ body.generation-history-modal-open .dashboard-shell {
     color: color-mix(in srgb, var(--brand-neutral) 72%, white);
 }
 
+.brand-mockup-landing__nav-icon {
+    opacity: 0.92;
+}
+
+.brand-mockup-landing__logo-wrap {
+    grid-column: 1;
+    grid-row: 1;
+    justify-self: start;
+    align-self: center;
+    overflow: visible;
+    line-height: 0;
+}
+
 .brand-mockup-landing__logo {
-    margin-right: auto;
-    max-width: 120px;
-    max-height: 44px;
+    display: block;
+    max-width: 180px;
+    max-height: 64px;
     width: auto;
     height: auto;
     object-fit: contain;
-    font-size: 1.15rem;
+    object-position: left center;
+    font-size: 1.35rem;
     color: var(--brand-neutral);
 }
 
-.brand-mockup-landing__hero {
-    display: grid;
-    grid-template-columns: minmax(0, 1fr) minmax(220px, 280px);
-    gap: 28px;
-    align-items: center;
-    margin-top: 48px;
+.brand-mockup-landing__logo--icon-only {
+    max-width: var(--mockup-icon-size);
+    max-height: var(--mockup-icon-size);
+}
+
+.brand-mockup-landing__logo:not(img) {
+    grid-column: 1;
+    grid-row: 1;
+    justify-self: start;
+    align-self: center;
+}
+
+.brand-mockup-landing__copy {
+    grid-column: 1;
+    grid-row: 2;
+    align-self: start;
 }
 
 .brand-mockup-landing__copy h3 {
@@ -4602,6 +4644,8 @@ body.generation-history-modal-open .dashboard-shell {
 }
 
 .brand-mockup-landing__visual {
+    grid-column: 2;
+    grid-row: 2;
     min-height: 240px;
     border-radius: 28px;
     background: color-mix(in srgb, var(--brand-accent) 18%, white);
@@ -4617,12 +4661,6 @@ body.generation-history-modal-open .dashboard-shell {
     object-fit: cover;
 }
 
-.brand-mockup-landing__icon-fallback {
-    width: 72px !important;
-    height: 72px !important;
-    object-fit: contain !important;
-}
-
 .brand-mockup--business-card {
     display: flex;
     align-items: center;
@@ -4636,10 +4674,13 @@ body.generation-history-modal-open .dashboard-shell {
     width: min(100%, 420px);
     aspect-ratio: 1.75 / 1;
     border-radius: 18px;
-    padding: 28px 30px;
+    padding: 24px 28px 22px 30px;
     background: #ffffff;
     box-shadow: 0 24px 60px rgba(15, 23, 42, 0.18);
     overflow: hidden;
+    display: flex;
+    flex-direction: column;
+    align-items: flex-start;
 }
 
 .brand-mockup-card__accent {
@@ -4653,32 +4694,51 @@ body.generation-history-modal-open .dashboard-shell {
 
 .brand-mockup-card__logo {
     display: block;
-    max-width: 120px;
-    max-height: 48px;
+    max-width: 112px;
+    max-height: 40px;
+    width: auto;
+    height: auto;
     object-fit: contain;
-    margin-bottom: 18px;
-    font-size: 1.2rem;
+    object-position: left center;
+    margin-bottom: 10px;
+    flex-shrink: 0;
+    font-size: 1.15rem;
     color: var(--brand-neutral);
+}
+
+.brand-mockup-card__icon-mark {
+    margin-bottom: 10px;
 }
 
 .brand-mockup-card__name {
     margin: 0;
-    font-size: 1.35rem;
+    font-size: 1.25rem;
     font-weight: 700;
+    line-height: 1.15;
+    flex-shrink: 0;
 }
 
 .brand-mockup-card__role {
     margin: 6px 0 0;
     color: var(--brand-primary);
     font-weight: 600;
+    font-size: 0.82rem;
+    line-height: 1.35;
+    max-width: 92%;
+    display: -webkit-box;
+    -webkit-box-orient: vertical;
+    -webkit-line-clamp: 2;
+    overflow: hidden;
 }
 
 .brand-mockup-card__contacts {
     display: flex;
     flex-direction: column;
     gap: 4px;
-    margin-top: 22px;
-    font-size: 0.88rem;
+    margin-top: auto;
+    padding-top: 14px;
+    font-size: 0.84rem;
+    line-height: 1.35;
     color: color-mix(in srgb, var(--brand-neutral) 68%, white);
 }
 
@@ -4708,16 +4768,34 @@ body.generation-history-modal-open .dashboard-shell {
 }
 
 .brand-mockup-instagram__avatar {
-    width: 34px;
-    height: 34px;
-    border-radius: 999px;
-    object-fit: cover;
-    background: var(--brand-secondary);
-    font-size: 0.72rem;
+    font-size: 0.82rem;
     display: inline-flex;
     align-items: center;
     justify-content: center;
     overflow: hidden;
+    flex-shrink: 0;
+    color: var(--brand-neutral);
+}
+
+.brand-mockup-instagram__avatar--logo {
+    width: 52px;
+    height: 52px;
+    border-radius: 999px;
+    object-fit: contain;
+    background: var(--brand-secondary);
+    padding: 4px;
+}
+
+.brand-mockup-instagram__avatar-ring {
+    width: calc(var(--mockup-icon-size) + 10px);
+    height: calc(var(--mockup-icon-size) + 10px);
+    border-radius: 999px;
+    background: var(--brand-secondary);
+    display: inline-flex;
+    align-items: center;
+    justify-content: center;
+    flex-shrink: 0;
+    padding: 5px;
 }
 
 .brand-mockup-instagram__media {
@@ -4736,10 +4814,10 @@ body.generation-history-modal-open .dashboard-shell {
     object-fit: cover;
 }
 
-.brand-mockup-instagram__icon-fallback {
-    width: 84px !important;
-    height: 84px !important;
-    object-fit: contain !important;
+.brand-mockup-instagram__media .brand-mockup-icon {
+    width: var(--mockup-icon-size);
+    height: var(--mockup-icon-size);
+    object-fit: contain;
 }
 
 .brand-mockup-instagram__actions {
