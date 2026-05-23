@@ -41,6 +41,7 @@ def _project_payload(project: ProjectRecord) -> dict:
         'brand_id': project.brand_id,
         'created_at': project.created_at,
         'updated_at': project.updated_at,
+        'is_imported': project.is_imported,
         'results_url': f'/app/projects/{project.slug}/results',
         'editor_url': f'/app/projects/{project.slug}',
     }
@@ -82,6 +83,34 @@ def create_project(request: Request, payload: CreateProjectPayload) -> JSONRespo
         {
             'ok': True,
             'project': _project_payload(project),
+            'redirect_url': f'/app/projects/{project.slug}?new=1',
+        }
+    )
+
+
+@router.post('/import-bundle')
+async def import_project_bundle(
+    request: Request,
+    file: UploadFile = File(...),
+) -> JSONResponse:
+    user_id = _require_user_id(request)
+    filename = (file.filename or '').lower()
+    if filename and not filename.endswith('.zip'):
+        return JSONResponse({'ok': False, 'error': 'Ожидается ZIP-архив проекта.'}, status_code=400)
+
+    content = await file.read()
+    try:
+        project, warnings = project_service.import_project_bundle(user_id, content)
+    except ValueError as exc:
+        return JSONResponse({'ok': False, 'error': str(exc)}, status_code=400)
+    except Exception as exc:
+        return JSONResponse({'ok': False, 'error': str(exc)}, status_code=400)
+
+    return JSONResponse(
+        {
+            'ok': True,
+            'project': _project_payload(project),
+            'warnings': warnings,
             'redirect_url': f'/app/projects/{project.slug}?new=1',
         }
     )

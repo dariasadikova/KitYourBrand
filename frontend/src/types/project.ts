@@ -5,6 +5,7 @@ export type ProjectSummary = {
   brand_id: string
   created_at: string
   updated_at: string
+  is_imported: boolean
   results_url: string
   editor_url: string
 }
@@ -18,5 +19,12 @@ export type ProjectsListResponse = {
 export type CreateProjectResponse = {
   ok: boolean
   project: ProjectSummary
+  redirect_url: string
+}
+
+export type ImportProjectResponse = {
+  ok: boolean
+  project: ProjectSummary
+  warnings: string[]
   redirect_url: string
 }

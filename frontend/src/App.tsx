@@ -1,4 +1,5 @@
 import {
+  type ChangeEvent,
   type FormEvent,
   type MouseEvent,
   type ReactNode,
@@ -20,7 +21,7 @@ import {
   validatePasswordResetToken,
 } from './services/authApi'
 import { getProfile, updateProfile } from './services/profileApi'
-import { createProject, deleteProject, listProjects, restoreProject } from './services/projectsApi'
+import { createProject, deleteProject, importProjectBundle, listProjects, restoreProject } from './services/projectsApi'
 import {
   deleteProjectEditorRef,
   getProjectEditor,
@@ -848,7 +849,7 @@ function DashboardShellNav({
     <nav className={navClass} id={mobileNavId} aria-label="Основная навигация">
       <Link
         to="/dashboard"
-        className={`dashboard-nav__item${activePath === '/dashboard' || activePath === '/generation-history' ? ' dashboard-nav__item--active' : ''}`}
+        className={`dashboard-nav__item${activePath === '/dashboard' ? ' dashboard-nav__item--active' : ''}`}
         onClick={onItemNavigate}
       >
         <span className="dashboard-nav__icon" aria-hidden="true">
@@ -856,7 +857,20 @@ function DashboardShellNav({
             <path d="M3 7a2 2 0 0 1 2-2h4l2 2h8a2 2 0 0 1 2 2v8a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2Z" />
           </svg>
         </span>
-        <span>Мои проекты</span>
+        <span className="dashboard-nav__label">Мои проекты</span>
+      </Link>
+      <Link
+        to="/generation-history"
+        className={`dashboard-nav__item${activePath === '/generation-history' ? ' dashboard-nav__item--active' : ''}`}
+        onClick={onItemNavigate}
+      >
+        <span className="dashboard-nav__icon" aria-hidden="true">
+          <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.2" strokeLinecap="round" strokeLinejoin="round">
+            <circle cx="12" cy="12" r="9" />
+            <path d="M12 7v5l3 2" />
+          </svg>
+        </span>
+        <span className="dashboard-nav__label">История генераций</span>
       </Link>
       <Link to="/figma-plugin" className={`dashboard-nav__item${activePath === '/figma-plugin' ? ' dashboard-nav__item--active' : ''}`} onClick={onItemNavigate}>
         <span className="dashboard-nav__icon" aria-hidden="true">
@@ -867,7 +881,7 @@ function DashboardShellNav({
             <rect x="14" y="14" width="7" height="7" rx="1.5" />
           </svg>
         </span>
-        <span>Figma-плагин</span>
+        <span className="dashboard-nav__label">Figma-плагин</span>
       </Link>
       <Link to="/profile" className={`dashboard-nav__item${activePath === '/profile' ? ' dashboard-nav__item--active' : ''}`} onClick={onItemNavigate}>
         <span className="dashboard-nav__icon" aria-hidden="true">
@@ -876,7 +890,7 @@ function DashboardShellNav({
             <path d="M4 20a8 8 0 0 1 16 0" />
           </svg>
         </span>
-        <span>Профиль</span>
+        <span className="dashboard-nav__label">Профиль</span>
       </Link>
       <a href="/logout" className="dashboard-nav__item" onClick={(event) => { onItemNavigate?.(); onLogoutClick(event) }}>
         <span className="dashboard-nav__icon" aria-hidden="true">
@@ -886,7 +900,7 @@ function DashboardShellNav({
             <path d="M21 12H9" />
           </svg>
         </span>
-        <span>Выход</span>
+        <span className="dashboard-nav__label">Выход</span>
       </a>
     </nav>
   )
@@ -2054,6 +2068,14 @@ function ProjectEditorPage({ projectSlug, isNewProjectFlow }: { projectSlug: str
   const [error, setError] = useState('')
 
   useEffect(() => {
+    const key = `kybby_import_warnings:${projectSlug}`
+    const stored = sessionStorage.getItem(key)
+    if (!stored) return
+    sessionStorage.removeItem(key)
+    setStatus(`Проект импортирован с предупреждениями: ${stored}`)
+  }, [projectSlug])
+
+  useEffect(() => {
     let alive = true
     setIsLoading(true)
     setError('')
@@ -2852,6 +2874,7 @@ function ProjectEditorPage({ projectSlug, isNewProjectFlow }: { projectSlug: str
             {isSaving ? 'Сохраняем...' : 'Сохранить'}
           </button>
           <a href={`/projects/${projectSlug}/download`} className="btn btn-outline btn-inline">Скачать конфигурацию проекта</a>
+          <a href={`/projects/${projectSlug}/download-bundle`} className="btn btn-outline btn-inline">Скачать ZIP (с референсами)</a>
           <button type="button" className="btn btn-inline btn-reset-light" disabled={isSaving} onClick={handleReset}>Сброс</button>
         </div>
         {status ? <div className="editor-status">{status}</div> : null}
@@ -3553,10 +3576,11 @@ function ProfilePage({ onSessionRefresh }: { onSessionRefresh: () => Promise<voi
 
 function ProjectsDashboard() {
   const navigate = useNavigate()
+  const importInputRef = useRef<HTMLInputElement>(null)
   const [projects, setProjects] = useState<ProjectSummary[]>([])
-  const [showGenerationHistory, setShowGenerationHistory] = useState(false)
   const [isLoading, setIsLoading] = useState(true)
   const [isCreating, setIsCreating] = useState(false)
+  const [isImporting, setIsImporting] = useState(false)
   const [error, setError] = useState('')
   const [projectPendingDelete, setProjectPendingDelete] = useState<ProjectSummary | null>(null)
   const [isDeletingProject, setIsDeletingProject] = useState(false)
@@ -3568,7 +3592,6 @@ function ProjectsDashboard() {
       .then((payload) => {
         if (!alive) return
         setProjects(payload.projects)
-        setShowGenerationHistory(payload.show_generation_history)
       })
       .catch((err) => {
         if (alive) setError(err instanceof Error ? err.message : 'Не удалось загрузить проекты.')
@@ -3595,6 +3618,34 @@ function ProjectsDashboard() {
     }
   }
 
+  function handleImportClick() {
+    importInputRef.current?.click()
+  }
+
+  async function handleImportFileChange(event: ChangeEvent<HTMLInputElement>) {
+    const input = event.currentTarget
+    const file = input.files?.[0]
+    input.value = ''
+    if (!file) return
+
+    setError('')
+    setIsImporting(true)
+
+    try {
+      const payload = await importProjectBundle(file)
+      if (payload.warnings?.length) {
+        sessionStorage.setItem(
+          `kybby_import_warnings:${payload.project.slug}`,
+          payload.warnings.join('; '),
+        )
+      }
+      navigate(payload.redirect_url.replace(/^\/app/, ''))
+    } catch (err) {
+      setError(err instanceof Error ? err.message : 'Не удалось импортировать проект.')
+      setIsImporting(false)
+    }
+  }
+
   async function confirmDeleteProject() {
     if (!projectPendingDelete) return
 
@@ -3603,7 +3654,6 @@ function ProjectsDashboard() {
     try {
       await deleteProject(projectPendingDelete.slug)
       setProjects((items) => items.filter((item) => item.slug !== projectPendingDelete.slug))
-      setShowGenerationHistory(true)
       setProjectPendingDelete(null)
     } catch (err) {
       setError(err instanceof Error ? err.message : 'Не удалось удалить проект.')
@@ -3617,20 +3667,30 @@ function ProjectsDashboard() {
       <div className="dashboard-head projects-head">
         <h1>Мои проекты</h1>
         <div className="projects-actions dashboard-head__actions">
-          {showGenerationHistory ? (
-            <Link
-              to="/generation-history"
-              className="btn btn-outline dashboard-history-btn projects-history-btn"
+          <div className="projects-primary-actions">
+            <form className="dashboard-create-form projects-create-form" onSubmit={(event) => event.preventDefault()}>
+              <input type="hidden" name="name" value="Новый проект" />
+              <button type="button" className="btn btn-primary dashboard-create-btn projects-create-btn" disabled={isCreating || isImporting} onClick={handleCreateProject}>
+                {isCreating ? 'Создаём...' : 'Создать проект'}
+              </button>
+            </form>
+            <button
+              type="button"
+              className="btn btn-outline dashboard-import-btn projects-import-btn"
+              disabled={isCreating || isImporting}
+              onClick={handleImportClick}
             >
-              Посмотреть историю генераций
-            </Link>
-          ) : null}
-          <form className="dashboard-create-form projects-create-form" onSubmit={(event) => event.preventDefault()}>
-            <input type="hidden" name="name" value="Новый проект" />
-            <button type="button" className="btn btn-primary dashboard-create-btn projects-create-btn" disabled={isCreating} onClick={handleCreateProject}>
-              {isCreating ? 'Создаём...' : 'Создать проект'}
+              {isImporting ? 'Импортируем...' : 'Импортировать проект'}
             </button>
-          </form>
+            <input
+              ref={importInputRef}
+              type="file"
+              accept=".zip,application/zip"
+              className="projects-import-input"
+              hidden
+              onChange={handleImportFileChange}
+            />
+          </div>
         </div>
       </div>
 
@@ -3654,20 +3714,27 @@ function ProjectsDashboard() {
                 <p>Дата создания:</p>
                 <span>{project.created_at.slice(0, 10)}</span>
               </div>
-              <div className="project-card__actions">
-                <form className="project-card__delete-form" onSubmit={(event) => event.preventDefault()}>
-                  <button
-                    type="button"
-                    className="project-card__action project-card__action--delete"
-                    aria-label="Удалить проект"
-                    onClick={() => setProjectPendingDelete(project)}
-                  >
-                    <ProjectCardDeleteIcon />
-                  </button>
-                </form>
-                <Link to={`/projects/${project.slug}`} className="project-card__action project-card__action--edit" aria-label="Открыть редактор проекта">
-                  <ProjectCardEditIcon />
-                </Link>
+              <div className="project-card__aside">
+                {project.is_imported ? (
+                  <div className="project-card__status">
+                    <span className="project-card__badge" title="Проект импортирован из ZIP-архива">Внешний</span>
+                  </div>
+                ) : null}
+                <div className="project-card__actions">
+                  <form className="project-card__delete-form" onSubmit={(event) => event.preventDefault()}>
+                    <button
+                      type="button"
+                      className="project-card__action project-card__action--delete"
+                      aria-label="Удалить проект"
+                      onClick={() => setProjectPendingDelete(project)}
+                    >
+                      <ProjectCardDeleteIcon />
+                    </button>
+                  </form>
+                  <Link to={`/projects/${project.slug}`} className="project-card__action project-card__action--edit" aria-label="Открыть редактор проекта">
+                    <ProjectCardEditIcon />
+                  </Link>
+                </div>
               </div>
             </article>
           ))}

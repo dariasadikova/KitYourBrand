@@ -210,6 +210,22 @@ async def download_project(request: Request, project_slug: str):
     return FileResponse(path, filename='tokens.json', media_type='application/json')
 
 
+@router.get('/projects/{project_slug}/download-bundle')
+async def download_project_bundle(request: Request, project_slug: str):
+    user_id = require_auth(request)
+    project = project_or_404(user_id, project_slug)
+    try:
+        zip_bytes = project_service.build_project_bundle_bytes(user_id, project_slug)
+    except FileNotFoundError as exc:
+        raise HTTPException(status_code=404, detail=str(exc)) from exc
+    filename = f'{project.slug}-kybby-project.zip'
+    return Response(
+        content=zip_bytes,
+        media_type='application/zip',
+        headers={'Content-Disposition': f'attachment; filename="{filename}"'},
+    )
+
+
 @router.post('/projects/{project_slug}/reset')
 async def reset_project(request: Request, project_slug: str) -> JSONResponse:
     user_id = require_auth(request)

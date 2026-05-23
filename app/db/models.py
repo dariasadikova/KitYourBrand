@@ -38,6 +38,7 @@ class Project(Base):
     created_at: Mapped[str] = mapped_column(sa.Text, nullable=False)
     updated_at: Mapped[str] = mapped_column(sa.Text, nullable=False)
     deleted_at: Mapped[str | None] = mapped_column(sa.Text, nullable=True)
+    is_imported: Mapped[int] = mapped_column(sa.Integer, nullable=False, server_default=sa.text('0'))
 
 
 class GenerationJobHistory(Base):

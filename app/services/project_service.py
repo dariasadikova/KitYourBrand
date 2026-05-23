@@ -1,11 +1,14 @@
 from __future__ import annotations
 
+import io
 import json
 import logging
 import re
 import shutil
 import sqlite3
+import tempfile
 import uuid
+import zipfile
 from dataclasses import dataclass
 from datetime import datetime, timezone
 from pathlib import Path
@@ -53,6 +56,9 @@ DEFAULT_TOKENS = {
 
 ALLOWED_EXT = {".png", ".jpg", ".jpeg", ".webp", ".gif", ".bmp"}
 REFERENCE_ASSET_KINDS = ('logos', 'icons', 'patterns', 'illustrations')
+MAX_PROJECT_BUNDLE_BYTES = 50 * 1024 * 1024
+PROJECT_BUNDLE_FORMAT = 'kybby-project'
+PROJECT_BUNDLE_VERSION = 1
 
 logger = logging.getLogger('kityourbrand.project')
 
@@ -66,6 +72,7 @@ class ProjectRecord:
     brand_id: str
     created_at: str
     updated_at: str
+    is_imported: bool = False
 
 
 class ProjectService:
@@ -108,6 +115,8 @@ class ProjectService:
             cols = self._table_columns(conn, 'projects')
             if cols and 'deleted_at' not in cols:
                 conn.execute('ALTER TABLE projects ADD COLUMN deleted_at TEXT')
+            if cols and 'is_imported' not in cols:
+                conn.execute('ALTER TABLE projects ADD COLUMN is_imported INTEGER NOT NULL DEFAULT 0')
             hist_cols = self._table_columns(conn, 'generation_jobs_history')
             if hist_cols:
                 if 'error_message' not in hist_cols:
@@ -157,7 +166,12 @@ class ProjectService:
         data['brand_id'] = self._slugify(safe_name)
         return data
 
-    def create_project(self, user_id: int, name: str) -> ProjectRecord:
+    def _project_record_from_row(self, row: sqlite3.Row) -> ProjectRecord:
+        data = dict(row)
+        data['is_imported'] = bool(int(data.get('is_imported') or 0))
+        return ProjectRecord(**data)
+
+    def create_project(self, user_id: int, name: str, *, is_imported: bool = False) -> ProjectRecord:
         project_name = (name or '').strip() or 'Новый проект'
         base_slug = self._slugify(project_name)
         rand = uuid.uuid4().hex
@@ -169,10 +183,10 @@ class ProjectService:
         with self._connect() as conn:
             cur = conn.execute(
                 """
-                INSERT INTO projects (user_id, slug, name, brand_id, created_at, updated_at)
-                VALUES (?, ?, ?, ?, ?, ?)
+                INSERT INTO projects (user_id, slug, name, brand_id, created_at, updated_at, is_imported)
+                VALUES (?, ?, ?, ?, ?, ?, ?)
                 """,
-                (user_id, slug, project_name, tokens['brand_id'], now, now),
+                (user_id, slug, project_name, tokens['brand_id'], now, now, int(is_imported)),
             )
             conn.execute(
                 "UPDATE users SET had_projects = 1 WHERE id = ?",
@@ -183,26 +197,35 @@ class ProjectService:
 
         self.save_tokens(user_id, slug, tokens)
         shutil.copyfile(self.tokens_path(user_id, slug), self.backup_path(user_id, slug))
-        return ProjectRecord(project_id, user_id, slug, project_name, tokens['brand_id'], now, now)
+        return ProjectRecord(
+            project_id,
+            user_id,
+            slug,
+            project_name,
+            tokens['brand_id'],
+            now,
+            now,
+            is_imported=is_imported,
+        )
 
     def list_projects(self, user_id: int) -> list[ProjectRecord]:
         with self._connect() as conn:
             rows = conn.execute(
                 """
-                SELECT id, user_id, slug, name, brand_id, created_at, updated_at
+                SELECT id, user_id, slug, name, brand_id, created_at, updated_at, is_imported
                 FROM projects
                 WHERE user_id = ? AND deleted_at IS NULL
                 ORDER BY updated_at DESC, id DESC
                 """,
                 (user_id,),
             ).fetchall()
-        return [ProjectRecord(**dict(row)) for row in rows]
+        return [self._project_record_from_row(row) for row in rows]
 
     def get_project(self, user_id: int, slug: str) -> Optional[ProjectRecord]:
         with self._connect() as conn:
             row = conn.execute(
                 """
-                SELECT id, user_id, slug, name, brand_id, created_at, updated_at
+                SELECT id, user_id, slug, name, brand_id, created_at, updated_at, is_imported
                 FROM projects
                 WHERE user_id = ? AND slug = ? AND deleted_at IS NULL
                 LIMIT 1
@@ -211,7 +234,7 @@ class ProjectService:
             ).fetchone()
         if row is None:
             return None
-        return ProjectRecord(**dict(row))
+        return self._project_record_from_row(row)
 
     def delete_project(self, user_id: int, slug: str) -> bool:
         project = self.get_project(user_id, slug)
@@ -1173,3 +1196,181 @@ class ProjectService:
             self.delete_reference_image(project.id, rel_path)
         self.save_tokens(user_id, slug, tokens)
         return self.references_by_asset(tokens)
+
+    def build_project_bundle_bytes(self, user_id: int, slug: str) -> bytes:
+        self.ensure_project(user_id, slug)
+        tokens_path = self.tokens_path(user_id, slug)
+        if not tokens_path.is_file():
+            raise FileNotFoundError('tokens.json не найден.')
+        tokens = self.load_tokens(user_id, slug)
+        ref_paths = self.collect_reference_paths(tokens.get('references', {}) or {})
+        project_dir = self.project_dir(user_id, slug)
+        exported_at = datetime.now(timezone.utc).isoformat()
+        manifest = {
+            'format': PROJECT_BUNDLE_FORMAT,
+            'version': PROJECT_BUNDLE_VERSION,
+            'exported_at': exported_at,
+            'project_slug': slug,
+            'reference_count': len(ref_paths),
+        }
+        buffer = io.BytesIO()
+        with zipfile.ZipFile(buffer, 'w', compression=zipfile.ZIP_DEFLATED) as archive:
+            archive.write(tokens_path, 'tokens.json')
+            archive.writestr(
+                'export.json',
+                json.dumps(manifest, ensure_ascii=False, indent=2),
+            )
+            added: set[str] = set()
+            for rel_path in ref_paths:
+                arcname = rel_path.replace('\\', '/').lstrip('/')
+                if not arcname or arcname in added:
+                    continue
+                abs_path = project_dir / rel_path
+                if not abs_path.is_file():
+                    continue
+                archive.write(abs_path, arcname)
+                added.add(arcname)
+        return buffer.getvalue()
+
+    def import_project_bundle(self, user_id: int, zip_bytes: bytes) -> tuple[ProjectRecord, list[str]]:
+        warnings: list[str] = []
+        if not zip_bytes:
+            raise ValueError('Пустой файл архива.')
+        if len(zip_bytes) > MAX_PROJECT_BUNDLE_BYTES:
+            max_mb = MAX_PROJECT_BUNDLE_BYTES // (1024 * 1024)
+            raise ValueError(f'Архив слишком большой (макс. {max_mb} МБ).')
+
+        with tempfile.TemporaryDirectory(prefix='kybby-import-') as tmp:
+            tmp_root = Path(tmp).resolve()
+            with zipfile.ZipFile(io.BytesIO(zip_bytes)) as archive:
+                has_tokens = any(
+                    member.filename.replace('\\', '/').rstrip('/') == 'tokens.json'
+                    for member in archive.infolist()
+                )
+                if not has_tokens:
+                    raise ValueError('В архиве нет tokens.json.')
+                for member in archive.infolist():
+                    if member.is_dir():
+                        continue
+                    dest = (tmp_root / member.filename).resolve()
+                    if not dest.is_relative_to(tmp_root):
+                        raise ValueError('Недопустимый путь в архиве.')
+                archive.extractall(tmp_root)
+
+            tokens_file = tmp_root / 'tokens.json'
+            if not tokens_file.is_file():
+                raise ValueError('tokens.json не найден.')
+            try:
+                imported = json.loads(tokens_file.read_text(encoding='utf-8'))
+            except json.JSONDecodeError as exc:
+                raise ValueError(f'Некорректный tokens.json: {exc}') from exc
+            if not isinstance(imported, dict):
+                raise ValueError('tokens.json должен содержать объект JSON.')
+
+            project_name = str(imported.get('name') or '').strip() or 'Новый проект'
+            project = self.create_project(user_id, project_name, is_imported=True)
+            ref_block = self._remap_import_references(
+                user_id,
+                project.slug,
+                project.id,
+                tmp_root,
+                dict(imported.get('references') or {}),
+                warnings,
+            )
+            imported['references'] = ref_block
+            imported['style_id'] = ''
+            imported['brand_id'] = project.brand_id
+            imported['name'] = project_name
+            self.save_tokens(user_id, project.slug, imported)
+            shutil.copyfile(
+                self.tokens_path(user_id, project.slug),
+                self.backup_path(user_id, project.slug),
+            )
+            updated = self.get_project(user_id, project.slug)
+            return updated or project, warnings
+
+    @staticmethod
+    def _find_reference_in_bundle(bundle_root: Path, rel_path: str) -> Path | None:
+        rel = rel_path.replace('\\', '/').lstrip('/')
+        if not rel:
+            return None
+        candidates = [
+            bundle_root / rel,
+            bundle_root / 'uploads' / 'refs' / Path(rel).name,
+            bundle_root / 'refs' / Path(rel).name,
+        ]
+        for candidate in candidates:
+            if candidate.is_file():
+                return candidate
+        return None
+
+    def _copy_reference_into_project(
+        self,
+        user_id: int,
+        slug: str,
+        project_id: int,
+        source: Path,
+        *,
+        original_name: str | None = None,
+    ) -> str:
+        ext = source.suffix.lower()
+        if ext not in ALLOWED_EXT:
+            raise ValueError(f'Недопустимый тип файла: {ext}')
+        safe_name = f'{uuid.uuid4().hex}{ext}'
+        uploads = self.uploads_dir(user_id, slug)
+        uploads.mkdir(parents=True, exist_ok=True)
+        rel = f'uploads/refs/{safe_name}'
+        shutil.copyfile(source, uploads / safe_name)
+        self.insert_reference_image(
+            project_id,
+            rel,
+            original_filename=original_name or source.name,
+        )
+        return rel
+
+    def _remap_import_references(
+        self,
+        user_id: int,
+        slug: str,
+        project_id: int,
+        bundle_root: Path,
+        references: dict[str, Any],
+        warnings: list[str],
+    ) -> dict[str, Any]:
+        ref_block = self.normalize_references_block(references)
+        new_block: dict[str, Any] = {kind: [] for kind in REFERENCE_ASSET_KINDS}
+        new_block['style_images'] = []
+
+        def import_path(rel_path: str, target_kind: str) -> None:
+            source = self._find_reference_in_bundle(bundle_root, rel_path)
+            if source is None:
+                warnings.append(f'Референс не найден в архиве: {rel_path}')
+                return
+            ext = source.suffix.lower()
+            if ext not in ALLOWED_EXT:
+                warnings.append(f'Пропущен файл с недопустимым расширением: {rel_path}')
+                return
+            try:
+                new_rel = self._copy_reference_into_project(
+                    user_id,
+                    slug,
+                    project_id,
+                    source,
+                    original_name=Path(rel_path).name,
+                )
+            except ValueError as exc:
+                warnings.append(f'{rel_path}: {exc}')
+                return
+            new_block[target_kind].append(new_rel)
+
+        for kind in REFERENCE_ASSET_KINDS:
+            for rel_path in ref_block.get(kind, []):
+                import_path(str(rel_path), kind)
+
+        legacy = ref_block.get('style_images', [])
+        has_per_type = any(new_block[kind] for kind in REFERENCE_ASSET_KINDS)
+        if isinstance(legacy, list) and legacy and not has_per_type:
+            for rel_path in legacy:
+                import_path(str(rel_path), 'logos')
+
+        return self.normalize_references_block(new_block)

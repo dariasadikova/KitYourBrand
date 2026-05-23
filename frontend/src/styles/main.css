@@ -1539,9 +1539,12 @@ img {
 }
 
 .dashboard-nav__item {
+    width: 100%;
     min-height: 60px;
     padding: 0 18px;
-    display: flex;
+    box-sizing: border-box;
+    display: grid;
+    grid-template-columns: 36px minmax(0, 1fr);
     align-items: center;
     gap: 14px;
     border-radius: 16px;
@@ -1567,7 +1570,13 @@ img {
     display: inline-flex;
     align-items: center;
     justify-content: center;
+    flex: none;
     opacity: 0.95;
+}
+
+.dashboard-nav__label {
+    min-width: 0;
+    line-height: 1.25;
 }
 
 .dashboard-nav__icon svg {
@@ -1856,6 +1865,17 @@ img {
     flex-wrap: wrap;
 }
 
+.projects-primary-actions {
+    display: flex;
+    align-items: center;
+    gap: 12px;
+    flex-wrap: wrap;
+}
+
+.projects-import-input {
+    display: none;
+}
+
 .dashboard-site-footer {
     flex: 0 0 auto;
     width: 100%;
@@ -1954,6 +1974,38 @@ img {
     border-color: rgba(255, 255, 255, 0.18);
 }
 
+.project-card__aside {
+    position: relative;
+    z-index: 3;
+    align-self: stretch;
+    display: flex;
+    flex-direction: column;
+    align-items: flex-end;
+    justify-content: space-between;
+    gap: 12px;
+    min-height: 100%;
+}
+
+.project-card__status {
+    flex: none;
+}
+
+.project-card__badge {
+    display: inline-flex;
+    align-items: center;
+    justify-content: center;
+    padding: 4px 10px;
+    border-radius: 999px;
+    border: 1px solid rgba(255, 193, 93, 0.38);
+    background: rgba(255, 193, 93, 0.14);
+    color: #ffd699;
+    font-size: 0.72rem;
+    font-weight: 700;
+    letter-spacing: 0.02em;
+    line-height: 1.2;
+    white-space: nowrap;
+}
+
 .project-card__icon {
     position: relative;
     z-index: 2;
@@ -2009,7 +2061,8 @@ img {
 .project-card__actions {
     position: relative;
     z-index: 3;
-    align-self: end;
+    flex: none;
+    margin-top: auto;
     display: inline-flex;
     align-items: center;
     gap: 8px;
@@ -2093,11 +2146,30 @@ img {
         gap: 2px;
     }
 
+    .page-dashboard .dashboard-main .projects-dashboard .project-card__aside {
+        position: absolute;
+        top: 20px;
+        right: 20px;
+        bottom: 20px;
+        align-self: auto;
+        justify-self: auto;
+        min-height: 0;
+        pointer-events: none;
+    }
+
+    .page-dashboard .dashboard-main .projects-dashboard .project-card__aside > * {
+        pointer-events: auto;
+    }
+
     .page-dashboard .dashboard-main .projects-dashboard .project-card__body {
         grid-column: 2;
         grid-row: 1;
         min-width: 0;
         padding-right: 0;
+    }
+
+    .page-dashboard .dashboard-main .projects-dashboard .project-card:has(.project-card__status) .project-card__body {
+        padding-right: 72px;
     }
 
     .page-dashboard .dashboard-main .projects-dashboard .project-card__body h2 {
@@ -2122,11 +2194,7 @@ img {
     }
 
     .page-dashboard .dashboard-main .projects-dashboard .project-card__actions {
-        grid-column: 2;
-        grid-row: 2;
-        align-self: end;
-        justify-self: end;
-        margin-top: 4px;
+        margin-top: auto;
         flex: none;
     }
 
@@ -5084,8 +5152,9 @@ body.generation-history-modal-open .dashboard-shell {
     .page-dashboard .dashboard-main .projects-dashboard .projects-grid.project-grid,
     .page-dashboard .dashboard-main .projects-dashboard .dashboard-head.projects-head,
     .page-dashboard .dashboard-main .projects-dashboard .projects-actions.dashboard-head__actions,
+    .page-dashboard .dashboard-main .projects-dashboard .projects-primary-actions,
     .page-dashboard .dashboard-main .projects-dashboard .projects-create-form.dashboard-create-form,
-    .page-dashboard .dashboard-main .projects-dashboard .projects-history-btn.dashboard-history-btn,
+    .page-dashboard .dashboard-main .projects-dashboard .projects-import-btn.dashboard-import-btn,
     .page-dashboard .dashboard-main .projects-dashboard .projects-create-btn.dashboard-create-btn {
         width: 100%;
         max-width: none;
@@ -5112,22 +5181,27 @@ body.generation-history-modal-open .dashboard-shell {
         gap: 12px;
     }
 
+    .page-dashboard .dashboard-main .projects-dashboard .projects-primary-actions {
+        display: flex;
+        flex-direction: column;
+        align-items: stretch;
+        gap: 12px;
+        width: 100%;
+    }
+
     .page-dashboard .dashboard-main .projects-dashboard .projects-create-form.dashboard-create-form {
         display: block;
         margin: 0;
+        width: 100%;
     }
 
-    .page-dashboard .dashboard-main .projects-dashboard .projects-history-btn.dashboard-history-btn,
+    .page-dashboard .dashboard-main .projects-dashboard .projects-import-btn.dashboard-import-btn,
     .page-dashboard .dashboard-main .projects-dashboard .projects-create-btn.dashboard-create-btn {
         display: flex;
         align-items: center;
         justify-content: center;
         flex: none;
-    }
-
-    .page-dashboard .dashboard-main .projects-dashboard .projects-history-btn.dashboard-history-btn {
-        white-space: normal;
-        text-align: center;
+        width: 100%;
     }
 }
 
