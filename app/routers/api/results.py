@@ -8,7 +8,7 @@ from fastapi import APIRouter, HTTPException, Query, Request, status
 from fastapi.responses import JSONResponse
 
 from app.core.paths import OUT_DIR
-from app.core.providers import ASSET_PROVIDER_SLUGS
+from app.core.providers import ASSET_PROVIDER_SLUGS, parse_generation_provider_slugs
 from app.db import project_service
 from app.services.generation_jobs import generation_jobs
 
@@ -50,6 +50,12 @@ def _palette_items_from_tokens(tokens: dict) -> list[dict]:
             continue
         items.append({'key': key, 'label': labels.get(key, key.title()), 'value': str(value).upper()})
     return items
+
+
+def _generation_provider_slugs_from_tokens(tokens: dict) -> list[str]:
+    generation = tokens.get('generation') if isinstance(tokens.get('generation'), dict) else {}
+    active = parse_generation_provider_slugs(generation)
+    return [provider for provider in ASSET_PROVIDER_SLUGS if provider in active]
 
 
 def _scan_asset_group(brand_id: str, section: str, suffixes: tuple[str, ...]) -> list[dict]:
@@ -162,6 +168,8 @@ def get_project_results(
             palette_items = []
 
     display_brand_id = (palette_tokens.get('brand_id') or brand_id).strip() or brand_id
+    generation_provider_slugs = _generation_provider_slugs_from_tokens(palette_tokens)
+    brand_description = str(palette_tokens.get('brand_description') or '').strip()
 
     return JSONResponse(
         {
@@ -170,9 +178,11 @@ def get_project_results(
                 'slug': project.slug,
                 'name': project.name,
                 'brand_id': display_brand_id,
+                'brand_description': brand_description,
             },
             'palette_items': palette_items,
             'assets': assets,
+            'generation_provider_slugs': generation_provider_slugs,
             'active_generation_job_id': (active_job or {}).get('id') if active_job else '',
             'selected_generation_job_id': selected_job_id,
         }

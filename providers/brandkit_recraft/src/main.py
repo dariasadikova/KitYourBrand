@@ -3,7 +3,7 @@ from pathlib import Path
 from dotenv import load_dotenv
 from utils.file_utils import ensure_dir, slugify, hex_to_rgb_triplet
 from utils.svg_tools import normalize_svg_palette_and_stroke
-from utils.raster_tools import quantize_to_palette
+from utils.raster_tools import quantize_to_palette, remove_flat_background_file
 from providers.recraft_official import RecraftClient
 from cli_log import info, warn, error
 
@@ -19,10 +19,16 @@ def build_prompt(base_prompt, tokens, kind):
     icon = tokens.get('icon', {})
     tex = tokens.get('texture', {})
     ill = tokens.get('illustration', {})
+    transparent = 'isolated on transparent background, no backdrop, no mockup, no scene'
     parts = [base_prompt]
-    if kind=='icon':
+    if kind == 'logo':
+        parts += [f"{ill.get('prompt_suffix','minimal')}",
+                  f"brand palette {pal.get('primary','')}/{pal.get('secondary','')}/{pal.get('accent','')}",
+                  transparent]
+    elif kind=='icon':
         parts += [f"outline, rounded corners, stroke {icon.get('strokeWidth',2)}",
-                  f"brand palette {pal.get('primary','')}/{pal.get('secondary','')}/{pal.get('accent','')}"]
+                  f"brand palette {pal.get('primary','')}/{pal.get('secondary','')}/{pal.get('accent','')}",
+                  transparent]
     elif kind=='pattern':
         parts += [f"seamless background, motifs: {', '.join(tex.get('motifs', []))}, density: {tex.get('density','medium')}",
                   f"brand palette {pal.get('primary','')}/{pal.get('secondary','')}/{pal.get('accent','')}"]
@@ -42,16 +48,22 @@ def colors_control(tokens):
 def postprocess_dirs(out_logos, out_icons, out_patterns, out_ills, tokens):
     pal = tokens.get('palette', {})
     palette = [c for c in [pal.get('primary'), pal.get('secondary'), pal.get('accent')] if c]
-    # SVG normalization
+    # SVG normalization + прозрачный фон для растра логотипов/иконок
     for folder in (out_logos, out_icons):
         for fn in os.listdir(folder):
+            full = os.path.join(folder, fn)
             if fn.lower().endswith('.svg'):
                 try:
-                    normalize_svg_palette_and_stroke(os.path.join(folder, fn),
+                    normalize_svg_palette_and_stroke(full,
                                                      target_palette=palette,
                                                      target_stroke_width=tokens.get('icon',{}).get('strokeWidth',2))
                 except Exception as e:
                     warn('postprocess: svg normalize %s: %s', fn, e)
+            elif fn.lower().endswith(('.png','.jpg','.jpeg','.webp')):
+                try:
+                    remove_flat_background_file(full)
+                except Exception as e:
+                    warn('postprocess: transparency %s: %s', fn, e)
     # Raster quantization
     for folder in (out_patterns, out_ills):
         for fn in os.listdir(folder):
@@ -115,7 +127,7 @@ def main():
     info('--- Логотипы: будет сгенерировано до %s (из %s промптов), model=%s ---', n_logos, len(logo_prompts), args.model)
     for idx, subj in enumerate(logo_prompts[:args.logos], 1):
         info('Логотип %s/%s: %s', idx, n_logos, subj)
-        prompt = build_prompt(subj + ' logo mark', tokens, 'illustration')
+        prompt = build_prompt(subj + ' logo mark', tokens, 'logo')
         url = client.generate(prompt=prompt, model=args.model,
                               style_id=style_id if args.style_base=='vector_illustration' and style_id else None,
                               style='vector_illustration' if not style_id else None,

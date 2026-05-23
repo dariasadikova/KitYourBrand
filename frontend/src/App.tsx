@@ -49,15 +49,9 @@ import type { GenerationHistoryResponse, GenerationHistoryRow } from './types/ge
 import type { Profile } from './types/profile'
 import type { ProjectSummary } from './types/project'
 import type { GenerationJob, ProjectResultsResponse, ResultAsset } from './types/results'
+import { BrandMockupsPreview } from './components/mockups/BrandMockupsPreview'
+import { GENERATION_PROVIDERS } from './constants/generationProviders'
 import type { PaletteVariant, PaletteVariantName, ProjectEditorResponse, ProjectTokens } from './types/editor'
-
-const GENERATION_PROVIDERS = [
-  { slug: 'recraft', label: 'Recraft' },
-  { slug: 'seedream', label: 'Seedream' },
-  { slug: 'flux', label: 'Flux' },
-  { slug: 'nano_banana', label: 'Nano Banana' },
-  { slug: 'gpt5_image', label: 'GPT-5 Image' },
-] as const
 
 function providerLabel(provider: string): string {
   return GENERATION_PROVIDERS.find((item) => item.slug === provider)?.label
@@ -1617,6 +1611,8 @@ function ResultsPage({ projectSlug }: { projectSlug: string }) {
           <ResultsAssetSection title="Паттерны" kind="patterns" projectSlug={projectSlug} selectedJobId={results.selected_generation_job_id || ''} assets={results.assets.patterns} gridClassName="results-media-grid results-media-grid--patterns" cardClassName="results-media-card" showDownloadButton={hasResultsContent} />
           <ResultsAssetSection title="Иллюстрации" kind="illustrations" projectSlug={projectSlug} selectedJobId={results.selected_generation_job_id || ''} assets={results.assets.illustrations} gridClassName="results-media-grid" cardClassName="results-media-card" showDownloadButton={hasResultsContent} />
 
+          {hasResultsContent ? <BrandMockupsPreview results={results} /> : null}
+
           {hasResultsContent ? (
           <section className="results-card results-card--export" data-figma-export>
             <div className="results-card__head results-card__head--stacked">
@@ -2025,6 +2021,7 @@ function ProjectEditorPage({ projectSlug, isNewProjectFlow }: { projectSlug: str
   const [editor, setEditor] = useState<ProjectEditorResponse | null>(null)
   const [tokens, setTokens] = useState<ProjectTokens>({})
   const [name, setName] = useState('')
+  const [brandDescription, setBrandDescription] = useState('')
   const [brandId, setBrandId] = useState('')
   const [styleId, setStyleId] = useState('')
   const [paletteSlots, setPaletteSlots] = useState<Record<PaletteKey, string>>(DEFAULT_PALETTE)
@@ -2096,6 +2093,7 @@ function ProjectEditorPage({ projectSlug, isNewProjectFlow }: { projectSlug: str
     function hydrateEditorState(nextTokens: ProjectTokens) {
       setTokens(nextTokens)
       setName(getTokenString(nextTokens, 'name'))
+      setBrandDescription(getTokenString(nextTokens, 'brand_description'))
       setBrandId(getTokenString(nextTokens, 'brand_id'))
       setStyleId(getTokenString(nextTokens, 'style_id'))
       const nextPaletteSlots = getPaletteSlots(nextTokens)
@@ -2185,6 +2183,7 @@ function ProjectEditorPage({ projectSlug, isNewProjectFlow }: { projectSlug: str
   }
 
   function syncAssetRefs(nextRefs: Record<AssetType, StyleRef[]>) {
+    const styleImages = ASSET_TYPES.flatMap((type) => nextRefs[type].map((ref) => ref.path))
     setAssetRefs(nextRefs)
     setTokens((current) => ({
       ...current,
@@ -2194,6 +2193,7 @@ function ProjectEditorPage({ projectSlug, isNewProjectFlow }: { projectSlug: str
           acc[type] = nextRefs[type].map((ref) => ref.path)
           return acc
         }, {} as Record<AssetType, string[]>),
+        style_images: styleImages,
       },
     }))
   }
@@ -2249,6 +2249,7 @@ function ProjectEditorPage({ projectSlug, isNewProjectFlow }: { projectSlug: str
   function buildEditorPayload(): ProjectTokens {
     const next = structuredClone(tokens) as ProjectTokens
     next.name = name.trim()
+    next.brand_description = brandDescription.trim().slice(0, 500)
     next.brand_id = brandId.trim()
     next.style_id = styleId.trim()
 
@@ -2435,6 +2436,7 @@ function ProjectEditorPage({ projectSlug, isNewProjectFlow }: { projectSlug: str
       const payload = await resetProjectEditor(projectSlug)
       setTokens(payload.tokens)
       setName(getTokenString(payload.tokens, 'name'))
+      setBrandDescription(getTokenString(payload.tokens, 'brand_description'))
       setBrandId(getTokenString(payload.tokens, 'brand_id'))
       setStyleId(getTokenString(payload.tokens, 'style_id'))
       const nextPaletteSlots = getPaletteSlots(payload.tokens)
@@ -2511,6 +2513,16 @@ function ProjectEditorPage({ projectSlug, isNewProjectFlow }: { projectSlug: str
             <label className="editor-field">
               <span>Название бренда</span>
               <input type="text" value={name} onChange={(event) => setName(event.target.value)} />
+            </label>
+            <label className="editor-field">
+              <span>О бренде</span>
+              <textarea
+                value={brandDescription}
+                rows={4}
+                maxLength={500}
+                placeholder="Кратко опишите бренд: чем занимаетесь, для кого, какое настроение и стиль. Это попадёт в превью на странице результатов."
+                onChange={(event) => setBrandDescription(event.target.value)}
+              />
             </label>
           </div>
           <div className="editor-grid">
@@ -2770,7 +2782,11 @@ function ProjectEditorPage({ projectSlug, isNewProjectFlow }: { projectSlug: str
                         type="button"
                         className="ref-delete"
                         disabled={refsLoadingType === type}
-                        onClick={() => void handleDeleteRef(type, ref.path)}
+                        onClick={(event) => {
+                          event.preventDefault()
+                          event.stopPropagation()
+                          void handleDeleteRef(type, ref.path)
+                        }}
                       >
                         Удалить
                       </button>

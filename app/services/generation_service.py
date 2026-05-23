@@ -654,6 +654,7 @@ class GenerationService:
             '--icons', str(icons_count),
             '--patterns', str(patterns_count),
             '--illustrations', str(illustrations_count),
+            '--force-png',
         ]
         stdout, stderr = self._run_provider_command(
             provider=provider,
@@ -918,6 +919,16 @@ class GenerationService:
 
         report(_PROGRESS_WEBP, 'Постобработка изображений WEBP → PNG')
         webp_converted = self.convert_webp_to_png_for_brand(brand_id, only_providers=active_providers)
+
+        if logos_count or icons_count:
+            from app.services.asset_transparency import process_brand_logos_icons_transparency
+
+            report(_PROGRESS_WEBP + 1, 'Прозрачный фон для логотипов и иконок')
+            process_brand_logos_icons_transparency(
+                self.out_root,
+                brand_id,
+                only_providers=active_providers,
+            )
 
         manifest, counts, export_path = self.build_and_save_figma_manifest(
             user_id,

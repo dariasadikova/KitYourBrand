@@ -58,27 +58,33 @@ def build_prompts(tokens: Dict, kind: str, name: str) -> Tuple[str, str]:
             pal_txt = "Palette: " + ", ".join(parts) + "."
 
     icon_cfg = tokens.get("icon") or {}
+    transparent_bg = (
+        "Isolated on fully transparent background (PNG alpha). "
+        "No solid background, no colored backdrop, no gradient fill, no floor, no shadow plate, no mockup, no scene."
+    )
+    transparent_negative = (
+        "white background, solid background, colored background, gradient background, backdrop, mockup, scene, environment"
+    )
     if kind == "logos":
         prompt = (
             f"Brand logo concept: {name}. "
             f"{style_prompt} {pal_txt} "
             f"Vector-like logo mark, centered composition, clean geometry, high contrast. "
-            f"No mockup, no watermark."
+            f"{transparent_bg} No mockup, no watermark."
         )
         if icon_cfg:
             prompt += f" Logo details: {json.dumps(icon_cfg, ensure_ascii=False)}."
-        return prompt.strip(), negative
+        return prompt.strip(), f"{negative}, {transparent_negative}".strip(", ")
     if kind == "icons":
         prompt = (
             f"Icon for UI: {name}. "
             f"{style_prompt} {pal_txt} "
             f"Minimal, clean, centered, high contrast, no text, no watermark. "
-            f"Flat vector-like look. "
-            f"Transparent background if possible."
+            f"Flat vector-like look. {transparent_bg}"
         )
         if icon_cfg:
             prompt += f" Icon details: {json.dumps(icon_cfg, ensure_ascii=False)}."
-        return prompt.strip(), negative
+        return prompt.strip(), f"{negative}, {transparent_negative}".strip(", ")
 
     if kind == "patterns":
         prompt = (

@@ -17,8 +17,10 @@ export type ProjectResultsResponse = {
     slug: string
     name: string
     brand_id: string
+    brand_description?: string
   }
   palette_items: PaletteResultItem[]
+  generation_provider_slugs?: string[]
   assets: {
     logos: ResultAsset[]
     icons: ResultAsset[]

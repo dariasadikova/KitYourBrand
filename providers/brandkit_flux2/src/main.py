@@ -60,13 +60,17 @@ def build_prompts(tokens: Dict, kind: str, name: str) -> Tuple[str, str]:
             pal_txt = "Palette: " + ", ".join(parts) + "."
 
     icon_cfg = tokens.get("icon") or {}
+    transparent_bg = (
+        "Isolated on fully transparent background (PNG alpha). "
+        "No solid background, no colored backdrop, no gradient fill, no floor, no shadow plate, no mockup, no scene."
+    )
 
     if kind == "logos":
         prompt = (
             f"Create a brand logo concept for: {name}. "
             f"{style_prompt} {pal_txt} "
             f"Centered logo mark, clean geometry, minimal details, vector-like style. "
-            f"No text, no watermark, no mockup."
+            f"{transparent_bg} No text, no watermark, no mockup."
         )
         if icon_cfg:
             prompt += f" Logo details: {json.dumps(icon_cfg, ensure_ascii=False)}."
@@ -81,7 +85,7 @@ def build_prompts(tokens: Dict, kind: str, name: str) -> Tuple[str, str]:
             f"{style_prompt} {pal_txt} "
             f"Centered composition, high contrast, clean silhouette. "
             f"Flat vector-like look, minimal details. "
-            f"Transparent background if possible. "
+            f"{transparent_bg} "
             f"No letters, no words, no watermark."
         )
         if icon_cfg:

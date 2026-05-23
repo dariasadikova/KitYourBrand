@@ -18,6 +18,7 @@ from typing import Any, Optional
 DEFAULT_TOKENS = {
     "name": "Demo Brand",
     "brand_id": "demo-brand",
+    "brand_description": "",
     "palette": {
         "primary": "#5B7C99",
         "secondary": "#E3E7ED",
@@ -886,6 +887,8 @@ class ProjectService:
     def normalize_tokens(self, data: dict) -> dict:
         data.setdefault('name', 'Brand')
         data['brand_id'] = (data.get('brand_id') or self._slugify(data.get('name', 'brand'))).strip()
+        raw_description = data.get('brand_description', '')
+        data['brand_description'] = str(raw_description).strip()[:500] if raw_description is not None else ''
         data.setdefault('style_id', '')
         data.setdefault('palette', {})
         data['palette'].setdefault('primary', '#5B7C99')
@@ -935,7 +938,8 @@ class ProjectService:
         return ordered
 
     def normalize_references_block(self, references: dict[str, Any]) -> dict[str, Any]:
-        refs = dict(references or {})
+        refs_in = dict(references or {})
+        refs = dict(refs_in)
         for kind in REFERENCE_ASSET_KINDS:
             raw = refs.get(kind, [])
             if not isinstance(raw, list):
@@ -949,7 +953,8 @@ class ProjectService:
             else []
         )
         has_per_type = any(refs[kind] for kind in REFERENCE_ASSET_KINDS)
-        if legacy_list and not has_per_type:
+        has_explicit_per_type_keys = any(kind in refs_in for kind in REFERENCE_ASSET_KINDS)
+        if legacy_list and not has_per_type and not has_explicit_per_type_keys:
             refs['logos'] = list(dict.fromkeys(legacy_list))
 
         refs['style_images'] = self.collect_reference_paths(refs)
@@ -1186,6 +1191,7 @@ class ProjectService:
             ref_block.setdefault(kind, [])
             if asset_type is None or asset_type == kind:
                 ref_block[kind] = [item for item in ref_block.get(kind, []) if item != rel_path]
+        ref_block['style_images'] = []
         ref_block = self.normalize_references_block(ref_block)
         tokens['references'] = ref_block
         still_used = rel_path in self.collect_reference_paths(ref_block)

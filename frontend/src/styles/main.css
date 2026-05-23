@@ -4344,6 +4344,446 @@ body.generation-history-modal-open .dashboard-shell {
     flex-direction: column;
 }
 
+.results-card--mockups .brand-mockups-lead {
+    margin: 0;
+    max-width: 640px;
+    font-size: 0.95rem;
+    line-height: 1.5;
+    color: rgba(248, 250, 252, 0.62);
+}
+
+.brand-mockups-tabs {
+    display: flex;
+    flex-wrap: wrap;
+    gap: 10px;
+    margin: 18px 0 16px;
+}
+
+.brand-mockups-provider-tabs {
+    display: flex;
+    flex-wrap: wrap;
+    gap: 10px;
+    margin: 18px 0 0;
+}
+
+.brand-mockups-provider-tab {
+    border: 1px solid rgba(96, 165, 250, 0.28);
+    background: rgba(96, 165, 250, 0.08);
+    color: rgba(191, 219, 254, 0.92);
+    border-radius: 999px;
+    padding: 9px 15px;
+    font-size: 0.88rem;
+    font-weight: 700;
+    cursor: pointer;
+    transition: background 0.18s ease, color 0.18s ease, border-color 0.18s ease;
+}
+
+.brand-mockups-provider-tab:hover {
+    border-color: rgba(96, 165, 250, 0.45);
+    color: #eff6ff;
+}
+
+.brand-mockups-provider-tab--active {
+    background: rgba(96, 165, 250, 0.22);
+    color: #ffffff;
+    border-color: rgba(147, 197, 253, 0.72);
+}
+
+.brand-mockups-tab {
+    border: 1px solid rgba(255, 255, 255, 0.14);
+    background: rgba(255, 255, 255, 0.04);
+    color: rgba(248, 250, 252, 0.78);
+    border-radius: 999px;
+    padding: 10px 16px;
+    font-size: 0.9rem;
+    font-weight: 600;
+    cursor: pointer;
+    transition: background 0.18s ease, color 0.18s ease, border-color 0.18s ease;
+}
+
+.brand-mockups-tab:hover {
+    border-color: rgba(255, 255, 255, 0.24);
+    color: #f8fafc;
+}
+
+.brand-mockups-tab--active {
+    background: #f8fafc;
+    color: #111827;
+    border-color: #f8fafc;
+}
+
+.brand-mockups-constructor {
+    margin: 0 0 16px;
+    padding: 16px;
+    border-radius: 16px;
+    border: 1px solid rgba(255, 255, 255, 0.1);
+    background: rgba(255, 255, 255, 0.03);
+}
+
+.brand-mockups-constructor__lead {
+    margin: 0 0 14px;
+    font-size: 0.88rem;
+    line-height: 1.45;
+    color: rgba(248, 250, 252, 0.62);
+}
+
+.brand-mockups-constructor__grid {
+    display: grid;
+    gap: 14px;
+}
+
+.brand-mockups-constructor__row {
+    display: grid;
+    gap: 10px;
+}
+
+.brand-mockups-constructor__label {
+    font-size: 0.78rem;
+    font-weight: 700;
+    letter-spacing: 0.04em;
+    text-transform: uppercase;
+    color: rgba(248, 250, 252, 0.55);
+}
+
+.brand-mockups-constructor__empty {
+    font-size: 0.86rem;
+    color: rgba(248, 250, 252, 0.42);
+}
+
+.brand-mockups-constructor__options {
+    display: flex;
+    gap: 10px;
+    overflow-x: auto;
+    padding-bottom: 4px;
+}
+
+.brand-mockups-constructor__option {
+    flex: 0 0 auto;
+    width: 92px;
+    border: 1px solid rgba(255, 255, 255, 0.12);
+    border-radius: 12px;
+    background: rgba(0, 0, 0, 0.22);
+    padding: 6px;
+    cursor: pointer;
+    text-align: left;
+    transition: border-color 0.18s ease, box-shadow 0.18s ease, transform 0.18s ease;
+}
+
+.brand-mockups-constructor__option:hover {
+    border-color: rgba(255, 255, 255, 0.28);
+    transform: translateY(-1px);
+}
+
+.brand-mockups-constructor__option--active {
+    border-color: rgba(96, 165, 250, 0.85);
+    box-shadow: 0 0 0 1px rgba(96, 165, 250, 0.35);
+}
+
+.brand-mockups-constructor__option img {
+    display: block;
+    width: 100%;
+    height: 56px;
+    object-fit: contain;
+    border-radius: 8px;
+    background: rgba(255, 255, 255, 0.92);
+}
+
+.brand-mockups-constructor__option span {
+    display: block;
+    margin-top: 6px;
+    font-size: 0.68rem;
+    line-height: 1.25;
+    color: rgba(248, 250, 252, 0.72);
+    overflow: hidden;
+    text-overflow: ellipsis;
+    white-space: nowrap;
+}
+
+@media (min-width: 900px) {
+    .brand-mockups-constructor__grid {
+        grid-template-columns: repeat(2, minmax(0, 1fr));
+        gap: 16px 20px;
+    }
+}
+
+.brand-mockups-stage {
+    overflow: auto;
+    border-radius: 20px;
+    background: rgba(0, 0, 0, 0.22);
+    border: 1px solid rgba(255, 255, 255, 0.08);
+    padding: 20px;
+}
+
+.brand-mockup {
+    --brand-primary: #5b7c99;
+    --brand-secondary: #e3e7ed;
+    --brand-accent: #1e2a33;
+    --brand-tertiary: #8fa3b8;
+    --brand-neutral: #111827;
+    color: var(--brand-neutral);
+}
+
+.brand-mockup-eyebrow {
+    margin: 0 0 10px;
+    color: var(--brand-primary);
+    font-size: 0.78rem;
+    font-weight: 700;
+    letter-spacing: 0.08em;
+    text-transform: uppercase;
+}
+
+.brand-mockup--landing {
+    min-width: min(100%, 760px);
+    min-height: 380px;
+    margin: 0 auto;
+    border-radius: 22px;
+    padding: 28px;
+    background:
+        radial-gradient(circle at top right, color-mix(in srgb, var(--brand-secondary) 70%, white), transparent 42%),
+        linear-gradient(135deg, #ffffff, #f8fafc);
+    box-shadow: 0 18px 48px rgba(15, 23, 42, 0.12);
+}
+
+.brand-mockup-landing__nav {
+    display: flex;
+    align-items: center;
+    gap: 18px;
+    font-size: 0.92rem;
+    color: color-mix(in srgb, var(--brand-neutral) 72%, white);
+}
+
+.brand-mockup-landing__logo {
+    margin-right: auto;
+    max-width: 120px;
+    max-height: 44px;
+    width: auto;
+    height: auto;
+    object-fit: contain;
+    font-size: 1.15rem;
+    color: var(--brand-neutral);
+}
+
+.brand-mockup-landing__hero {
+    display: grid;
+    grid-template-columns: minmax(0, 1fr) minmax(220px, 280px);
+    gap: 28px;
+    align-items: center;
+    margin-top: 48px;
+}
+
+.brand-mockup-landing__copy h3 {
+    margin: 0;
+    max-width: 520px;
+    font-size: clamp(1.8rem, 3vw, 2.5rem);
+    line-height: 1.08;
+}
+
+.brand-mockup-landing__copy p {
+    max-width: 460px;
+    margin: 14px 0 0;
+    color: color-mix(in srgb, var(--brand-neutral) 70%, white);
+    line-height: 1.55;
+}
+
+.brand-mockup-copy--loading {
+    opacity: 0.55;
+    transition: opacity 0.25s ease;
+}
+
+.brand-mockup-landing__copy button {
+    margin-top: 18px;
+    border: 0;
+    border-radius: 999px;
+    padding: 12px 22px;
+    background: var(--brand-primary);
+    color: #ffffff;
+    font-weight: 700;
+    cursor: default;
+}
+
+.brand-mockup-landing__visual {
+    min-height: 240px;
+    border-radius: 28px;
+    background: color-mix(in srgb, var(--brand-accent) 18%, white);
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    overflow: hidden;
+}
+
+.brand-mockup-landing__visual img {
+    width: 100%;
+    height: 100%;
+    object-fit: cover;
+}
+
+.brand-mockup-landing__icon-fallback {
+    width: 72px !important;
+    height: 72px !important;
+    object-fit: contain !important;
+}
+
+.brand-mockup--business-card {
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    min-height: 320px;
+    padding: 12px;
+}
+
+.brand-mockup-card__sheet {
+    position: relative;
+    width: min(100%, 420px);
+    aspect-ratio: 1.75 / 1;
+    border-radius: 18px;
+    padding: 28px 30px;
+    background: #ffffff;
+    box-shadow: 0 24px 60px rgba(15, 23, 42, 0.18);
+    overflow: hidden;
+}
+
+.brand-mockup-card__accent {
+    position: absolute;
+    left: 0;
+    top: 0;
+    bottom: 0;
+    width: 8px;
+    background: var(--brand-primary);
+}
+
+.brand-mockup-card__logo {
+    display: block;
+    max-width: 120px;
+    max-height: 48px;
+    object-fit: contain;
+    margin-bottom: 18px;
+    font-size: 1.2rem;
+    color: var(--brand-neutral);
+}
+
+.brand-mockup-card__name {
+    margin: 0;
+    font-size: 1.35rem;
+    font-weight: 700;
+}
+
+.brand-mockup-card__role {
+    margin: 6px 0 0;
+    color: var(--brand-primary);
+    font-weight: 600;
+}
+
+.brand-mockup-card__contacts {
+    display: flex;
+    flex-direction: column;
+    gap: 4px;
+    margin-top: 22px;
+    font-size: 0.88rem;
+    color: color-mix(in srgb, var(--brand-neutral) 68%, white);
+}
+
+.brand-mockup--instagram {
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    min-height: 420px;
+    padding: 8px;
+}
+
+.brand-mockup-instagram__phone {
+    width: min(100%, 360px);
+    border-radius: 24px;
+    padding: 18px 18px 20px;
+    background: #ffffff;
+    box-shadow: 0 24px 60px rgba(15, 23, 42, 0.16);
+}
+
+.brand-mockup-instagram__top {
+    display: flex;
+    align-items: center;
+    gap: 10px;
+    margin-bottom: 12px;
+    font-size: 0.92rem;
+    font-weight: 700;
+}
+
+.brand-mockup-instagram__avatar {
+    width: 34px;
+    height: 34px;
+    border-radius: 999px;
+    object-fit: cover;
+    background: var(--brand-secondary);
+    font-size: 0.72rem;
+    display: inline-flex;
+    align-items: center;
+    justify-content: center;
+    overflow: hidden;
+}
+
+.brand-mockup-instagram__media {
+    aspect-ratio: 1 / 1;
+    border-radius: 16px;
+    background: color-mix(in srgb, var(--brand-secondary) 55%, white);
+    overflow: hidden;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+}
+
+.brand-mockup-instagram__media img {
+    width: 100%;
+    height: 100%;
+    object-fit: cover;
+}
+
+.brand-mockup-instagram__icon-fallback {
+    width: 84px !important;
+    height: 84px !important;
+    object-fit: contain !important;
+}
+
+.brand-mockup-instagram__actions {
+    display: flex;
+    gap: 14px;
+    margin: 12px 0 8px;
+    color: var(--brand-neutral);
+    font-size: 1rem;
+}
+
+.brand-mockup-instagram__caption {
+    margin: 0;
+    font-size: 0.88rem;
+    line-height: 1.45;
+    color: color-mix(in srgb, var(--brand-neutral) 82%, white);
+}
+
+.brand-mockup-instagram__caption strong {
+    margin-right: 6px;
+}
+
+@media (max-width: 760px) {
+    .brand-mockups-stage {
+        padding: 14px;
+    }
+
+    .brand-mockup--landing {
+        min-width: 560px;
+        padding: 22px;
+    }
+
+    .brand-mockup-landing__hero {
+        grid-template-columns: minmax(0, 1fr) 200px;
+        gap: 18px;
+        margin-top: 32px;
+    }
+}
+
+@media (max-width: 680px) {
+    .brand-mockup-landing__nav span:not(:first-child) {
+        display: none;
+    }
+}
+
 .results-card--export {
     gap: 14px;
 }

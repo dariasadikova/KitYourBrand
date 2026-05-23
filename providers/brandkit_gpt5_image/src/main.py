@@ -70,11 +70,15 @@ def style_text(tokens: Dict) -> Tuple[str, str]:
 def build_logo_prompt(tokens: Dict, name: str) -> Tuple[str, str]:
     style_prompt, negative = style_text(tokens)
     icon_cfg = tokens.get("icon") or {}
+    transparent_bg = (
+        "Isolated on fully transparent background (PNG alpha). "
+        "No solid background, no colored backdrop, no gradient fill, no floor, no shadow plate, no mockup, no scene."
+    )
     prompt = (
         f"Create a brand logo concept for: {name}. "
         f"{style_prompt} {palette_text(tokens)} "
         f"Centered logo mark, clean geometry, minimal details, vector-like style. "
-        f"No text, no watermark, no mockup."
+        f"{transparent_bg} No text, no watermark, no mockup."
     )
     if icon_cfg:
         prompt += f" Logo details: {json.dumps(icon_cfg, ensure_ascii=False)}."
@@ -84,11 +88,15 @@ def build_logo_prompt(tokens: Dict, name: str) -> Tuple[str, str]:
 def build_icon_prompt(tokens: Dict, name: str) -> Tuple[str, str]:
     style_prompt, negative = style_text(tokens)
     icon_cfg = tokens.get("icon") or {}
+    transparent_bg = (
+        "Isolated on fully transparent background (PNG alpha). "
+        "No solid background, no colored backdrop, no gradient fill, no floor, no shadow plate, no mockup, no scene."
+    )
     prompt = (
         f"Design a simple UI icon for: {name}. "
         f"{style_prompt} {palette_text(tokens)} "
         f"Centered composition, high contrast, clean silhouette. "
-        f"Flat vector-like look, minimal details. Transparent background if possible. "
+        f"Flat vector-like look, minimal details. {transparent_bg} "
         f"No letters, no words, no watermark."
     )
     if icon_cfg:
