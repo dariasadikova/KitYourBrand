@@ -11,7 +11,7 @@ import uuid
 import zipfile
 from dataclasses import dataclass
 from datetime import datetime, timezone
-from pathlib import Path
+from pathlib import Path, PurePosixPath
 from typing import Any, Optional
 
 from app.core.demo_mode import GUEST_USER_ID
@@ -673,6 +673,53 @@ class ProjectService:
                 (user_id, project_slug),
             ).fetchone()
         return row is not None
+
+    def get_latest_successful_generation_job(self, user_id: int, project_slug: str) -> dict[str, Any] | None:
+        with self._connect() as conn:
+            row = conn.execute(
+                """
+                SELECT job_id, tokens_snapshot, started_at, finished_at
+                FROM generation_jobs_history
+                WHERE user_id = ? AND project_slug = ? AND status = 'success'
+                ORDER BY COALESCE(finished_at, started_at) DESC, started_at DESC
+                LIMIT 1
+                """,
+                (user_id, project_slug),
+            ).fetchone()
+        return dict(row) if row else None
+
+    def asset_storage_path_exists(self, user_id: int, project_slug: str, storage_path: str) -> bool:
+        rel = str(storage_path or '').replace('\\', '/').strip()
+        if not rel:
+            return False
+        if rel.startswith('generation_results/'):
+            path = (self.project_dir(user_id, project_slug) / PurePosixPath(rel)).resolve()
+            root = (self.project_dir(user_id, project_slug) / 'generation_results').resolve()
+            try:
+                path.relative_to(root)
+            except ValueError:
+                return False
+            return path.is_file()
+        if rel.startswith('out/'):
+            from app.core.paths import OUT_DIR
+
+            parts = PurePosixPath(rel).parts
+            if len(parts) < 5:
+                return False
+            path = (OUT_DIR / parts[1] / parts[2] / parts[3] / parts[-1]).resolve()
+            base = (OUT_DIR / parts[1] / parts[2] / parts[3]).resolve()
+            try:
+                path.relative_to(base)
+            except ValueError:
+                return False
+            return path.is_file()
+        path = (self.project_dir(user_id, project_slug) / rel).resolve()
+        root = self.project_dir(user_id, project_slug).resolve()
+        try:
+            path.relative_to(root)
+        except ValueError:
+            return False
+        return path.is_file()
 
     def set_generation_job_running(self, job_id: str) -> None:
         with self._connect() as conn:

@@ -50,8 +50,7 @@ import type { Profile } from './types/profile'
 import type { ProjectSummary } from './types/project'
 import type { GenerationJob, ProjectResultsResponse, ResultAsset } from './types/results'
 import { BrandMockupsPreview } from './components/mockups/BrandMockupsPreview'
-import { DemoLockedAction } from './components/demo/DemoModeBanner'
-import { DEMO_ASSET_COUNTS, DEMO_PALETTE_KEYS, DEMO_PROVIDER_LABEL } from './constants/demoMode'
+import { DEMO_ASSET_COUNTS, DEMO_MAX_REFERENCES, DEMO_PALETTE_KEYS, DEMO_PROVIDER_LABEL } from './constants/demoMode'
 import { startDemoProject } from './services/demoApi'
 import { GENERATION_PROVIDERS } from './constants/generationProviders'
 import type { PaletteVariant, PaletteVariantName, ProjectEditorResponse, ProjectTokens } from './types/editor'
@@ -134,7 +133,20 @@ function DemoEditorRoute({ session }: { session: AuthMeResponse | null }) {
   }
 
   if (session.demo_project_slug && session.demo_project_slug !== projectSlug) {
-    return <Navigate to={`/demo/projects/${session.demo_project_slug}`} replace />
+    return (
+      <Navigate
+        to={
+          session.demo_generation_used
+            ? `/demo/projects/${session.demo_project_slug}/results`
+            : `/demo/projects/${session.demo_project_slug}`
+        }
+        replace
+      />
+    )
+  }
+
+  if (session.demo_generation_used) {
+    return <Navigate to={`/demo/projects/${projectSlug}/results`} replace />
   }
 
   return (
@@ -161,7 +173,7 @@ function DemoResultsRoute({ session }: { session: AuthMeResponse | null }) {
     <div className="page-shell page-demo">
       <DemoTopBar />
       <DemoShell mainClassName="results-main">
-        <ResultsPage projectSlug={projectSlug} isDemoMode demoEditorPath={`/demo/projects/${projectSlug}`} />
+        <ResultsPage projectSlug={projectSlug} isDemoMode />
       </DemoShell>
     </div>
   )
@@ -490,10 +502,6 @@ function LandingBackdrop({
   async function handleTryNow() {
     if (session?.authenticated) {
       navigate('/dashboard')
-      return
-    }
-    if (session?.demo_mode && session.demo_project_slug) {
-      navigate(`/demo/projects/${session.demo_project_slug}`)
       return
     }
 
@@ -1593,11 +1601,9 @@ function ResultsFigmaImportGuide({ brandId }: { brandId: string }) {
 function ResultsPage({
   projectSlug,
   isDemoMode = false,
-  demoEditorPath,
 }: {
   projectSlug: string
   isDemoMode?: boolean
-  demoEditorPath?: string
 }) {
   const [searchParams] = useSearchParams()
   const selectedJobId = searchParams.get('job')?.trim() || ''
@@ -1649,7 +1655,11 @@ function ResultsPage({
         if (!payload?.ok || !payload.job) break
         setJob(payload.job)
         const terminal = ['completed', 'failed', 'cancelled', 'completed_with_errors'].includes(String(payload.job.status || ''))
-        if (terminal) break
+        if (terminal) {
+          const refreshed = await getProjectResults(projectSlug, selectedJobId).catch(() => null)
+          if (alive && refreshed) setResults(refreshed)
+          break
+        }
         await new Promise((resolve) => setTimeout(resolve, 1000))
       }
     }
@@ -1775,7 +1785,6 @@ function ResultsPage({
               <p>Зарегистрируйтесь, чтобы сохранить проект, скачать полный бренд-комплект и экспортировать ассеты в Figma.</p>
               <div className="demo-register-card__actions">
                 <Link to="/register" className="btn btn-primary">Зарегистрироваться и продолжить</Link>
-                {demoEditorPath ? <Link to={demoEditorPath} className="btn btn-outline">Вернуться в демо-редактор</Link> : null}
               </div>
             </section>
           ) : null}
@@ -1808,20 +1817,6 @@ function ResultsPage({
             </div>
             <p className={`results-export__status${exportTone ? ` results-export__status--${exportTone}` : ''}`} aria-live="polite">{exportStatus}</p>
           </section>
-          ) : null}
-
-          {hasResultsContent && isDemoMode ? (
-            <section className="results-card results-card--export">
-              <div className="results-card__head results-card__head--stacked">
-                <div className="results-card__title">
-                  <h2>Экспорт и скачивание</h2>
-                </div>
-              </div>
-              <DemoLockedAction
-                label="Экспорт в Figma"
-                message="Экспорт в Figma и скачивание ZIP доступны после регистрации."
-              />
-            </section>
           ) : null}
         </div>
       </section>
@@ -2254,6 +2249,8 @@ function ProjectEditorPage({
   const [error, setError] = useState('')
   const demoResultsBase = isDemoMode ? `/demo/projects/${projectSlug}/results` : `/projects/${projectSlug}/results`
   const demoPaletteKeySet = new Set<string>(DEMO_PALETTE_KEYS)
+  const demoTotalRefs = ASSET_TYPES.reduce((total, assetType) => total + assetRefs[assetType].length, 0)
+  const demoRefLimitReached = isDemoMode && demoTotalRefs >= DEMO_MAX_REFERENCES
 
   useEffect(() => {
     const key = `kybby_import_warnings:${projectSlug}`
@@ -2997,13 +2994,15 @@ function ProjectEditorPage({
                     ? 'В демо можно загрузить 1 референс на весь проект (до 2 МБ).'
                     : 'Изображения, которые задают желаемую эстетику для этого типа ассетов.'}
                 </p>
-                <label className="btn btn-primary btn-upload btn-upload--compact asset-panel-refs__upload">
+                <label
+                  className={`btn btn-primary btn-upload btn-upload--compact asset-panel-refs__upload${demoRefLimitReached ? ' asset-panel-refs__upload--disabled' : ''}`}
+                >
                   <input
                     type="file"
                     multiple={!isDemoMode}
                     accept=".png,.jpg,.jpeg,.webp,.gif,.bmp"
                     hidden
-                    disabled={refsLoadingType === type}
+                    disabled={refsLoadingType === type || demoRefLimitReached}
                     onChange={(event) => {
                       void handleUploadRefs(type, event.target.files)
                       event.currentTarget.value = ''

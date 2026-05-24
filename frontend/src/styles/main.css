@@ -2563,6 +2563,12 @@ img {
     padding-inline: 18px;
     border-radius: 10px;
 }
+
+.asset-panel-refs__upload--disabled {
+    opacity: 0.45;
+    cursor: not-allowed;
+    pointer-events: none;
+}
 .refs-grid--compact {
     grid-template-columns: repeat(auto-fill, minmax(120px, 1fr));
     gap: 10px;

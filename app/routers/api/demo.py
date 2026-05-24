@@ -47,14 +47,22 @@ def start_demo(request: Request) -> JSONResponse:
 
     request.session['demo_project_slug'] = project.slug
 
+    generation_used = demo_generation_used(request)
+    if generation_used:
+        redirect_url = f'/app/demo/projects/{project.slug}/results'
+    elif existing:
+        redirect_url = f'/app/demo/projects/{project.slug}'
+    else:
+        redirect_url = f'/app/demo/projects/{project.slug}?new=1'
+
     return JSONResponse(
         {
             'ok': True,
             'project': _demo_project_payload(project),
-            'redirect_url': f'/app/demo/projects/{project.slug}?new=1',
+            'redirect_url': redirect_url,
             'demo_mode': True,
             'demo_limits': DEMO_LIMITS_PAYLOAD,
-            'demo_generation_used': demo_generation_used(request),
+            'demo_generation_used': generation_used,
         }
     )
 

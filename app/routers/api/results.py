@@ -120,6 +120,14 @@ def _assets_from_generation_rows(project_slug: str, brand_id: str, rows: list[di
     return grouped
 
 
+def _filter_existing_asset_rows(user_id: int, project_slug: str, rows: list[dict]) -> list[dict]:
+    return [
+        row
+        for row in rows
+        if project_service.asset_storage_path_exists(user_id, project_slug, str(row.get('storage_path') or ''))
+    ]
+
+
 @router.get('/{project_slug}/results')
 def get_project_results(
     request: Request,
@@ -151,19 +159,41 @@ def get_project_results(
         )
         if past_tokens:
             palette_tokens = past_tokens
-        asset_rows = project_service.list_assets_for_generation(user_id, project_slug, selected_job_id)
+        asset_rows = _filter_existing_asset_rows(
+            user_id,
+            project_slug,
+            project_service.list_assets_for_generation(user_id, project_slug, selected_job_id),
+        )
         assets = _assets_from_generation_rows(project_slug, brand_id, asset_rows)
         palette_items = _palette_items_from_tokens(palette_tokens)
     else:
         has_finished_generation = project_service.project_has_successful_generation(user_id, project_slug)
         if has_finished_generation:
-            assets = {
-                'logos': _scan_asset_group(brand_id, 'logos', ('.png', '.svg', '.jpg', '.jpeg')),
-                'icons': _scan_asset_group(brand_id, 'icons', ('.png', '.svg', '.jpg', '.jpeg')),
-                'patterns': _scan_asset_group(brand_id, 'patterns', ('.png', '.svg', '.jpg', '.jpeg')),
-                'illustrations': _scan_asset_group(brand_id, 'illustrations', ('.png', '.svg', '.jpg', '.jpeg')),
-            }
-            palette_items = _palette_items_from_tokens(tokens)
+            latest_job = project_service.get_latest_successful_generation_job(user_id, project_slug)
+            if latest_job:
+                latest_job_id = str(latest_job.get('job_id') or '')
+                past_tokens = project_service.tokens_at_generation_start(
+                    user_id,
+                    project_slug,
+                    tokens_snapshot_json=latest_job.get('tokens_snapshot'),
+                    started_at=latest_job.get('started_at'),
+                )
+                if past_tokens:
+                    palette_tokens = past_tokens
+                asset_rows = _filter_existing_asset_rows(
+                    user_id,
+                    project_slug,
+                    project_service.list_assets_for_generation(user_id, project_slug, latest_job_id),
+                )
+                assets = _assets_from_generation_rows(project_slug, brand_id, asset_rows)
+            else:
+                assets = {
+                    'logos': _scan_asset_group(brand_id, 'logos', ('.png', '.svg', '.jpg', '.jpeg')),
+                    'icons': _scan_asset_group(brand_id, 'icons', ('.png', '.svg', '.jpg', '.jpeg')),
+                    'patterns': _scan_asset_group(brand_id, 'patterns', ('.png', '.svg', '.jpg', '.jpeg')),
+                    'illustrations': _scan_asset_group(brand_id, 'illustrations', ('.png', '.svg', '.jpg', '.jpeg')),
+                }
+            palette_items = _palette_items_from_tokens(palette_tokens)
         else:
             assets = {'logos': [], 'icons': [], 'patterns': [], 'illustrations': []}
             palette_items = []
