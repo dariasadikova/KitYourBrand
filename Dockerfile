@@ -32,9 +32,10 @@ RUN apt-get update \
         gosu \
     && rm -rf /var/lib/apt/lists/*
 
+COPY requirements-prod.txt ./requirements-prod.txt
 COPY requirements.txt ./
 RUN python -m pip install --upgrade pip \
-    && pip install -r requirements.txt
+    && pip install -r requirements-prod.txt
 
 COPY app ./app
 COPY alembic ./alembic
@@ -50,7 +51,9 @@ RUN set -eux; \
     for req in \
         providers/brandkit_recraft/requirements.txt \
         providers/brandkit_seedream/requirements.txt \
-        providers/brandkit_flux2/requirements.txt; do \
+        providers/brandkit_flux2/requirements.txt \
+        providers/brandkit_nano_banana/requirements.txt \
+        providers/brandkit_gpt5_image/requirements.txt; do \
         if [ -f "$req" ]; then pip install -r "$req"; fi; \
     done; \
     mkdir -p /data/data /data/out; \
@@ -61,4 +64,4 @@ RUN set -eux; \
 EXPOSE 8000
 
 ENTRYPOINT ["docker-entrypoint.sh"]
-CMD ["sh", "-c", "uvicorn app.main:app --host ${APP_HOST:-0.0.0.0} --port ${APP_PORT:-8000}"]
+CMD ["sh", "-c", "uvicorn app.main:app --host ${APP_HOST:-0.0.0.0} --port ${APP_PORT:-8000} --proxy-headers --forwarded-allow-ips='*'"]

@@ -14,6 +14,8 @@ from datetime import datetime, timezone
 from pathlib import Path
 from typing import Any, Optional
 
+from app.core.demo_mode import GUEST_USER_ID
+
 
 DEFAULT_TOKENS = {
     "name": "Demo Brand",
@@ -74,6 +76,7 @@ class ProjectRecord:
     created_at: str
     updated_at: str
     is_imported: bool = False
+    guest_session_id: str | None = None
 
 
 class ProjectService:
@@ -118,6 +121,8 @@ class ProjectService:
                 conn.execute('ALTER TABLE projects ADD COLUMN deleted_at TEXT')
             if cols and 'is_imported' not in cols:
                 conn.execute('ALTER TABLE projects ADD COLUMN is_imported INTEGER NOT NULL DEFAULT 0')
+            if cols and 'guest_session_id' not in cols:
+                conn.execute('ALTER TABLE projects ADD COLUMN guest_session_id TEXT')
             hist_cols = self._table_columns(conn, 'generation_jobs_history')
             if hist_cols:
                 if 'error_message' not in hist_cols:
@@ -136,11 +141,6 @@ class ProjectService:
 
     def user_projects_dir(self, user_id: int) -> Path:
         path = self.storage_dir / str(user_id)
-        path.mkdir(parents=True, exist_ok=True)
-        return path
-
-    def project_dir(self, user_id: int, slug: str) -> Path:
-        path = self.user_projects_dir(user_id) / slug
         path.mkdir(parents=True, exist_ok=True)
         return path
 
@@ -170,7 +170,30 @@ class ProjectService:
     def _project_record_from_row(self, row: sqlite3.Row) -> ProjectRecord:
         data = dict(row)
         data['is_imported'] = bool(int(data.get('is_imported') or 0))
-        return ProjectRecord(**data)
+        guest_session_id = data.get('guest_session_id')
+        data['guest_session_id'] = str(guest_session_id) if guest_session_id else None
+        return ProjectRecord(**{key: data[key] for key in ProjectRecord.__dataclass_fields__})
+
+    def _guest_session_id_for_project(self, user_id: int, slug: str) -> str | None:
+        if user_id != GUEST_USER_ID:
+            return None
+        with self._connect() as conn:
+            row = conn.execute(
+                'SELECT guest_session_id FROM projects WHERE user_id = ? AND slug = ? LIMIT 1',
+                (user_id, slug),
+            ).fetchone()
+        if row and row['guest_session_id']:
+            return str(row['guest_session_id'])
+        return None
+
+    def project_dir(self, user_id: int, slug: str) -> Path:
+        guest_id = self._guest_session_id_for_project(user_id, slug)
+        if guest_id:
+            path = self.storage_dir / 'guest' / guest_id / slug
+        else:
+            path = self.storage_dir / str(user_id) / slug
+        path.mkdir(parents=True, exist_ok=True)
+        return path
 
     def create_project(self, user_id: int, name: str, *, is_imported: bool = False) -> ProjectRecord:
         project_name = (name or '').strip() or 'Новый проект'
@@ -208,6 +231,124 @@ class ProjectService:
             now,
             is_imported=is_imported,
         )
+
+    def create_demo_project(self, guest_session_id: str, name: str = 'Демо-проект') -> ProjectRecord:
+        project_name = (name or '').strip() or 'Демо-проект'
+        base_slug = self._slugify(project_name) or 'demo'
+        rand = uuid.uuid4().hex
+        slug = f'demo-{base_slug}-{rand[:6]}'
+        now = datetime.now(timezone.utc).isoformat()
+        tokens = self.make_default_tokens(project_name)
+        tokens['brand_id'] = f'demo-{base_slug}-{rand[:10]}'
+        tokens['name'] = project_name
+
+        with self._connect() as conn:
+            cur = conn.execute(
+                """
+                INSERT INTO projects (
+                    user_id, slug, name, brand_id, created_at, updated_at, is_imported, guest_session_id
+                )
+                VALUES (?, ?, ?, ?, ?, ?, ?, ?)
+                """,
+                (GUEST_USER_ID, slug, project_name, tokens['brand_id'], now, now, 0, guest_session_id),
+            )
+            project_id = int(cur.lastrowid)
+            conn.commit()
+
+        self.save_tokens(GUEST_USER_ID, slug, tokens)
+        shutil.copyfile(self.tokens_path(GUEST_USER_ID, slug), self.backup_path(GUEST_USER_ID, slug))
+        return ProjectRecord(
+            project_id,
+            GUEST_USER_ID,
+            slug,
+            project_name,
+            tokens['brand_id'],
+            now,
+            now,
+            is_imported=False,
+            guest_session_id=guest_session_id,
+        )
+
+    def get_guest_project(self, guest_session_id: str, slug: str) -> Optional[ProjectRecord]:
+        with self._connect() as conn:
+            row = conn.execute(
+                """
+                SELECT id, user_id, slug, name, brand_id, created_at, updated_at, is_imported, guest_session_id
+                FROM projects
+                WHERE user_id = ? AND guest_session_id = ? AND slug = ? AND deleted_at IS NULL
+                LIMIT 1
+                """,
+                (GUEST_USER_ID, guest_session_id, slug),
+            ).fetchone()
+        if row is None:
+            return None
+        return self._project_record_from_row(row)
+
+    def get_guest_project_by_session(self, guest_session_id: str) -> Optional[ProjectRecord]:
+        with self._connect() as conn:
+            row = conn.execute(
+                """
+                SELECT id, user_id, slug, name, brand_id, created_at, updated_at, is_imported, guest_session_id
+                FROM projects
+                WHERE user_id = ? AND guest_session_id = ? AND deleted_at IS NULL
+                ORDER BY updated_at DESC, id DESC
+                LIMIT 1
+                """,
+                (GUEST_USER_ID, guest_session_id),
+            ).fetchone()
+        if row is None:
+            return None
+        return self._project_record_from_row(row)
+
+    def count_project_references(self, user_id: int, slug: str) -> int:
+        tokens = self.load_tokens(user_id, slug)
+        refs = tokens.get('references', {}) or {}
+        return len(self.collect_reference_paths(refs))
+
+    def claim_guest_project(self, guest_session_id: str, slug: str, new_user_id: int) -> Optional[ProjectRecord]:
+        project = self.get_guest_project(guest_session_id, slug)
+        if project is None:
+            return None
+
+        old_dir = self.storage_dir / 'guest' / guest_session_id / slug
+        new_parent = self.storage_dir / str(new_user_id)
+        new_parent.mkdir(parents=True, exist_ok=True)
+        new_dir = new_parent / slug
+        if old_dir.exists():
+            if new_dir.exists():
+                shutil.rmtree(new_dir)
+            shutil.move(str(old_dir), str(new_dir))
+
+        now = self._utc_now_iso()
+        with self._connect() as conn:
+            conn.execute(
+                """
+                UPDATE projects
+                SET user_id = ?, guest_session_id = NULL, updated_at = ?
+                WHERE id = ?
+                """,
+                (new_user_id, now, project.id),
+            )
+            conn.execute(
+                'UPDATE generation_jobs_history SET user_id = ? WHERE project_id = ?',
+                (new_user_id, project.id),
+            )
+            conn.execute(
+                'UPDATE assets SET user_id = ? WHERE project_id = ?',
+                (new_user_id, project.id),
+            )
+            conn.execute(
+                'UPDATE style_profiles SET user_id = ? WHERE project_id = ?',
+                (new_user_id, project.id),
+            )
+            conn.execute(
+                'UPDATE asset_manifests SET user_id = ? WHERE project_id = ?',
+                (new_user_id, project.id),
+            )
+            conn.execute('UPDATE users SET had_projects = 1 WHERE id = ?', (new_user_id,))
+            conn.commit()
+
+        return self.get_project(new_user_id, slug)
 
     def list_projects(self, user_id: int) -> list[ProjectRecord]:
         with self._connect() as conn:

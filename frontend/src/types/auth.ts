@@ -10,7 +10,23 @@ export type AuthMeResponse = {
   ok: boolean
   authenticated: boolean
   user: SessionUser | null
+  demo_mode?: boolean
+  demo_project_slug?: string
+  demo_generation_used?: boolean
+  demo_limits?: Record<string, unknown>
   error?: string
+}
+
+export type ClaimedDemoProject = {
+  slug: string
+  name: string
+  editor_url: string
+  results_url: string
+}
+
+export type LoginResponse = AuthMeResponse & {
+  claimed_demo_project?: ClaimedDemoProject
+  message?: string
 }
 
 export type LoginPayload = {

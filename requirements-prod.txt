@@ -1,0 +1,2 @@
+# Production image (Amvera / Docker). Dev-only deps live in requirements-dev.txt.
+-r requirements.txt

@@ -3,6 +3,7 @@ import type {
   AuthMeResponse,
   ForgotPasswordResponse,
   LoginPayload,
+  LoginResponse,
   RegisterPayload,
   ResetPasswordPayload,
 } from '../types/auth'
@@ -11,8 +12,8 @@ export function getCurrentSession(): Promise<AuthMeResponse> {
   return apiClient<AuthMeResponse>('/api/auth/me')
 }
 
-export function login(payload: LoginPayload): Promise<AuthMeResponse> {
-  return apiClient<AuthMeResponse>('/api/auth/login', {
+export function login(payload: LoginPayload): Promise<LoginResponse> {
+  return apiClient<LoginResponse>('/api/auth/login', {
     method: 'POST',
     headers: { 'Content-Type': 'application/json' },
     body: JSON.stringify(payload),

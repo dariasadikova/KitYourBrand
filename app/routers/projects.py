@@ -7,7 +7,13 @@ from fastapi import APIRouter, File, HTTPException, Request, Response, UploadFil
 from fastapi.responses import FileResponse, JSONResponse, RedirectResponse
 
 from app.schemas.palette import PaletteSuggestRequest, PaletteSuggestResponse
-from app.core.paths import OUT_DIR
+from app.core.demo_mode import DEMO_ASSET_COUNTS, DEMO_PROVIDER_SLUG
+from app.core.project_access import (
+    demo_generation_used,
+    mark_demo_generation_used,
+    require_job_access,
+    require_project_access,
+)
 from app.core.providers import ASSET_PROVIDER_SLUGS, parse_generation_provider_slugs
 from app.core.settings import settings
 from app.db import project_service
@@ -184,8 +190,15 @@ async def suggest_palette(
     project_slug: str,
     payload: PaletteSuggestRequest,
 ) -> JSONResponse:
-    user_id = require_auth(request)
-    project_or_404(user_id, project_slug)
+    access = require_project_access(request, project_slug)
+    if access.is_demo:
+        return JSONResponse(
+            {
+                'ok': False,
+                'error': 'В демо-режиме доступна базовая палитра из 3 цветов. Зарегистрируйтесь для автоподбора.',
+            },
+            status_code=403,
+        )
     try:
         seed_color = palette_service.normalize_hex(payload.seed_color)
         variants = palette_service.suggest_variants(seed_color)
@@ -212,8 +225,14 @@ async def download_project(request: Request, project_slug: str):
 
 @router.get('/projects/{project_slug}/download-bundle')
 async def download_project_bundle(request: Request, project_slug: str):
-    user_id = require_auth(request)
-    project = project_or_404(user_id, project_slug)
+    access = require_project_access(request, project_slug)
+    if access.is_demo:
+        raise HTTPException(
+            status_code=403,
+            detail='Скачивание проекта доступно после регистрации.',
+        )
+    user_id = access.user_id
+    project = access.project
     try:
         zip_bytes = project_service.build_project_bundle_bytes(user_id, project_slug)
     except FileNotFoundError as exc:
@@ -283,9 +302,8 @@ async def delete_ref(request: Request, project_slug: str) -> JSONResponse:
 
 @router.get('/projects/{project_slug}/refs/{filename}')
 async def serve_ref(request: Request, project_slug: str, filename: str):
-    user_id = require_auth(request)
-    project_or_404(user_id, project_slug)
-    path = project_service.uploads_dir(user_id, project_slug) / filename
+    access = require_project_access(request, project_slug)
+    path = project_service.uploads_dir(access.user_id, project_slug) / filename
     if not path.exists():
         raise HTTPException(status_code=404, detail='Файл не найден.')
     return FileResponse(path)
@@ -293,8 +311,16 @@ async def serve_ref(request: Request, project_slug: str, filename: str):
 
 @router.post('/projects/{project_slug}/generate-figma')
 async def generate_figma(request: Request, project_slug: str) -> JSONResponse:
-    user_id = require_auth(request)
-    project_or_404(user_id, project_slug)
+    access = require_project_access(request, project_slug)
+    if access.is_demo:
+        return JSONResponse(
+            {
+                'ok': False,
+                'error': 'Экспорт в Figma доступен после регистрации. Создайте аккаунт, чтобы сохранить бренд-комплект.',
+            },
+            status_code=403,
+        )
+    user_id = access.user_id
 
     try:
         data = await request.json()
@@ -371,9 +397,8 @@ async def serve_generation_result_asset(
     kind: str,
     filename: str,
 ):
-    user_id = require_auth(request)
-    project_or_404(user_id, project_slug)
-    snapshot_root = (project_service.project_dir(user_id, project_slug) / 'generation_results' / job_id).resolve()
+    access = require_project_access(request, project_slug)
+    snapshot_root = (project_service.project_dir(access.user_id, project_slug) / 'generation_results' / job_id).resolve()
     path = (snapshot_root / provider / kind / filename).resolve()
     try:
         path.relative_to(snapshot_root)
@@ -386,9 +411,26 @@ async def serve_generation_result_asset(
 
 @router.post('/projects/{project_slug}/generate/start')
 async def start_generate_assets(request: Request, project_slug: str) -> JSONResponse:
-    user_id = require_auth(request)
-    project_or_404(user_id, project_slug)
+    access = require_project_access(request, project_slug)
+    user_id = access.user_id
     data = await request.json()
+
+    if access.is_demo:
+        if demo_generation_used(request):
+            return JSONResponse(
+                {
+                    'ok': False,
+                    'error': 'В демо-режиме доступна одна генерация. Зарегистрируйтесь, чтобы продолжить без ограничений.',
+                },
+                status_code=403,
+            )
+        data = dict(data or {})
+        data.update(DEMO_ASSET_COUNTS)
+        data['illustrations_count'] = 0
+        data['provider_slugs'] = [DEMO_PROVIDER_SLUG]
+        data['build_style'] = True
+        mark_demo_generation_used(request)
+
     try:
         active_providers = parse_generation_provider_slugs(data)
     except ValueError as exc:
@@ -419,17 +461,14 @@ async def start_generate_assets(request: Request, project_slug: str) -> JSONResp
 
 @router.get('/generation-jobs/{job_id}')
 async def get_generation_job(request: Request, job_id: str) -> JSONResponse:
-    user_id = require_auth(request)
-    job = generation_jobs.get_job(job_id)
-    if not job or int(job['user_id']) != user_id:
-        raise HTTPException(status_code=404, detail='Задача не найдена.')
+    job = require_job_access(request, job_id)
     return JSONResponse({'ok': True, 'job': job})
 
 
 @router.post('/generation-jobs/{job_id}/cancel')
 async def cancel_generation_job(request: Request, job_id: str) -> JSONResponse:
-    user_id = require_auth(request)
-    ok = generation_jobs.request_cancel(job_id, user_id)
+    job = require_job_access(request, job_id)
+    ok = generation_jobs.request_cancel(job_id, int(job['user_id']))
     if not ok:
         return JSONResponse({'ok': False, 'error': 'Задача не найдена или уже завершена.'}, status_code=400)
     return JSONResponse({'ok': True})
@@ -437,9 +476,8 @@ async def cancel_generation_job(request: Request, job_id: str) -> JSONResponse:
 
 @router.get('/projects/{project_slug}/generation/active')
 async def get_active_generation_job_for_project(request: Request, project_slug: str) -> JSONResponse:
-    user_id = require_auth(request)
-    project_or_404(user_id, project_slug)
-    job = generation_jobs.get_active_job_for_project(user_id=user_id, project_slug=project_slug)
+    access = require_project_access(request, project_slug)
+    job = generation_jobs.get_active_job_for_project(user_id=access.user_id, project_slug=project_slug)
     return JSONResponse({'ok': True, 'job': job})
 
 
@@ -485,8 +523,14 @@ async def project_results_page(request: Request, project_slug: str) -> RedirectR
 
 @router.get('/projects/{project_slug}/downloads/{kind}')
 async def download_generated_assets(request: Request, project_slug: str, kind: str, job: str | None = None):
-    user_id = require_auth(request)
-    project = project_or_404(user_id, project_slug)
+    access = require_project_access(request, project_slug)
+    if access.is_demo:
+        raise HTTPException(
+            status_code=403,
+            detail='Скачивание ZIP доступно после регистрации. Создайте аккаунт, чтобы получить полный бренд-комплект.',
+        )
+    user_id = access.user_id
+    project = access.project
     tokens = project_service.load_tokens(user_id, project_slug)
     brand_id = (tokens.get('brand_id') or project.brand_id or '').strip()
     if not brand_id:

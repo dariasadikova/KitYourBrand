@@ -9,6 +9,8 @@ from fastapi.responses import JSONResponse
 
 from app.core.paths import OUT_DIR
 from app.core.providers import ASSET_PROVIDER_SLUGS, parse_generation_provider_slugs
+from app.core.demo_mode import DEMO_LIMITS_PAYLOAD
+from app.core.project_access import require_project_access
 from app.db import project_service
 from app.services.generation_jobs import generation_jobs
 
@@ -124,10 +126,9 @@ def get_project_results(
     project_slug: str,
     job_id: str | None = Query(default=None, alias='job'),
 ) -> JSONResponse:
-    user_id = _require_user_id(request)
-    project = project_service.get_project(user_id, project_slug)
-    if project is None:
-        raise HTTPException(status_code=404, detail='Проект не найден.')
+    access = require_project_access(request, project_slug)
+    user_id = access.user_id
+    project = access.project
 
     tokens = project_service.load_tokens(user_id, project_slug)
     brand_id = (tokens.get('brand_id') or project.brand_id or '').strip()
@@ -171,8 +172,7 @@ def get_project_results(
     generation_provider_slugs = _generation_provider_slugs_from_tokens(palette_tokens)
     brand_description = str(palette_tokens.get('brand_description') or '').strip()
 
-    return JSONResponse(
-        {
+    response_payload = {
             'ok': True,
             'project': {
                 'slug': project.slug,
@@ -186,4 +186,7 @@ def get_project_results(
             'active_generation_job_id': (active_job or {}).get('id') if active_job else '',
             'selected_generation_job_id': selected_job_id,
         }
-    )
+    if access.is_demo:
+        response_payload['demo_mode'] = True
+        response_payload['demo_limits'] = DEMO_LIMITS_PAYLOAD
+    return JSONResponse(response_payload)

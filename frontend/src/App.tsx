@@ -44,12 +44,15 @@ import {
   providerNewsStorageKey,
   readSeenProviderNewsVersion,
 } from './config/providerNews'
-import type { AuthMeResponse } from './types/auth'
+import type { AuthMeResponse, LoginResponse } from './types/auth'
 import type { GenerationHistoryResponse, GenerationHistoryRow } from './types/generationHistory'
 import type { Profile } from './types/profile'
 import type { ProjectSummary } from './types/project'
 import type { GenerationJob, ProjectResultsResponse, ResultAsset } from './types/results'
 import { BrandMockupsPreview } from './components/mockups/BrandMockupsPreview'
+import { DemoLockedAction } from './components/demo/DemoModeBanner'
+import { DEMO_ASSET_COUNTS, DEMO_PALETTE_KEYS, DEMO_PROVIDER_LABEL } from './constants/demoMode'
+import { startDemoProject } from './services/demoApi'
 import { GENERATION_PROVIDERS } from './constants/generationProviders'
 import type { PaletteVariant, PaletteVariantName, ProjectEditorResponse, ProjectTokens } from './types/editor'
 
@@ -102,11 +105,13 @@ function App() {
 
   return (
     <Routes>
-      <Route path="/" element={<LandingPage session={session} onLogout={handleLogout} />} />
+      <Route path="/" element={<LandingPage session={session} onLogout={handleLogout} onSessionRefresh={refreshSession} />} />
       <Route path="/login" element={<LoginPage session={session} onSessionChange={setSession} />} />
       <Route path="/register" element={<RegisterPage />} />
       <Route path="/forgot-password" element={<ForgotPasswordPage />} />
       <Route path="/reset-password" element={<ResetPasswordPage />} />
+      <Route path="/demo/projects/:projectSlug" element={<DemoEditorRoute session={session} />} />
+      <Route path="/demo/projects/:projectSlug/results" element={<DemoResultsRoute session={session} />} />
       <Route path="/dashboard" element={<ProtectedDashboard session={session} onLogout={handleLogout} />} />
       <Route path="/profile" element={<ProtectedProfile session={session} onLogout={handleLogout} onSessionRefresh={refreshSession} />} />
       <Route path="/figma-plugin" element={<ProtectedFigmaPlugin session={session} onLogout={handleLogout} />} />
@@ -114,6 +119,101 @@ function App() {
       <Route path="/projects/:projectSlug" element={<ProtectedEditor session={session} onLogout={handleLogout} />} />
       <Route path="/projects/:projectSlug/results" element={<ProtectedResults session={session} onLogout={handleLogout} />} />
     </Routes>
+  )
+}
+
+function DemoEditorRoute({ session }: { session: AuthMeResponse | null }) {
+  const { projectSlug = '' } = useParams()
+  const [searchParams] = useSearchParams()
+
+  if (session === null) return null
+  if (session.authenticated) return <Navigate to={`/projects/${projectSlug}${searchParams.toString() ? `?${searchParams.toString()}` : ''}`} replace />
+
+  if (!session.demo_mode) {
+    return <Navigate to="/" replace />
+  }
+
+  if (session.demo_project_slug && session.demo_project_slug !== projectSlug) {
+    return <Navigate to={`/demo/projects/${session.demo_project_slug}`} replace />
+  }
+
+  return (
+    <div className="page-shell page-demo">
+      <DemoTopBar />
+      <DemoShell mainClassName="project-main">
+        <ProjectEditorPage projectSlug={projectSlug} isNewProjectFlow={searchParams.get('new') === '1'} isDemoMode />
+      </DemoShell>
+    </div>
+  )
+}
+
+function DemoResultsRoute({ session }: { session: AuthMeResponse | null }) {
+  const { projectSlug = '' } = useParams()
+
+  if (session === null) return null
+  if (session.authenticated) return <Navigate to={`/projects/${projectSlug}/results`} replace />
+  if (!session.demo_mode) return <Navigate to="/" replace />
+  if (session.demo_project_slug && session.demo_project_slug !== projectSlug) {
+    return <Navigate to={`/demo/projects/${session.demo_project_slug}/results`} replace />
+  }
+
+  return (
+    <div className="page-shell page-demo">
+      <DemoTopBar />
+      <DemoShell mainClassName="results-main">
+        <ResultsPage projectSlug={projectSlug} isDemoMode demoEditorPath={`/demo/projects/${projectSlug}`} />
+      </DemoShell>
+    </div>
+  )
+}
+
+function DemoTopBar() {
+  useEffect(() => {
+    document.body.classList.add('page-dashboard')
+    return () => document.body.classList.remove('page-dashboard')
+  }, [])
+
+  return (
+    <header className="demo-topbar">
+      <Link to="/" className="brand-mark demo-topbar__brand" aria-label="KYBBY home">
+        <img className="brand-mark__logo" src="/app/static/img/kybby-logo.png" alt="" />
+        <span className="brand-mark__text">KYBBY</span>
+      </Link>
+      <div className="demo-topbar__actions">
+        <Link to="/login" className="btn btn-outline btn-inline demo-topbar__link">Вход</Link>
+        <Link to="/register" className="btn btn-primary btn-inline demo-topbar__register">Регистрация</Link>
+      </div>
+    </header>
+  )
+}
+
+function DemoSidebarNav() {
+  return (
+    <nav className="dashboard-nav" aria-label="Навигация демо">
+      <span className="dashboard-nav__item dashboard-nav__item--active demo-sidebar-nav__item" aria-current="page">
+        <span className="dashboard-nav__icon" aria-hidden="true">
+          <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.2" strokeLinecap="round" strokeLinejoin="round">
+            <path d="M12 3 2 8l10 5 10-5-10-5Z" />
+            <path d="M2 17l10 5 10-5" />
+            <path d="M2 12l10 5 10-5" />
+          </svg>
+        </span>
+        <span className="dashboard-nav__label">Демо режим</span>
+      </span>
+    </nav>
+  )
+}
+
+function DemoShell({ mainClassName = '', children }: { mainClassName?: string; children: ReactNode }) {
+  return (
+    <div className="dashboard-shell demo-shell">
+      <aside className="dashboard-sidebar" aria-label="Боковая панель">
+        <DemoSidebarNav />
+      </aside>
+      <main className={`dashboard-main demo-main${mainClassName ? ` ${mainClassName}` : ''}`}>
+        {children}
+      </main>
+    </div>
   )
 }
 
@@ -278,11 +378,19 @@ function LandingHeader({ session, onLogout }: { session: AuthMeResponse | null; 
   )
 }
 
-function LandingPage({ session, onLogout }: { session: AuthMeResponse | null; onLogout: () => Promise<void> }) {
+function LandingPage({
+  session,
+  onLogout,
+  onSessionRefresh,
+}: {
+  session: AuthMeResponse | null
+  onLogout: () => Promise<void>
+  onSessionRefresh: () => Promise<void>
+}) {
   return (
     <div className="landing-shell">
       <LandingHeader session={session} onLogout={onLogout} />
-      <LandingBackdrop />
+      <LandingBackdrop session={session} onSessionRefresh={onSessionRefresh} />
       <footer className="site-footer">
         <div className="container footer-inner">
           <div className="brand-mark brand-mark--footer">
@@ -368,7 +476,39 @@ function FeatureIcon({ name }: { name: Feature['icon'] }) {
   )
 }
 
-function LandingBackdrop() {
+function LandingBackdrop({
+  session,
+  onSessionRefresh,
+}: {
+  session: AuthMeResponse | null
+  onSessionRefresh: () => Promise<void>
+}) {
+  const navigate = useNavigate()
+  const [isStartingDemo, setIsStartingDemo] = useState(false)
+  const [demoError, setDemoError] = useState('')
+
+  async function handleTryNow() {
+    if (session?.authenticated) {
+      navigate('/dashboard')
+      return
+    }
+    if (session?.demo_mode && session.demo_project_slug) {
+      navigate(`/demo/projects/${session.demo_project_slug}`)
+      return
+    }
+
+    setDemoError('')
+    setIsStartingDemo(true)
+    try {
+      const payload = await startDemoProject()
+      await onSessionRefresh()
+      navigate(payload.redirect_url.replace(/^\/app/, ''))
+    } catch (err) {
+      setDemoError(err instanceof Error ? err.message : 'Не удалось открыть демо-режим.')
+      setIsStartingDemo(false)
+    }
+  }
+
   return (
     <main>
       <section className="hero-section">
@@ -384,7 +524,11 @@ function LandingBackdrop() {
             <span className="hero-title__line hero-title__line--accent">за минуты</span>
           </h1>
           <p className="hero-subtitle">Логотипы, иконки, паттерны, иллюстрации — всё в одном месте.</p>
-          <a href="#features" className="btn btn-hero--demo">Посмотреть демо</a>
+          <button type="button" className="btn btn-hero--demo" disabled={isStartingDemo} onClick={() => void handleTryNow()}>
+            {isStartingDemo ? 'Открываем...' : 'Попробовать сейчас'}
+          </button>
+          {demoError ? <p className="hero-demo-error">{demoError}</p> : null}
+          <p className="hero-demo-note">Можно без регистрации · один пробный проект · ограниченная генерация</p>
         </div>
         <a href="#features" className="hero-scroll" aria-label="Прокрутить к возможностям">
           <span className="hero-scroll__mouse">
@@ -419,7 +563,7 @@ function LoginPage({
   onSessionChange,
 }: {
   session: AuthMeResponse | null
-  onSessionChange: (session: AuthMeResponse) => void
+  onSessionChange: (session: LoginResponse) => void
 }) {
   const [searchParams] = useSearchParams()
   const navigate = useNavigate()
@@ -439,6 +583,10 @@ function LoginPage({
     try {
       const nextSession = await login({ email, password })
       onSessionChange(nextSession)
+      if (nextSession.claimed_demo_project?.editor_url) {
+        navigate(nextSession.claimed_demo_project.editor_url.replace(/^\/app/, ''), { replace: true })
+        return
+      }
       navigate('/dashboard', { replace: true })
     } catch (err) {
       setError(err instanceof Error ? err.message : 'Не удалось войти.')
@@ -1442,7 +1590,15 @@ function ResultsFigmaImportGuide({ brandId }: { brandId: string }) {
   )
 }
 
-function ResultsPage({ projectSlug }: { projectSlug: string }) {
+function ResultsPage({
+  projectSlug,
+  isDemoMode = false,
+  demoEditorPath,
+}: {
+  projectSlug: string
+  isDemoMode?: boolean
+  demoEditorPath?: string
+}) {
   const [searchParams] = useSearchParams()
   const selectedJobId = searchParams.get('job')?.trim() || ''
   const [results, setResults] = useState<ProjectResultsResponse | null>(null)
@@ -1606,14 +1762,25 @@ function ResultsPage({ projectSlug }: { projectSlug: string }) {
             )}
           </section>
 
-          <ResultsAssetSection title="Логотипы" kind="logos" projectSlug={projectSlug} selectedJobId={results.selected_generation_job_id || ''} assets={results.assets.logos} gridClassName="results-icons-grid" cardClassName="results-icon-card" showDownloadButton={hasResultsContent} />
-          <ResultsAssetSection title="Иконки" kind="icons" projectSlug={projectSlug} selectedJobId={results.selected_generation_job_id || ''} assets={results.assets.icons} gridClassName="results-icons-grid" cardClassName="results-icon-card" showDownloadButton={hasResultsContent} />
-          <ResultsAssetSection title="Паттерны" kind="patterns" projectSlug={projectSlug} selectedJobId={results.selected_generation_job_id || ''} assets={results.assets.patterns} gridClassName="results-media-grid results-media-grid--patterns" cardClassName="results-media-card" showDownloadButton={hasResultsContent} />
-          <ResultsAssetSection title="Иллюстрации" kind="illustrations" projectSlug={projectSlug} selectedJobId={results.selected_generation_job_id || ''} assets={results.assets.illustrations} gridClassName="results-media-grid" cardClassName="results-media-card" showDownloadButton={hasResultsContent} />
+          <ResultsAssetSection title="Логотипы" kind="logos" projectSlug={projectSlug} selectedJobId={results.selected_generation_job_id || ''} assets={results.assets.logos} gridClassName="results-icons-grid" cardClassName="results-icon-card" showDownloadButton={hasResultsContent && !isDemoMode} />
+          <ResultsAssetSection title="Иконки" kind="icons" projectSlug={projectSlug} selectedJobId={results.selected_generation_job_id || ''} assets={results.assets.icons} gridClassName="results-icons-grid" cardClassName="results-icon-card" showDownloadButton={hasResultsContent && !isDemoMode} />
+          <ResultsAssetSection title="Паттерны" kind="patterns" projectSlug={projectSlug} selectedJobId={results.selected_generation_job_id || ''} assets={results.assets.patterns} gridClassName="results-media-grid results-media-grid--patterns" cardClassName="results-media-card" showDownloadButton={hasResultsContent && !isDemoMode} />
+          <ResultsAssetSection title="Иллюстрации" kind="illustrations" projectSlug={projectSlug} selectedJobId={results.selected_generation_job_id || ''} assets={results.assets.illustrations} gridClassName="results-media-grid" cardClassName="results-media-card" showDownloadButton={hasResultsContent && !isDemoMode} />
 
           {hasResultsContent ? <BrandMockupsPreview results={results} /> : null}
 
-          {hasResultsContent ? (
+          {isDemoMode && hasResultsContent ? (
+            <section className="results-card demo-register-card">
+              <h2>Понравился результат?</h2>
+              <p>Зарегистрируйтесь, чтобы сохранить проект, скачать полный бренд-комплект и экспортировать ассеты в Figma.</p>
+              <div className="demo-register-card__actions">
+                <Link to="/register" className="btn btn-primary">Зарегистрироваться и продолжить</Link>
+                {demoEditorPath ? <Link to={demoEditorPath} className="btn btn-outline">Вернуться в демо-редактор</Link> : null}
+              </div>
+            </section>
+          ) : null}
+
+          {hasResultsContent && !isDemoMode ? (
           <section className="results-card results-card--export" data-figma-export>
             <div className="results-card__head results-card__head--stacked">
               <div className="results-card__title">
@@ -1641,6 +1808,20 @@ function ResultsPage({ projectSlug }: { projectSlug: string }) {
             </div>
             <p className={`results-export__status${exportTone ? ` results-export__status--${exportTone}` : ''}`} aria-live="polite">{exportStatus}</p>
           </section>
+          ) : null}
+
+          {hasResultsContent && isDemoMode ? (
+            <section className="results-card results-card--export">
+              <div className="results-card__head results-card__head--stacked">
+                <div className="results-card__title">
+                  <h2>Экспорт и скачивание</h2>
+                </div>
+              </div>
+              <DemoLockedAction
+                label="Экспорт в Figma"
+                message="Экспорт в Figma и скачивание ZIP доступны после регистрации."
+              />
+            </section>
           ) : null}
         </div>
       </section>
@@ -2017,7 +2198,15 @@ function illustrationFormatFromTokens(tokens: ProjectTokens): 'vector' | 'raster
   return 'raster'
 }
 
-function ProjectEditorPage({ projectSlug, isNewProjectFlow }: { projectSlug: string; isNewProjectFlow: boolean }) {
+function ProjectEditorPage({
+  projectSlug,
+  isNewProjectFlow,
+  isDemoMode = false,
+}: {
+  projectSlug: string
+  isNewProjectFlow: boolean
+  isDemoMode?: boolean
+}) {
   const [editor, setEditor] = useState<ProjectEditorResponse | null>(null)
   const [tokens, setTokens] = useState<ProjectTokens>({})
   const [name, setName] = useState('')
@@ -2063,6 +2252,8 @@ function ProjectEditorPage({ projectSlug, isNewProjectFlow }: { projectSlug: str
   const [isSaving, setIsSaving] = useState(false)
   const [status, setStatus] = useState('')
   const [error, setError] = useState('')
+  const demoResultsBase = isDemoMode ? `/demo/projects/${projectSlug}/results` : `/projects/${projectSlug}/results`
+  const demoPaletteKeySet = new Set<string>(DEMO_PALETTE_KEYS)
 
   useEffect(() => {
     const key = `kybby_import_warnings:${projectSlug}`
@@ -2113,12 +2304,23 @@ function ProjectEditorPage({ projectSlug, isNewProjectFlow }: { projectSlug: str
       setAssetRefs(referencesToAssetRefs(nextTokens, projectSlug))
       setBuildStyle(getNestedTokenBoolean(nextTokens, 'generation', 'build_style', true))
       setSelectedGenerationProviders(getGenerationProviderSlugsFromTokens(nextTokens))
+      if (isDemoMode) {
+        setAssetCounts({
+          logos: DEMO_ASSET_COUNTS.logos,
+          icons: DEMO_ASSET_COUNTS.icons,
+          patterns: DEMO_ASSET_COUNTS.patterns,
+          illustrations: DEMO_ASSET_COUNTS.illustrations,
+        })
+        setActivePaletteKeys(['primary', 'secondary', 'accent'])
+        setSelectedGenerationProviders(['recraft'])
+        setBuildStyle(true)
+      }
     }
 
     return () => {
       alive = false
     }
-  }, [projectSlug, isNewProjectFlow])
+  }, [projectSlug, isNewProjectFlow, isDemoMode])
 
   function setPaletteValue(key: PaletteKey, value: string) {
     const nextColor = value.toUpperCase()
@@ -2171,6 +2373,7 @@ function ProjectEditorPage({ projectSlug, isNewProjectFlow }: { projectSlug: str
   }
 
   function togglePaletteKey(key: PaletteKey, checked: boolean) {
+    if (isDemoMode && !demoPaletteKeySet.has(key)) return
     setActivePaletteKeys((current) => {
       if (checked) return current.includes(key) ? current : [...current, key].slice(0, 6)
       if (current.length <= 2) return current
@@ -2179,6 +2382,7 @@ function ProjectEditorPage({ projectSlug, isNewProjectFlow }: { projectSlug: str
   }
 
   function setAssetCount(type: AssetType, value: string) {
+    if (isDemoMode) return
     setAssetCounts((current) => ({ ...current, [type]: clampAssetCount(value, DEFAULT_ASSET_COUNTS[type]) }))
   }
 
@@ -2548,33 +2752,41 @@ function ProjectEditorPage({ projectSlug, isNewProjectFlow }: { projectSlug: str
             </div>
           </div>
 
+          {!isDemoMode ? (
           <p className="editor-note editor-note--compact">
             Итоговая палитра — это ваши значения в сетке (шаг сохранения / запуска). Блок «Подбор палитры» ниже необязателен: он лишь предлагает варианты; они применятся к сетке только после нажатия Soft, Balanced или Contrast.
           </p>
+          ) : null}
+          {isDemoMode ? (
+            <p className="editor-note editor-note--compact demo-inline-note">
+              В демо-режиме доступна базовая палитра из 3 цветов. Зарегистрируйтесь, чтобы настраивать расширенную палитру.
+            </p>
+          ) : null}
 
           <div className="palette-grid palette-grid--six">
             {PALETTE_KEYS.map((key) => {
               const slotActive = activePaletteKeys.includes(key)
+              const demoLocked = isDemoMode && !demoPaletteKeySet.has(key)
               return (
               <div
-                className={`palette-item${slotActive ? '' : ' palette-item--inactive'}`}
+                className={`palette-item${slotActive ? '' : ' palette-item--inactive'}${demoLocked ? ' palette-item--demo-locked' : ''}`}
                 key={key}
               >
                 <label className="palette-item__label">
-                  <input type="checkbox" checked={slotActive} onChange={(event) => togglePaletteKey(key, event.target.checked)} /> <span>{PALETTE_LABELS[key]}</span>
+                  <input type="checkbox" checked={slotActive} disabled={demoLocked} onChange={(event) => togglePaletteKey(key, event.target.checked)} /> <span>{PALETTE_LABELS[key]}</span>
                 </label>
                 <input
                   type="color"
                   className="palette-swatch"
                   value={normalizeHexColor(paletteSlots[key]) || DEFAULT_PALETTE[key]}
-                  disabled={!slotActive}
+                  disabled={!slotActive || demoLocked}
                   onChange={(event) => setPaletteValue(key, event.target.value)}
                 />
                 <input
                   type="text"
                   className="editor-field__compact"
                   value={paletteSlots[key]}
-                  disabled={!slotActive}
+                  disabled={!slotActive || demoLocked}
                   onChange={(event) => setPaletteValue(key, event.target.value)}
                 />
               </div>
@@ -2583,6 +2795,8 @@ function ProjectEditorPage({ projectSlug, isNewProjectFlow }: { projectSlug: str
           </div>
           <div className="editor-note editor-note--compact" hidden={activePaletteKeys.length >= 2}>Выберите минимум 2 цвета палитры. Они будут использоваться в текущей генерации.</div>
 
+          {!isDemoMode ? (
+          <>
           <div className="palette-assistant-bar">
             <button
               type="button"
@@ -2648,6 +2862,8 @@ function ProjectEditorPage({ projectSlug, isNewProjectFlow }: { projectSlug: str
               </div>
             </div>
           ) : null}
+          </>
+          ) : null}
         </section>
 
         <section className="editor-card editor-card--progressive" data-progress-step="3">
@@ -2663,7 +2879,7 @@ function ProjectEditorPage({ projectSlug, isNewProjectFlow }: { projectSlug: str
             {ASSET_TYPES.map((type) => (
               <button
                 type="button"
-                className={`asset-tab${activeAssetType === type ? ' asset-tab--active' : ''}`}
+                className={`asset-tab${activeAssetType === type ? ' asset-tab--active' : ''}${isDemoMode && type === 'illustrations' ? ' asset-tab--locked' : ''}`}
                 role="tab"
                 aria-selected={activeAssetType === type ? 'true' : 'false'}
                 aria-controls={`asset-panel-${type}`}
@@ -2671,10 +2887,16 @@ function ProjectEditorPage({ projectSlug, isNewProjectFlow }: { projectSlug: str
                 key={type}
                 onClick={() => setActiveAssetType(type)}
               >
-                {ASSET_LABELS[type]}
+                {ASSET_LABELS[type]}{isDemoMode && type === 'illustrations' ? ' 🔒' : ''}
               </button>
             ))}
           </div>
+
+          {isDemoMode ? (
+            <p className="editor-note editor-note--compact demo-inline-note">
+              В демо: 1 логотип, 2 иконки, 1 паттерн. Иллюстрации и повторная генерация доступны после регистрации. Можно загрузить 1 референс до 2 МБ.
+            </p>
+          ) : null}
 
           {ASSET_TYPES.map((type) => (
             <div
@@ -2685,6 +2907,14 @@ function ProjectEditorPage({ projectSlug, isNewProjectFlow }: { projectSlug: str
               hidden={activeAssetType !== type}
               key={type}
             >
+              {isDemoMode && type === 'illustrations' ? (
+                <div className="demo-asset-locked">
+                  <h3>Иллюстрации</h3>
+                  <p>Доступны после регистрации. В демо вы получите логотип, иконки и паттерн.</p>
+                  <Link to="/register" className="btn btn-primary btn-inline">Зарегистрироваться</Link>
+                </div>
+              ) : (
+              <>
               <label className="editor-field">
                 <span>Промпт</span>
                 <textarea
@@ -2749,17 +2979,28 @@ function ProjectEditorPage({ projectSlug, isNewProjectFlow }: { projectSlug: str
               <div className="editor-grid editor-grid--narrow asset-panel-counts">
                 <label className="editor-field">
                   <span>{assetCountLabel(type)}</span>
-                  <input type="number" min="1" max="20" value={assetCounts[type]} onChange={(event) => setAssetCount(type, event.target.value)} />
+                  <input
+                    type="number"
+                    min="1"
+                    max="20"
+                    value={isDemoMode ? DEMO_ASSET_COUNTS[type] : assetCounts[type]}
+                    disabled={isDemoMode}
+                    onChange={(event) => setAssetCount(type, event.target.value)}
+                  />
                 </label>
               </div>
 
               <div className="asset-panel-refs">
                 <span className="asset-panel-refs__title">{ASSET_REF_LABELS[type]}</span>
-                <p className="asset-panel-refs__hint">Изображения, которые задают желаемую эстетику для этого типа ассетов.</p>
+                <p className="asset-panel-refs__hint">
+                  {isDemoMode
+                    ? 'В демо можно загрузить 1 референс на весь проект (до 2 МБ).'
+                    : 'Изображения, которые задают желаемую эстетику для этого типа ассетов.'}
+                </p>
                 <label className="btn btn-primary btn-upload btn-upload--compact asset-panel-refs__upload">
                   <input
                     type="file"
-                    multiple
+                    multiple={!isDemoMode}
                     accept=".png,.jpg,.jpeg,.webp,.gif,.bmp"
                     hidden
                     disabled={refsLoadingType === type}
@@ -2794,6 +3035,8 @@ function ProjectEditorPage({ projectSlug, isNewProjectFlow }: { projectSlug: str
                   ))}
                 </div>
               </div>
+              </>
+              )}
             </div>
           ))}
         </section>
@@ -2811,6 +3054,7 @@ function ProjectEditorPage({ projectSlug, isNewProjectFlow }: { projectSlug: str
             <input
               type="checkbox"
               checked={buildStyle}
+              disabled={isDemoMode}
               onChange={(event) => {
                 const next = event.target.checked
                 setBuildStyle(next)
@@ -2825,6 +3069,13 @@ function ProjectEditorPage({ projectSlug, isNewProjectFlow }: { projectSlug: str
             </div>
           </label>
 
+          {isDemoMode ? (
+            <div className="demo-provider-box">
+              <span className="demo-provider-box__label">Провайдер</span>
+              <strong>{DEMO_PROVIDER_LABEL}</strong>
+              <p>После регистрации вы сможете выбрать Recraft, Flux, Seedream и другие модели, а также подключить свои API-ключи.</p>
+            </div>
+          ) : (
           <div className="editor-field generation-providers-pick">
             <span>Нейросети для этого запуска</span>
             <p className="generation-providers-hint">
@@ -2843,15 +3094,26 @@ function ProjectEditorPage({ projectSlug, isNewProjectFlow }: { projectSlug: str
               ))}
             </div>
           </div>
+          )}
 
           <div className="generated-summary">
             <h3>Что будет сгенерировано:</h3>
             <ul>
+              {isDemoMode ? (
+                <>
+                  <li>1 логотип, 2 иконки, 1 паттерн</li>
+                  <li>Бренд-превью на мокапах</li>
+                  <li>Одна демо-генерация без регистрации</li>
+                </>
+              ) : (
+                <>
               <li>Иконки в заданном стиле и цветовой палитре</li>
               <li>Варианты логотипов в едином стиле бренда</li>
               <li>Seamless паттерны с заданными мотивами</li>
               <li>Иллюстрации в едином визуальном стиле</li>
               <li>JSON-токены для интеграции с Figma</li>
+                </>
+              )}
             </ul>
           </div>
         </section>
@@ -2865,10 +3127,10 @@ function ProjectEditorPage({ projectSlug, isNewProjectFlow }: { projectSlug: str
             {isGenerationStarting ? 'Запускаем генерацию...' : 'Собрать бренд-комплект'}
           </button>
           <div className="cta-stats">
-            <span><strong>{assetCounts.logos}</strong> вариантов логотипа</span>
-            <span><strong>{assetCounts.icons}</strong> иконок</span>
-            <span><strong>{assetCounts.patterns}</strong> паттернов</span>
-            <span><strong>{assetCounts.illustrations}</strong> иллюстраций</span>
+            <span><strong>{isDemoMode ? DEMO_ASSET_COUNTS.logos : assetCounts.logos}</strong> вариантов логотипа</span>
+            <span><strong>{isDemoMode ? DEMO_ASSET_COUNTS.icons : assetCounts.icons}</strong> иконок</span>
+            <span><strong>{isDemoMode ? DEMO_ASSET_COUNTS.patterns : assetCounts.patterns}</strong> паттернов</span>
+            <span><strong>{isDemoMode ? DEMO_ASSET_COUNTS.illustrations : assetCounts.illustrations}</strong> иллюстраций</span>
           </div>
           <div className="editor-status">
             {generationJob
@@ -2889,8 +3151,12 @@ function ProjectEditorPage({ projectSlug, isNewProjectFlow }: { projectSlug: str
           <button type="button" className="btn btn-outline btn-inline" disabled={isSaving} onClick={handleSave}>
             {isSaving ? 'Сохраняем...' : 'Сохранить'}
           </button>
+          {!isDemoMode ? (
+            <>
           <a href={`/projects/${projectSlug}/download`} className="btn btn-outline btn-inline">Скачать конфигурацию проекта</a>
           <a href={`/projects/${projectSlug}/download-bundle`} className="btn btn-outline btn-inline">Скачать ZIP (с референсами)</a>
+            </>
+          ) : null}
           <button type="button" className="btn btn-inline btn-reset-light" disabled={isSaving} onClick={handleReset}>Сброс</button>
         </div>
         {status ? <div className="editor-status">{status}</div> : null}
@@ -2900,6 +3166,7 @@ function ProjectEditorPage({ projectSlug, isNewProjectFlow }: { projectSlug: str
         <ProjectGenerationModal
           job={generationJob}
           projectSlug={projectSlug}
+          resultsBasePath={demoResultsBase}
           cancelRequested={cancelRequested}
           errorMessage={generationError}
           errorHint={generationErrorHint}
@@ -2918,6 +3185,7 @@ function ProjectEditorPage({ projectSlug, isNewProjectFlow }: { projectSlug: str
 function ProjectGenerationModal({
   job,
   projectSlug,
+  resultsBasePath,
   cancelRequested,
   errorMessage,
   errorHint,
@@ -2927,6 +3195,7 @@ function ProjectGenerationModal({
 }: {
   job: GenerationJob
   projectSlug: string
+  resultsBasePath?: string
   cancelRequested: boolean
   errorMessage: string
   errorHint: string
@@ -2934,6 +3203,7 @@ function ProjectGenerationModal({
   onClose: () => void
   onDismissError: () => void
 }) {
+  const resultsPath = resultsBasePath || `/projects/${projectSlug}/results`
   const terminal = ['completed', 'completed_with_errors', 'failed', 'cancelled'].includes(String(job.status || ''))
   const canOpenResult = job.status === 'completed' || job.status === 'completed_with_errors'
   const statuses = job.provider_statuses || job.providers || {}
@@ -2979,7 +3249,7 @@ function ProjectGenerationModal({
             {canOpenResult ? (
               <Link
                 className="btn btn-primary btn-inline"
-                to={`/projects/${projectSlug}/results${job.id ? `?job=${encodeURIComponent(job.id)}` : ''}`}
+                to={`${resultsPath}${job.id ? `?job=${encodeURIComponent(job.id)}` : ''}`}
               >
                 Посмотреть результат
               </Link>

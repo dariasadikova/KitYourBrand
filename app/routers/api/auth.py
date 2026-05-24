@@ -7,7 +7,15 @@ from fastapi import APIRouter, Query, Request
 from fastapi.responses import JSONResponse
 
 from app.core.settings import settings
-from app.db import auth_service
+from app.core.demo_mode import DEMO_LIMITS_PAYLOAD
+from app.core.project_access import (
+    clear_demo_session,
+    demo_generation_used,
+    demo_project_slug,
+    guest_session_id,
+    is_demo_session,
+)
+from app.db import auth_service, project_service
 
 logger = logging.getLogger(__name__)
 
@@ -49,11 +57,37 @@ def _user_dict_from_row(row) -> dict | None:
     }
 
 
+def _maybe_claim_demo_project(request: Request, user_id: int) -> dict | None:
+    if not is_demo_session(request):
+        return None
+    session_id = guest_session_id(request)
+    slug = demo_project_slug(request)
+    if not session_id or not slug:
+        clear_demo_session(request)
+        return None
+    claimed = project_service.claim_guest_project(session_id, slug, user_id)
+    clear_demo_session(request)
+    if claimed is None:
+        return None
+    return {
+        'slug': claimed.slug,
+        'name': claimed.name,
+        'editor_url': f'/app/projects/{claimed.slug}',
+        'results_url': f'/app/projects/{claimed.slug}/results',
+    }
+
+
 @router.get('/me')
 def current_session(request: Request) -> JSONResponse:
     user_id = request.session.get('user_id')
     if not user_id:
-        return JSONResponse({'ok': True, 'authenticated': False, 'user': None})
+        payload: dict = {'ok': True, 'authenticated': False, 'user': None}
+        if is_demo_session(request):
+            payload['demo_mode'] = True
+            payload['demo_project_slug'] = demo_project_slug(request)
+            payload['demo_generation_used'] = demo_generation_used(request)
+            payload['demo_limits'] = DEMO_LIMITS_PAYLOAD
+        return JSONResponse(payload)
 
     row = auth_service.get_user_by_id(int(user_id))
     user = _user_dict_from_row(row)
@@ -80,7 +114,13 @@ def login(payload: LoginPayload, request: Request) -> JSONResponse:
     if user is None:
         return JSONResponse({'ok': False, 'error': 'Пользователь не найден.'}, status_code=400)
 
-    return JSONResponse({'ok': True, 'authenticated': True, 'user': user})
+    claimed_project = _maybe_claim_demo_project(request, int(result.user_id or 0))
+
+    body: dict = {'ok': True, 'authenticated': True, 'user': user}
+    if claimed_project:
+        body['claimed_demo_project'] = claimed_project
+        body['message'] = 'Мы сохранили ваш демо-проект в личном кабинете.'
+    return JSONResponse(body)
 
 
 @router.post('/register')

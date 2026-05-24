@@ -68,6 +68,9 @@ def create_app() -> FastAPI:
         app.mount('/app/static', StaticFiles(directory=str(FRONTEND_STATIC_DIR)), name='frontend_static')
 
     app.include_router(api_auth.router)
+    from app.routers.api import demo as api_demo
+
+    app.include_router(api_demo.router)
     app.include_router(api_generation_history.router)
     app.include_router(api_profile.router)
     app.include_router(api_projects.router)
