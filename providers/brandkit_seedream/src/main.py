@@ -1,5 +1,6 @@
 #!/usr/bin/env python3
 import argparse
+import colorsys
 import json
 import os
 import re
@@ -42,20 +43,102 @@ def slugify(s: str) -> str:
     return s or "item"
 
 
+def hex_to_color_name(value: str) -> str:
+    raw = (value or "").strip().lstrip("#")
+    if len(raw) == 3:
+        raw = "".join(ch * 2 for ch in raw)
+    if not re.fullmatch(r"[0-9a-fA-F]{6}", raw):
+        return ""
+
+    r = int(raw[0:2], 16) / 255
+    g = int(raw[2:4], 16) / 255
+    b = int(raw[4:6], 16) / 255
+    h, s, v = colorsys.rgb_to_hsv(r, g, b)
+    hue = h * 360
+
+    if s < 0.08:
+        if v < 0.18:
+            return "near black"
+        if v < 0.45:
+            return "dark gray"
+        if v < 0.75:
+            return "gray"
+        if v < 0.92:
+            return "light gray"
+        return "near white"
+
+    if 180 <= hue <= 250 and s < 0.45 and v < 0.45:
+        base = "blue-gray"
+    elif hue < 15 or hue >= 345:
+        base = "red"
+    elif hue < 40:
+        base = "orange"
+    elif hue < 65:
+        base = "yellow"
+    elif hue < 155:
+        base = "green"
+    elif hue < 190:
+        base = "teal"
+    elif hue < 255:
+        base = "blue"
+    elif hue < 285:
+        base = "purple"
+    elif hue < 330:
+        base = "pink"
+    else:
+        base = "crimson"
+
+    if v < 0.28:
+        modifier = "dark"
+    elif v > 0.82 and s < 0.35:
+        modifier = "pale"
+    elif s < 0.28:
+        modifier = "muted"
+    elif v > 0.82 and s > 0.65:
+        modifier = "vivid"
+    else:
+        modifier = ""
+
+    return f"{modifier} {base}".strip()
+
+
+def palette_description_for_seedream(palette: Dict) -> str:
+    if not isinstance(palette, dict):
+        return ""
+
+    role_labels = {
+        "primary": "primary",
+        "secondary": "secondary",
+        "accent": "accent",
+    }
+    parts = []
+    for key, label in role_labels.items():
+        color_name = hex_to_color_name(str(palette.get(key) or ""))
+        if color_name:
+            parts.append(f"{label} {color_name}")
+
+    if not parts:
+        return ""
+
+    return (
+        "Use the brand palette as color guidance only: "
+        f"{', '.join(parts)}. Do not draw a palette, color chips, labels, or color codes."
+    )
+
+
 def build_prompts(tokens: Dict, kind: str, name: str) -> Tuple[str, str]:
     style = tokens.get("style", {}) or {}
     style_prompt = (style.get("prompt") or "").strip()
     negative = (style.get("negative") or "").strip()
 
     palette = tokens.get("palette") or {}
-    pal_txt = ""
-    if palette:
-        parts = []
-        for k in ("primary", "secondary", "accent"):
-            if palette.get(k):
-                parts.append(f"{k}:{palette[k]}")
-        if parts:
-            pal_txt = "Palette: " + ", ".join(parts) + "."
+    # Seedream often renders explicit HEX palettes as visible labels/swatches.
+    # Convert palette colors to words for every asset type instead of passing #RRGGBB.
+    pal_txt = palette_description_for_seedream(palette)
+    palette_artifact_negative = (
+        "hex codes, color codes, visible color values, color swatches, palette chips, "
+        "palette labels, callouts, annotation lines, UI overlays, infographic elements"
+    )
 
     icon_cfg = tokens.get("icon") or {}
     transparent_bg = (
@@ -74,7 +157,7 @@ def build_prompts(tokens: Dict, kind: str, name: str) -> Tuple[str, str]:
         )
         if icon_cfg:
             prompt += f" Logo details: {json.dumps(icon_cfg, ensure_ascii=False)}."
-        return prompt.strip(), f"{negative}, {transparent_negative}".strip(", ")
+        return prompt.strip(), f"{negative}, {transparent_negative}, {palette_artifact_negative}".strip(", ")
     if kind == "icons":
         prompt = (
             f"Icon for UI: {name}. "
@@ -84,7 +167,7 @@ def build_prompts(tokens: Dict, kind: str, name: str) -> Tuple[str, str]:
         )
         if icon_cfg:
             prompt += f" Icon details: {json.dumps(icon_cfg, ensure_ascii=False)}."
-        return prompt.strip(), f"{negative}, {transparent_negative}".strip(", ")
+        return prompt.strip(), f"{negative}, {transparent_negative}, {palette_artifact_negative}".strip(", ")
 
     if kind == "patterns":
         prompt = (
@@ -92,14 +175,21 @@ def build_prompts(tokens: Dict, kind: str, name: str) -> Tuple[str, str]:
             f"{style_prompt} {pal_txt} "
             f"Tileable, seamless, minimal, no text, no watermark."
         )
-        return prompt.strip(), negative
+        return prompt.strip(), f"{negative}, {palette_artifact_negative}".strip(", ")
 
+    illustration_negative = (
+        "text, letters, words, captions, labels, typography, watermark, logo, "
+        f"{palette_artifact_negative}"
+    )
     prompt = (
         f"Illustration for brand UI: {name}. "
-        f"{style_prompt} {pal_txt} "
-        f"Modern, friendly, clean composition, no text, no watermark."
+        f"{style_prompt} "
+        f"{pal_txt} "
+        f"Create a clean standalone image only: no text, no labels, no captions, "
+        f"no hex codes, no color swatches, no palette chips, no callouts, no UI overlays. "
+        f"Modern, friendly, clean composition, no watermark."
     )
-    return prompt.strip(), negative
+    return prompt.strip(), f"{negative}, {illustration_negative}".strip(", ")
 
 
 def save_image_bytes(raw: bytes, mime: str, out_path_base: str, force_png: bool = False) -> str:
