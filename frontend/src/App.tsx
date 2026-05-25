@@ -150,8 +150,8 @@ function DemoEditorRoute({ session }: { session: AuthMeResponse | null }) {
   }
 
   return (
-    <div className="page-shell page-demo">
-      <DemoTopBar />
+    <div className="page-shell page-demo landing-shell">
+      <LandingHeader session={session} />
       <DemoShell mainClassName="project-main">
         <ProjectEditorPage projectSlug={projectSlug} isNewProjectFlow={searchParams.get('new') === '1'} isDemoMode />
       </DemoShell>
@@ -170,8 +170,8 @@ function DemoResultsRoute({ session }: { session: AuthMeResponse | null }) {
   }
 
   return (
-    <div className="page-shell page-demo">
-      <DemoTopBar />
+    <div className="page-shell page-demo landing-shell">
+      <LandingHeader session={session} />
       <DemoShell mainClassName="results-main">
         <ResultsPage projectSlug={projectSlug} isDemoMode />
       </DemoShell>
@@ -179,37 +179,10 @@ function DemoResultsRoute({ session }: { session: AuthMeResponse | null }) {
   )
 }
 
-function DemoTopBar() {
-  useEffect(() => {
-    document.body.classList.add('page-dashboard')
-    return () => document.body.classList.remove('page-dashboard')
-  }, [])
-
-  return (
-    <header className="demo-topbar">
-      <Link to="/" className="brand-mark demo-topbar__brand" aria-label="KYBBY home">
-        <img className="brand-mark__logo" src="/app/static/img/kybby-logo.png" alt="" />
-        <span className="brand-mark__text">KYBBY</span>
-      </Link>
-      <div className="demo-topbar__actions">
-        <Link to="/login" className="btn btn-outline btn-inline demo-topbar__link">Вход</Link>
-        <Link to="/register" className="btn btn-primary btn-inline demo-topbar__register">Регистрация</Link>
-      </div>
-    </header>
-  )
-}
-
 function DemoSidebarNav() {
   return (
     <nav className="dashboard-nav" aria-label="Навигация демо">
       <span className="dashboard-nav__item dashboard-nav__item--active demo-sidebar-nav__item" aria-current="page">
-        <span className="dashboard-nav__icon" aria-hidden="true">
-          <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.2" strokeLinecap="round" strokeLinejoin="round">
-            <path d="M12 3 2 8l10 5 10-5-10-5Z" />
-            <path d="M2 17l10 5 10-5" />
-            <path d="M2 12l10 5 10-5" />
-          </svg>
-        </span>
         <span className="dashboard-nav__label">Демо режим</span>
       </span>
     </nav>
@@ -218,14 +191,24 @@ function DemoSidebarNav() {
 
 function DemoShell({ mainClassName = '', children }: { mainClassName?: string; children: ReactNode }) {
   return (
-    <div className="dashboard-shell demo-shell">
-      <aside className="dashboard-sidebar" aria-label="Боковая панель">
-        <DemoSidebarNav />
-      </aside>
-      <main className={`dashboard-main demo-main${mainClassName ? ` ${mainClassName}` : ''}`}>
-        {children}
-      </main>
-    </div>
+    <>
+      <div className="dashboard-shell demo-shell">
+        <aside className="dashboard-sidebar" aria-label="Боковая панель">
+          <DemoSidebarNav />
+        </aside>
+        <main className={`dashboard-main demo-main${mainClassName ? ` ${mainClassName}` : ''}`}>
+          {children}
+        </main>
+      </div>
+      <footer className="dashboard-site-footer">
+        <div className="dashboard-site-footer__inner">
+          <p className="dashboard-site-footer__brand" aria-label="KYBBY">
+            <DashboardWordmark />
+          </p>
+          <p>© 2026 KYBBY. Генерация бренд-комплектов с помощью ИИ.</p>
+        </div>
+      </footer>
+    </>
   )
 }
 
@@ -252,7 +235,7 @@ function ProtectedFigmaPlugin({ session, onLogout }: { session: AuthMeResponse |
   if (!session.authenticated) return <Navigate to="/" replace />
 
   return (
-    <MigrationShell session={session} activePath="/figma-plugin" mainClassName="profile-main" onLogout={onLogout}>
+    <MigrationShell session={session} activePath="/figma-plugin" mainClassName="figma-plugin-main" onLogout={onLogout}>
       <FigmaPluginPage />
     </MigrationShell>
   )
@@ -263,7 +246,7 @@ function ProtectedGenerationHistory({ session, onLogout }: { session: AuthMeResp
   if (!session.authenticated) return <Navigate to="/" replace />
 
   return (
-    <MigrationShell session={session} activePath="/generation-history" onLogout={onLogout}>
+    <MigrationShell session={session} activePath="/generation-history" mainClassName="generation-history-main" onLogout={onLogout}>
       <GenerationHistoryPage />
     </MigrationShell>
   )
@@ -330,13 +313,15 @@ function LandingHeader({ session, onLogout }: { session: AuthMeResponse | null; 
   }
 
   return (
-    <header className={`site-header landing-header${menuOpen ? ' landing-header--open' : ''}`}>
-      <div className="container header-inner landing-header__inner">
-        <Link to="/" className="brand-mark landing-header__brand" aria-label="KYBBY home" onClick={closeMenu}>
-          <img className="brand-mark__logo" src="/app/static/img/kybby-logo.png" alt="" />
+    <header className={`site-header landing-header landing-page-header${menuOpen ? ' landing-header--open' : ''}`}>
+      <div className="landing-page-header__brand">
+        <Link to="/" className="brand-mark landing-header__brand landing-header__brand-link" aria-label="KYBBY home" onClick={closeMenu}>
           <span className="brand-mark__text landing-header__brand-text">KYBBY</span>
+          <DashboardWordmark className="landing-header__wordmark" />
         </Link>
+      </div>
 
+      <div className="landing-page-header__actions">
         <button
           type="button"
           className="landing-header__burger"
@@ -351,8 +336,9 @@ function LandingHeader({ session, onLogout }: { session: AuthMeResponse | null; 
             <span className="landing-header__burger-line" />
           </span>
         </button>
+      </div>
 
-        <nav className="header-actions landing-header__nav" id="landing-menu">
+      <nav className="header-actions landing-header__nav" id="landing-menu">
           {session?.authenticated ? (
             <>
               <Link to="/dashboard" className="btn btn-primary" onClick={closeMenu}>
@@ -368,15 +354,14 @@ function LandingHeader({ session, onLogout }: { session: AuthMeResponse | null; 
           ) : (
             <>
               <Link to="/login" className="btn btn-outline" onClick={closeMenu}>
-                Вход
+                войти
               </Link>
               <Link to="/register" className="btn btn-primary" onClick={closeMenu}>
-                Регистрация
+                зарегистрироваться
               </Link>
             </>
           )}
         </nav>
-      </div>
       {menuOpen ? (
         <button
           type="button"
@@ -399,16 +384,20 @@ function LandingPage({
   onLogout: () => Promise<void>
   onSessionRefresh: () => Promise<void>
 }) {
+  useEffect(() => {
+    document.body.classList.add('page-landing')
+    return () => document.body.classList.remove('page-landing')
+  }, [])
+
   return (
     <div className="landing-shell">
       <LandingHeader session={session} onLogout={onLogout} />
       <LandingBackdrop session={session} onSessionRefresh={onSessionRefresh} />
       <footer className="site-footer">
         <div className="container footer-inner">
-          <div className="brand-mark brand-mark--footer">
-            <img className="brand-mark__logo brand-mark__logo--footer" src="/app/static/img/kybby-logo.png" alt="KYBBY" />
-            <span className="brand-mark__text">KYBBY</span>
-          </div>
+          <p className="footer-wordmark" aria-label="KYBBY">
+            <span className="footer-wordmark__accent">KYB</span>BY
+          </p>
           <p>© 2026 KYBBY. Генерация бренд-комплектов с помощью ИИ.</p>
         </div>
       </footer>
@@ -416,74 +405,96 @@ function LandingPage({
   )
 }
 
+type FeatureIconName = 'assets' | 'collab' | 'mockups' | 'figma'
+
 type Feature = {
   title: string
-  description: string
-  icon: 'sparkles' | 'grid3x3' | 'image' | 'download'
+  descriptionLines: readonly [string, string, string]
+  icon: FeatureIconName
 }
 
 const LANDING_FEATURES: readonly Feature[] = [
   {
-    title: 'Генерация иконок',
-    description: 'Создавайте уникальные иконки в едином стиле с настраиваемой цветовой палитрой и параметрами.',
-    icon: 'sparkles',
+    title: 'Генерация ассетов',
+    descriptionLines: [
+      'Весь бренд-комплект за один запуск.',
+      'Один стиль, одна палитра, одни рефы.',
+      'Несколько нейросетей на выбор.',
+    ],
+    icon: 'assets',
   },
   {
-    title: 'Создание паттернов',
-    description: 'Бесшовные паттерны и фоны с заданными мотивами и плотностью для любых дизайн-задач.',
-    icon: 'grid3x3',
+    title: 'Совместная работа',
+    descriptionLines: [
+      'Сохраняйте проекты и делитесь ими',
+      'с коллегами. Вся история генераций,',
+      'палитра и ассеты — в лк.',
+    ],
+    icon: 'collab',
   },
   {
-    title: 'Иллюстрации',
-    description: 'Векторные иллюстрации, созданные ИИ в соответствии с вашим брендом и референсами.',
-    icon: 'image',
+    title: 'Превью на мокапах',
+    descriptionLines: [
+      'Смотрите, как бренд выглядит',
+      'в лендинге, визитке, ВКонтакте.',
+      'Собирайте превью под свой проект.',
+    ],
+    icon: 'mockups',
   },
   {
     title: 'Экспорт в Figma',
-    description: 'Прямая интеграция с Figma через плагин — все ассеты доступны сразу в вашем проекте.',
-    icon: 'download',
+    descriptionLines: [
+      'Переносите ассеты в Figma',
+      'через плагин KYBBY. Все файлы',
+      'готовы к импорту в ваш проект.',
+    ],
+    icon: 'figma',
   },
 ]
 
-function FeatureIcon({ name }: { name: Feature['icon'] }) {
-  if (name === 'sparkles') {
-    return (
-      <svg className="feature-icon__svg" xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round" aria-hidden="true">
-        <path d="m12 3-1.912 5.813a2 2 0 0 1-1.275 1.275L3 12l5.813 1.912a2 2 0 0 1 1.275 1.275L12 21l1.912-5.813a2 2 0 0 1 1.275-1.275L21 12l-5.813-1.912a2 2 0 0 1-1.275-1.275L12 3Z" />
-        <path d="M5 3v4" />
-        <path d="M19 17v4" />
-        <path d="M3 5h4" />
-        <path d="M17 19h4" />
-      </svg>
-    )
-  }
+const HERO_POINTS = [
+  ['генерируйте бренд-комплекты', 'в едином стиле'],
+  ['делитесь проектами с коллегами'],
+  ['смотрите, как бренд выглядит', 'на мокапах'],
+  ['переносите ассеты в плагин', 'и продолжайте работу в Figma'],
+] as const
 
-  if (name === 'grid3x3') {
-    return (
-      <svg className="feature-icon__svg" xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round" aria-hidden="true">
-        <rect width="7" height="7" x="3" y="3" rx="1" />
-        <rect width="7" height="7" x="14" y="3" rx="1" />
-        <rect width="7" height="7" x="14" y="14" rx="1" />
-        <rect width="7" height="7" x="3" y="14" rx="1" />
-      </svg>
-    )
-  }
+const LANDING_FEATURE_ICONS: Record<FeatureIconName, string> = {
+  assets: '/app/static/img/landing/stars.png',
+  collab: '/app/static/img/landing/together.png',
+  mockups: '/app/static/img/landing/preview.png',
+  figma: '/app/static/img/landing/export.png',
+}
 
-  if (name === 'image') {
-    return (
-      <svg className="feature-icon__svg" xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round" aria-hidden="true">
-        <rect width="18" height="18" x="3" y="3" rx="2" ry="2" />
-        <circle cx="9" cy="9" r="2" />
-        <path d="m21 15-3.086-3.086a2 2 0 0 0-2.828 0L6 21" />
-      </svg>
-    )
-  }
-
+function LandingFeatureIcon({ name }: { name: FeatureIconName }) {
   return (
-    <svg className="feature-icon__svg" xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round" aria-hidden="true">
-      <path d="M21 15v4a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2v-4" />
-      <polyline points="7 10 12 15 17 10" />
-      <line x1="12" x2="12" y1="15" y2="3" />
+    <img
+      className="feature-icon__img"
+      src={LANDING_FEATURE_ICONS[name]}
+      alt=""
+      width={28}
+      height={28}
+      aria-hidden="true"
+    />
+  )
+}
+
+function HeroCtaArrow() {
+  return (
+    <svg
+      className="hero-cta__arrow"
+      viewBox="0 0 32 32"
+      fill="none"
+      xmlns="http://www.w3.org/2000/svg"
+      aria-hidden="true"
+    >
+      <path
+        d="M6 26L26 6M26 6H8M26 6V24"
+        stroke="currentColor"
+        strokeWidth="3"
+        strokeLinecap="round"
+        strokeLinejoin="round"
+      />
     </svg>
   )
 }
@@ -518,31 +529,66 @@ function LandingBackdrop({
   }
 
   return (
-    <main>
-      <section className="hero-section">
-        <div className="hero-bg" aria-hidden="true">
-          <div className="hero-bg__orb hero-bg__orb--1"></div>
-          <div className="hero-bg__orb hero-bg__orb--2"></div>
-          <div className="hero-bg__dots hero-bg__dots--left"></div>
-          <div className="hero-bg__dots hero-bg__dots--right"></div>
+    <main className="landing-main">
+      <section className="hero-section" aria-labelledby="landing-hero-title">
+        <div className="hero-board">
+          <div className="hero-board__frame">
+            <div className="hero-board__glow" aria-hidden="true" />
+
+            <p className="hero-board__wordmark" aria-hidden="true">
+              <span className="hero-board__wordmark-accent">KYB</span>BY
+            </p>
+
+            <div className="hero-tagline">
+              <p className="hero-tagline__brackets hero-tagline__brackets--desktop" aria-hidden="true">[              ]</p>
+              <span className="hero-tagline__bracket hero-tagline__bracket--open" aria-hidden="true">[</span>
+              <h1 className="hero-tagline__title" id="landing-hero-title">
+                <span>создайте бренд-стиль</span>
+                <span>за минуты</span>
+              </h1>
+              <span className="hero-tagline__bracket hero-tagline__bracket--close" aria-hidden="true">]</span>
+            </div>
+
+            <div className="hero-tile hero-tile--filled hero-tile--logos"><span>логотипы</span></div>
+
+            <div className="hero-cta-wrap">
+              <button type="button" className="hero-cta" disabled={isStartingDemo} onClick={() => void handleTryNow()}>
+                <span>{isStartingDemo ? 'Открываем...' : 'попробовать'}</span>
+                <HeroCtaArrow />
+              </button>
+              {demoError ? <p className="hero-demo-error">{demoError}</p> : null}
+            </div>
+
+            <div className="hero-tile hero-tile--filled hero-tile--patterns"><span>паттерны</span></div>
+            <div className="hero-tile hero-tile--filled hero-tile--icons"><span>иконки</span></div>
+            <div className="hero-tile hero-tile--filled hero-tile--illustrations">
+              <span>
+                иллюст-
+                <br className="hero-tile__break" />
+                рации
+              </span>
+            </div>
+
+            <div className="hero-tile hero-tile--ghost hero-tile--ghost-mid" aria-hidden="true" />
+            <div className="hero-tile hero-tile--ghost hero-tile--ghost-tagline" aria-hidden="true" />
+            <div className="hero-tile hero-tile--ghost hero-tile--ghost-tr" aria-hidden="true" />
+            <div className="hero-tile hero-tile--ghost hero-tile--ghost-br" aria-hidden="true" />
+
+            <ul className="hero-points">
+              {HERO_POINTS.map((lines) => (
+                <li key={lines.join(' ')}>
+                  {lines.map((line, index) => (
+                    <span key={line}>
+                      {line}
+                      {index < lines.length - 1 ? <br /> : null}
+                    </span>
+                  ))}
+                </li>
+              ))}
+            </ul>
+          </div>
+  
         </div>
-        <div className="container hero-content">
-          <h1 className="hero-title">
-            <span className="hero-title__line hero-title__line--light">Создайте бренд-стиль</span>
-            <span className="hero-title__line hero-title__line--accent">за минуты</span>
-          </h1>
-          <p className="hero-subtitle">Логотипы, иконки, паттерны, иллюстрации — всё в одном месте.</p>
-          <button type="button" className="btn btn-hero--demo" disabled={isStartingDemo} onClick={() => void handleTryNow()}>
-            {isStartingDemo ? 'Открываем...' : 'Попробовать сейчас'}
-          </button>
-          {demoError ? <p className="hero-demo-error">{demoError}</p> : null}
-          <p className="hero-demo-note">Можно без регистрации · один пробный проект · ограниченная генерация</p>
-        </div>
-        <a href="#features" className="hero-scroll" aria-label="Прокрутить к возможностям">
-          <span className="hero-scroll__mouse">
-            <span className="hero-scroll__dot"></span>
-          </span>
-        </a>
       </section>
       <section className="features-section section-block" id="features">
         <div className="container section-head section-head-center">
@@ -553,16 +599,59 @@ function LandingBackdrop({
         <div className="container feature-grid">
           {LANDING_FEATURES.map((item) => (
             <article className="feature-card" key={item.title}>
-              <div className="feature-icon" aria-hidden="true">
-                <FeatureIcon name={item.icon} />
+              <div className="feature-icon-wrap" aria-hidden="true">
+                <LandingFeatureIcon name={item.icon} />
               </div>
               <h3>{item.title}</h3>
-              <p>{item.description}</p>
+              <p className="feature-card__text">
+                {item.descriptionLines.map((line, index) => (
+                  <span key={line}>
+                    {line}
+                    {index < 2 ? <br /> : null}
+                  </span>
+                ))}
+              </p>
             </article>
           ))}
         </div>
       </section>
     </main>
+  )
+}
+
+function AuthModalBrand() {
+  return (
+    <p className="auth-modal-brand" aria-label="KYBBY">
+      <span className="auth-modal-brand__accent">KYB</span>BY
+    </p>
+  )
+}
+
+function AuthScreenShell({ children }: { children: ReactNode }) {
+  useEffect(() => {
+    document.body.classList.add('page-auth')
+    return () => document.body.classList.remove('page-auth')
+  }, [])
+
+  return (
+    <div className="auth-screen">
+      <div className="auth-backdrop-content" aria-hidden="true">
+        <h1 className="auth-backdrop-title">
+          <span>создайте бренд-стиль</span>
+          <span>за минуты</span>
+        </h1>
+      </div>
+      <div className="auth-backdrop-blur" aria-hidden="true" />
+      {children}
+    </div>
+  )
+}
+
+function DashboardWordmark({ className }: { className?: string }) {
+  return (
+    <span className={['dashboard-wordmark', className].filter(Boolean).join(' ')}>
+      <span className="dashboard-wordmark__accent">KYB</span>BY
+    </span>
   )
 }
 
@@ -604,20 +693,10 @@ function LoginPage({
   }
 
   return (
-    <div className="auth-screen">
-      <div className="auth-backdrop-content" aria-hidden="true">
-        <h1 className="auth-backdrop-title">
-          <span>Создайте бренд-стиль</span>
-          <span className="auth-backdrop-title-accent">за минуты</span>
-        </h1>
-      </div>
-      <div className="auth-backdrop-blur"></div>
+    <AuthScreenShell>
       <div className="auth-modal" role="dialog" aria-modal="true" aria-labelledby="login-title">
         <Link className="auth-modal-close" to="/" aria-label="Закрыть">×</Link>
-        <div className="auth-modal-brand">
-          <img className="auth-modal-brand-logo" src="/app/static/img/kybby-logo.png" alt="" />
-          <span>KYBBY</span>
-        </div>
+        <AuthModalBrand />
         <h1 className="auth-modal-title" id="login-title">Вход</h1>
         {searchParams.get('registered') === '1' ? (
           <div className="callout callout-success" role="status">Регистрация прошла успешно. Войдите, используя email и пароль.</div>
@@ -658,7 +737,7 @@ function LoginPage({
         </form>
         <p className="auth-switch">Нет аккаунта? <Link to="/register">Зарегистрироваться</Link></p>
       </div>
-    </div>
+    </AuthScreenShell>
   )
 }
 
@@ -694,20 +773,10 @@ function RegisterPage() {
   }
 
   return (
-    <div className="auth-screen">
-      <div className="auth-backdrop-content" aria-hidden="true">
-        <h1 className="auth-backdrop-title">
-          <span>Создайте бренд-стиль</span>
-          <span className="auth-backdrop-title-accent">за минуты</span>
-        </h1>
-      </div>
-      <div className="auth-backdrop-blur"></div>
+    <AuthScreenShell>
       <div className="auth-modal" role="dialog" aria-modal="true" aria-labelledby="register-title">
         <Link className="auth-modal-close" to="/" aria-label="Закрыть">×</Link>
-        <div className="auth-modal-brand">
-          <img className="auth-modal-brand-logo" src="/app/static/img/kybby-logo.png" alt="" />
-          <span>KYBBY</span>
-        </div>
+        <AuthModalBrand />
         <h1 className="auth-modal-title" id="register-title">Регистрация</h1>
 
         {error || queryError ? <div className="error">{error || queryError}</div> : null}
@@ -744,7 +813,7 @@ function RegisterPage() {
 
         <p className="auth-switch">Уже есть аккаунт? <Link to="/login">Войти</Link></p>
       </div>
-    </div>
+    </AuthScreenShell>
   )
 }
 
@@ -776,20 +845,10 @@ function ForgotPasswordPage() {
   }
 
   return (
-    <div className="auth-screen">
-      <div className="auth-backdrop-content" aria-hidden="true">
-        <h1 className="auth-backdrop-title">
-          <span>Создайте бренд-стиль</span>
-          <span className="auth-backdrop-title-accent">за минуты</span>
-        </h1>
-      </div>
-      <div className="auth-backdrop-blur"></div>
+    <AuthScreenShell>
       <div className="auth-modal" role="dialog" aria-modal="true" aria-labelledby="forgot-password-title">
         <Link className="auth-modal-close" to="/login" aria-label="Закрыть">×</Link>
-        <div className="auth-modal-brand">
-          <img className="auth-modal-brand-logo" src="/app/static/img/kybby-logo.png" alt="" />
-          <span>KYBBY</span>
-        </div>
+        <AuthModalBrand />
         <h1 className="auth-modal-title" id="forgot-password-title">Сброс пароля</h1>
         <p className="auth-modal-lead">
           Укажите email аккаунта. Мы отправим ссылку для установки нового пароля.
@@ -838,7 +897,7 @@ function ForgotPasswordPage() {
           </p>
         ) : null}
       </div>
-    </div>
+    </AuthScreenShell>
   )
 }
 
@@ -904,20 +963,10 @@ function ResetPasswordPage() {
   }
 
   return (
-    <div className="auth-screen">
-      <div className="auth-backdrop-content" aria-hidden="true">
-        <h1 className="auth-backdrop-title">
-          <span>Создайте бренд-стиль</span>
-          <span className="auth-backdrop-title-accent">за минуты</span>
-        </h1>
-      </div>
-      <div className="auth-backdrop-blur"></div>
+    <AuthScreenShell>
       <div className="auth-modal" role="dialog" aria-modal="true" aria-labelledby="reset-password-title">
         <Link className="auth-modal-close" to="/login" aria-label="Закрыть">×</Link>
-        <div className="auth-modal-brand">
-          <img className="auth-modal-brand-logo" src="/app/static/img/kybby-logo.png" alt="" />
-          <span>KYBBY</span>
-        </div>
+        <AuthModalBrand />
         <h1 className="auth-modal-title" id="reset-password-title">Новый пароль</h1>
         {tokenState === 'checking' ? (
           <p className="auth-modal-lead" role="status">Проверяем ссылку...</p>
@@ -974,7 +1023,7 @@ function ResetPasswordPage() {
           </p>
         )}
       </div>
-    </div>
+    </AuthScreenShell>
   )
 }
 
@@ -1002,11 +1051,6 @@ function DashboardShellNav({
         className={`dashboard-nav__item${activePath === '/dashboard' ? ' dashboard-nav__item--active' : ''}`}
         onClick={onItemNavigate}
       >
-        <span className="dashboard-nav__icon" aria-hidden="true">
-          <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.2" strokeLinecap="round" strokeLinejoin="round">
-            <path d="M3 7a2 2 0 0 1 2-2h4l2 2h8a2 2 0 0 1 2 2v8a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2Z" />
-          </svg>
-        </span>
         <span className="dashboard-nav__label">Мои проекты</span>
       </Link>
       <Link
@@ -1014,42 +1058,15 @@ function DashboardShellNav({
         className={`dashboard-nav__item${activePath === '/generation-history' ? ' dashboard-nav__item--active' : ''}`}
         onClick={onItemNavigate}
       >
-        <span className="dashboard-nav__icon" aria-hidden="true">
-          <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.2" strokeLinecap="round" strokeLinejoin="round">
-            <circle cx="12" cy="12" r="9" />
-            <path d="M12 7v5l3 2" />
-          </svg>
-        </span>
         <span className="dashboard-nav__label">История генераций</span>
       </Link>
       <Link to="/figma-plugin" className={`dashboard-nav__item${activePath === '/figma-plugin' ? ' dashboard-nav__item--active' : ''}`} onClick={onItemNavigate}>
-        <span className="dashboard-nav__icon" aria-hidden="true">
-          <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.2" strokeLinecap="round" strokeLinejoin="round">
-            <rect x="3" y="3" width="7" height="7" rx="1.5" />
-            <rect x="14" y="3" width="7" height="7" rx="1.5" />
-            <rect x="3" y="14" width="7" height="7" rx="1.5" />
-            <rect x="14" y="14" width="7" height="7" rx="1.5" />
-          </svg>
-        </span>
         <span className="dashboard-nav__label">Figma-плагин</span>
       </Link>
       <Link to="/profile" className={`dashboard-nav__item${activePath === '/profile' ? ' dashboard-nav__item--active' : ''}`} onClick={onItemNavigate}>
-        <span className="dashboard-nav__icon" aria-hidden="true">
-          <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.2" strokeLinecap="round" strokeLinejoin="round">
-            <circle cx="12" cy="8" r="4" />
-            <path d="M4 20a8 8 0 0 1 16 0" />
-          </svg>
-        </span>
         <span className="dashboard-nav__label">Профиль</span>
       </Link>
       <a href="/logout" className="dashboard-nav__item" onClick={(event) => { onItemNavigate?.(); onLogoutClick(event) }}>
-        <span className="dashboard-nav__icon" aria-hidden="true">
-          <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.2" strokeLinecap="round" strokeLinejoin="round">
-            <path d="M9 4H5a2 2 0 0 0-2 2v12a2 2 0 0 0 2 2h4" />
-            <path d="M16 17l5-5-5-5" />
-            <path d="M21 12H9" />
-          </svg>
-        </span>
         <span className="dashboard-nav__label">Выход</span>
       </a>
     </nav>
@@ -1136,8 +1153,7 @@ function MigrationShell({
       <header className={`dashboard-page-header${mobileNavOpen ? ' landing-header--open' : ''}`}>
         <div className="dashboard-page-header__brand">
           <Link to="/dashboard" className="dashboard-brand dashboard-brand--header" aria-label="KYBBY dashboard">
-            <img className="brand-mark__logo" src="/app/static/img/kybby-logo.png" alt="" />
-            <span className="brand-mark__text">KYBBY</span>
+            <DashboardWordmark />
           </Link>
         </div>
         <div className="dashboard-page-header__actions">
@@ -1215,10 +1231,9 @@ function MigrationShell({
       </div>
       <footer className="dashboard-site-footer">
         <div className="dashboard-site-footer__inner">
-          <div className="brand-mark brand-mark--dashboard-footer">
-            <img className="brand-mark__logo" src="/app/static/img/kybby-logo.png" alt="KYBBY" />
-            <span className="brand-mark__text">KYBBY</span>
-          </div>
+          <p className="dashboard-site-footer__brand" aria-label="KYBBY">
+            <DashboardWordmark />
+          </p>
           <p>© 2026 KYBBY. Генерация бренд-комплектов с помощью ИИ.</p>
         </div>
       </footer>
@@ -1377,7 +1392,6 @@ function GenerationHistoryPage() {
                       <td className="generation-history-table__date">{row.started_display}</td>
                       <td className="generation-history-table__project">
                         <span className="generation-history-table__project-inner">
-                          <span className="generation-history-project-dot" aria-hidden="true"></span>
                           {row.project_name}
                         </span>
                       </td>
@@ -1393,21 +1407,19 @@ function GenerationHistoryPage() {
               <p className="generation-history-footer__meta">
                 Показано {history?.showing_from}–{history?.showing_to} из {history?.total} генераций
               </p>
-              {(history?.total_pages || 1) > 1 ? (
-                <nav className="generation-history-pagination" aria-label="Страницы списка генераций">
-                  {history?.has_prev ? (
-                    <button type="button" className="btn btn-outline btn-inline generation-history-page-link" onClick={() => loadHistory(history.prev_page)}>Предыдущая</button>
-                  ) : (
-                    <span className="generation-history-page-link generation-history-page-link--disabled">Предыдущая</span>
-                  )}
-                  <span className="generation-history-page-current">{history?.page}</span>
-                  {history?.has_next ? (
-                    <button type="button" className="btn btn-outline btn-inline generation-history-page-link" onClick={() => loadHistory(history.next_page)}>Следующая</button>
-                  ) : (
-                    <span className="generation-history-page-link generation-history-page-link--disabled">Следующая</span>
-                  )}
-                </nav>
-              ) : null}
+              <nav className="generation-history-pagination" aria-label="Страницы списка генераций">
+                {history?.has_prev ? (
+                  <button type="button" className="btn btn-outline btn-inline generation-history-page-link" onClick={() => loadHistory(history.prev_page)}>Предыдущая</button>
+                ) : (
+                  <span className="generation-history-page-link generation-history-page-link--disabled">Предыдущая</span>
+                )}
+                <span className="generation-history-page-current">{history?.page}</span>
+                {history?.has_next ? (
+                  <button type="button" className="btn btn-outline btn-inline generation-history-page-link" onClick={() => loadHistory(history.next_page)}>Следующая</button>
+                ) : (
+                  <span className="generation-history-page-link generation-history-page-link--disabled">Следующая</span>
+                )}
+              </nav>
             </div>
           </>
         ) : (
@@ -1417,20 +1429,20 @@ function GenerationHistoryPage() {
 
       {statsOpen && history
         ? dashboardOverlayPortal(
-            <div className="generation-history-modal">
-          <div className="generation-history-modal__backdrop" onClick={() => setStatsOpen(false)}></div>
-          <div className="generation-history-modal__dialog" role="dialog" aria-modal="true" aria-labelledby="generation-history-stats-title">
-            <button type="button" className="generation-history-modal__close" aria-label="Закрыть статистику" onClick={() => setStatsOpen(false)}>×</button>
-            <h2 id="generation-history-stats-title">Статистика генераций</h2>
-            <div className="generation-history-stats generation-history-stats--modal">
-              <HistoryStatCard label="Генераций всего" value={String(history.stats.total)} />
-              <HistoryStatCard label="Успешных генераций" value={String(history.stats.successful)} />
-              <HistoryStatCard label="Среднее время" value={history.stats_avg_display} />
-              <HistoryStatCard label="Проектов" value={String(history.stats.projects_with_generations)} />
+          <div className="generation-history-modal">
+            <div className="generation-history-modal__backdrop" onClick={() => setStatsOpen(false)}></div>
+            <div className="generation-history-modal__dialog" role="dialog" aria-modal="true" aria-labelledby="generation-history-stats-title">
+              <button type="button" className="generation-history-modal__close" aria-label="Закрыть статистику" onClick={() => setStatsOpen(false)}>×</button>
+              <h2 id="generation-history-stats-title">Статистика генераций</h2>
+              <div className="generation-history-stats generation-history-stats--modal">
+                <HistoryStatCard label="Генераций всего" value={String(history.stats.total)} />
+                <HistoryStatCard label="Успешных генераций" value={String(history.stats.successful)} />
+                <HistoryStatCard label="Среднее время" value={history.stats_avg_display} />
+                <HistoryStatCard label="Проектов" value={String(history.stats.projects_with_generations)} />
+              </div>
             </div>
           </div>
-        </div>
-      ) : null}
+        ) : null}
 
       {errorRow ? (
         <div className="generation-history-modal">
@@ -1504,11 +1516,8 @@ function renderHistoryAction(
 function HistoryStatCard({ label, value }: { label: string; value: string }) {
   return (
     <article className="generation-history-stat-card">
-      <div className="generation-history-stat-card__icon" aria-hidden="true">•</div>
-      <div className="generation-history-stat-card__body">
-        <span className="generation-history-stat-card__label">{label}</span>
-        <strong className="generation-history-stat-card__value">{value}</strong>
-      </div>
+      <span className="generation-history-stat-card__label">{label}</span>
+      <strong className="generation-history-stat-card__value">{value}</strong>
     </article>
   )
 }
@@ -1706,6 +1715,7 @@ function ResultsPage({
       <section className="results-page">
         <div className="results-page__head">
           <div>
+            {isDemoMode ? <span className="project-card__badge">один запуск без регистрации</span> : null}
             <h1>Результаты генерации бренд-комплекта</h1>
             <p>Загружаем результаты...</p>
           </div>
@@ -1719,6 +1729,7 @@ function ResultsPage({
       <section className="results-page">
         <div className="results-page__head">
           <div>
+            {isDemoMode ? <span className="project-card__badge">один запуск без регистрации</span> : null}
             <h1>Результаты генерации бренд-комплекта</h1>
             <p>{error || 'Результаты пока недоступны.'}</p>
           </div>
@@ -1739,12 +1750,13 @@ function ResultsPage({
       <section className="results-page" data-results-page data-project-slug={projectSlug} data-brand-id={results.project.brand_id} data-active-job-id={job?.id || ''}>
         <div className="results-page__head">
           <div>
+            {isDemoMode ? <span className="project-card__badge">один запуск без регистрации</span> : null}
             <h1>Результаты генерации бренд-комплекта</h1>
             <p>
               {results.selected_generation_job_id
                 ? 'Открыта сохранённая версия генерации из истории'
                 : hasResultsContent
-                  ? 'Ваш бренд-комплект готов к использованию'
+                  ? 'Ваш бренд-комплект готов к использованию.'
                   : 'Здесь появятся результаты после первой успешной генерации в редакторе проекта.'}
             </p>
           </div>
@@ -1784,39 +1796,39 @@ function ResultsPage({
               <h2>Понравился результат?</h2>
               <p>Зарегистрируйтесь, чтобы сохранить проект, скачать полный бренд-комплект и экспортировать ассеты в Figma.</p>
               <div className="demo-register-card__actions">
-                <Link to="/register" className="btn btn-primary">Зарегистрироваться и продолжить</Link>
+                <Link to="/register" className="btn btn-primary">зарегистрироваться и продолжить</Link>
               </div>
             </section>
           ) : null}
 
           {hasResultsContent && !isDemoMode ? (
-          <section className="results-card results-card--export" data-figma-export>
-            <div className="results-card__head results-card__head--stacked">
-              <div className="results-card__title">
-                <h2>Экспорт в Figma</h2>
-              </div>
-            </div>
-            <ResultsFigmaImportGuide brandId={results.project.brand_id} />
-            {manifestUrl ? (
-              <details className="results-manifest" id="results-manifest-panel">
-                <summary className="results-manifest__summary">
-                  <span>Скачать JSON manifest</span>
-                </summary>
-                <div className="results-manifest__content">
-                  <a href={resolveAppPublicUrl(manifestUrl)} className="btn results-manifest__download-link" download>
-                    Скачать файл manifest
-                  </a>
+            <section className="results-card results-card--export" data-figma-export>
+              <div className="results-card__head results-card__head--stacked">
+                <div className="results-card__title">
+                  <h2>Экспорт в Figma</h2>
                 </div>
-              </details>
-            ) : null}
-            <div className="results-export__actions">
-              <button type="button" className="btn btn-primary" disabled={isExporting} onClick={handleGenerateFigma}>
-                {isExporting ? 'Генерируем Figma JSON…' : manifestUrl ? 'Manifest готов ✓' : 'Экспорт бренд-комплекта'}
-              </button>
-              <a href={`/projects/${projectSlug}/downloads/all${results.selected_generation_job_id ? `?job=${encodeURIComponent(results.selected_generation_job_id)}` : ''}`} className="btn btn-secondary">Скачать архив</a>
-            </div>
-            <p className={`results-export__status${exportTone ? ` results-export__status--${exportTone}` : ''}`} aria-live="polite">{exportStatus}</p>
-          </section>
+              </div>
+              <ResultsFigmaImportGuide brandId={results.project.brand_id} />
+              {manifestUrl ? (
+                <details className="results-manifest" id="results-manifest-panel">
+                  <summary className="results-manifest__summary">
+                    <span>Скачать JSON manifest</span>
+                  </summary>
+                  <div className="results-manifest__content">
+                    <a href={resolveAppPublicUrl(manifestUrl)} className="btn results-manifest__download-link" download>
+                      Скачать файл manifest
+                    </a>
+                  </div>
+                </details>
+              ) : null}
+              <div className="results-export__actions">
+                <button type="button" className="btn btn-primary" disabled={isExporting} onClick={handleGenerateFigma}>
+                  {isExporting ? 'Генерируем Figma JSON…' : manifestUrl ? 'Manifest готов ✓' : 'экспорт бренд-комплекта'}
+                </button>
+                <a href={`/projects/${projectSlug}/downloads/all${results.selected_generation_job_id ? `?job=${encodeURIComponent(results.selected_generation_job_id)}` : ''}`} className="btn btn-secondary">скачать архив</a>
+              </div>
+              <p className={`results-export__status${exportTone ? ` results-export__status--${exportTone}` : ''}`} aria-live="polite">{exportStatus}</p>
+            </section>
           ) : null}
         </div>
       </section>
@@ -2670,6 +2682,7 @@ function ProjectEditorPage({
       <section className="project-editor">
         <div className="project-page-head">
           <div>
+            {isDemoMode ? <span className="project-card__badge">один запуск без регистрации</span> : null}
             <h1>Генерация бренд-комплекта</h1>
             <p>Загружаем проект...</p>
           </div>
@@ -2683,6 +2696,7 @@ function ProjectEditorPage({
       <section className="project-editor">
         <div className="project-page-head">
           <div>
+            {isDemoMode ? <span className="project-card__badge">один запуск без регистрации</span> : null}
             <h1>Генерация бренд-комплекта</h1>
             <p>{error}</p>
           </div>
@@ -2695,6 +2709,7 @@ function ProjectEditorPage({
     <section className="project-editor">
       <div className="project-page-head">
         <div>
+          {isDemoMode ? <span className="project-card__badge">один запуск без регистрации</span> : null}
           <h1>Генерация бренд-комплекта</h1>
           <p>Настрой стиль бренда и сгенерируй логотипы, иконки, паттерны и иллюстрации</p>
         </div>
@@ -2750,9 +2765,9 @@ function ProjectEditorPage({
           </div>
 
           {!isDemoMode ? (
-          <p className="editor-note editor-note--compact">
-            Итоговая палитра — это ваши значения в сетке (шаг сохранения / запуска). Блок «Подбор палитры» ниже необязателен: он лишь предлагает варианты; они применятся к сетке только после нажатия Soft, Balanced или Contrast.
-          </p>
+            <p className="editor-note editor-note--compact">
+              Итоговая палитра — это ваши значения в сетке (шаг сохранения / запуска). Блок «Подбор палитры» ниже необязателен: он лишь предлагает варианты; они применятся к сетке только после нажатия Soft, Balanced или Contrast.
+            </p>
           ) : null}
           {isDemoMode ? (
             <p className="editor-note editor-note--compact demo-inline-note">
@@ -2765,101 +2780,101 @@ function ProjectEditorPage({
               const slotActive = activePaletteKeys.includes(key)
               const demoLocked = isDemoMode && !demoPaletteKeySet.has(key)
               return (
-              <div
-                className={`palette-item${slotActive ? '' : ' palette-item--inactive'}${demoLocked ? ' palette-item--demo-locked' : ''}`}
-                key={key}
-              >
-                <label className="palette-item__label">
-                  <input type="checkbox" checked={slotActive} disabled={demoLocked} onChange={(event) => togglePaletteKey(key, event.target.checked)} /> <span>{PALETTE_LABELS[key]}</span>
-                </label>
-                <input
-                  type="color"
-                  className="palette-swatch"
-                  value={normalizeHexColor(paletteSlots[key]) || DEFAULT_PALETTE[key]}
-                  disabled={!slotActive || demoLocked}
-                  onChange={(event) => setPaletteValue(key, event.target.value)}
-                />
-                <input
-                  type="text"
-                  className="editor-field__compact"
-                  value={paletteSlots[key]}
-                  disabled={!slotActive || demoLocked}
-                  onChange={(event) => setPaletteValue(key, event.target.value)}
-                />
-              </div>
+                <div
+                  className={`palette-item${slotActive ? '' : ' palette-item--inactive'}${demoLocked ? ' palette-item--demo-locked' : ''}`}
+                  key={key}
+                >
+                  <label className="palette-item__label">
+                    <input type="checkbox" checked={slotActive} disabled={demoLocked} onChange={(event) => togglePaletteKey(key, event.target.checked)} /> <span>{PALETTE_LABELS[key]}</span>
+                  </label>
+                  <input
+                    type="color"
+                    className="palette-swatch"
+                    value={normalizeHexColor(paletteSlots[key]) || DEFAULT_PALETTE[key]}
+                    disabled={!slotActive || demoLocked}
+                    onChange={(event) => setPaletteValue(key, event.target.value)}
+                  />
+                  <input
+                    type="text"
+                    className="editor-field__compact"
+                    value={paletteSlots[key]}
+                    disabled={!slotActive || demoLocked}
+                    onChange={(event) => setPaletteValue(key, event.target.value)}
+                  />
+                </div>
               )
             })}
           </div>
           <div className="editor-note editor-note--compact" hidden={activePaletteKeys.length >= 2}>Выберите минимум 2 цвета палитры. Они будут использоваться в текущей генерации.</div>
 
           {!isDemoMode ? (
-          <>
-          <div className="palette-assistant-bar">
-            <button
-              type="button"
-              className="btn btn-outline btn-inline palette-assistant-toggle"
-              aria-expanded={paletteAssistantOpen}
-              onClick={() => {
-                const next = !paletteAssistantOpen
-                setPaletteAssistantOpen(next)
-                if (next && normalizeHexColor(paletteSeedColor)) {
-                  void fetchPaletteSuggestions(paletteSeedRole, paletteSeedColor)
-                }
-              }}
-            >
-              {paletteAssistantOpen ? 'Скрыть подбор палитры' : 'Подобрать палитру по опорному цвету (необязательно)'}
-            </button>
-          </div>
-
-          {paletteAssistantOpen ? (
-            <div className="palette-autofill">
-              <div className="palette-autofill__head">
-                <div>
-                  <h3>Подбор палитры</h3>
-                  <p>
-                    Сейчас за опору взят цвет {capitalizePaletteLabel(paletteSeedRole)}.
-                  </p>
-                  <p>
-                    Нажмите вариант Soft / Balanced / Contrast, чтобы подставить предложенные 6 цветов. Пока не нажали — в генерации используются только ваши значения в сетке.
-                  </p>
-                </div>
+            <>
+              <div className="palette-assistant-bar">
                 <button
                   type="button"
-                  className="btn btn-inline palette-autofill__refresh"
-                  disabled={isPaletteLoading || !normalizeHexColor(paletteSeedColor)}
-                  onClick={() => void fetchPaletteSuggestions(paletteSeedRole, paletteSeedColor)}
+                  className="btn btn-outline btn-inline palette-assistant-toggle"
+                  aria-expanded={paletteAssistantOpen}
+                  onClick={() => {
+                    const next = !paletteAssistantOpen
+                    setPaletteAssistantOpen(next)
+                    if (next && normalizeHexColor(paletteSeedColor)) {
+                      void fetchPaletteSuggestions(paletteSeedRole, paletteSeedColor)
+                    }
+                  }}
                 >
-                  {isPaletteLoading ? 'Обновляем...' : 'Обновить варианты'}
+                  {paletteAssistantOpen ? 'Скрыть подбор палитры' : 'Подобрать палитру по опорному цвету (необязательно)'}
                 </button>
               </div>
-              <div className="palette-autofill__actions">
-                {(['soft', 'balanced', 'contrast'] as const).map((variantName) => (
-                  <button
-                    type="button"
-                    className={`small-action palette-variant-btn${activePaletteVariant === variantName ? ' is-active' : ''}`}
-                    key={variantName}
-                    onClick={() => void applySuggestedPalette(variantName)}
-                  >
-                    {variantName === 'soft' ? 'Soft' : variantName === 'balanced' ? 'Balanced' : 'Contrast'}
-                  </button>
-                ))}
-              </div>
-              <div className="palette-autofill__preview">
-                {paletteSuggestions?.[activePaletteVariant]
-                  ? PALETTE_KEYS.map((key) => (
-                    <div className="palette-preview-swatch" key={key}>
-                      <div className="palette-preview-swatch__color" style={{ background: paletteSuggestions[activePaletteVariant][key] }}></div>
-                      <div className="palette-preview-swatch__meta">
-                        <span className="palette-preview-swatch__label">{PALETTE_LABELS[key]}</span>
-                        <strong className="palette-preview-swatch__value">{paletteSuggestions[activePaletteVariant][key]}</strong>
-                      </div>
+
+              {paletteAssistantOpen ? (
+                <div className="palette-autofill">
+                  <div className="palette-autofill__head">
+                    <div>
+                      <h3>Подбор палитры</h3>
+                      <p>
+                        Сейчас за опору взят цвет {capitalizePaletteLabel(paletteSeedRole)}.
+                      </p>
+                      <p>
+                        Нажмите вариант Soft / Balanced / Contrast, чтобы подставить предложенные 6 цветов. Пока не нажали — в генерации используются только ваши значения в сетке.
+                      </p>
                     </div>
-                  ))
-                  : null}
-              </div>
-            </div>
-          ) : null}
-          </>
+                    <button
+                      type="button"
+                      className="btn btn-inline palette-autofill__refresh"
+                      disabled={isPaletteLoading || !normalizeHexColor(paletteSeedColor)}
+                      onClick={() => void fetchPaletteSuggestions(paletteSeedRole, paletteSeedColor)}
+                    >
+                      {isPaletteLoading ? 'Обновляем...' : 'Обновить варианты'}
+                    </button>
+                  </div>
+                  <div className="palette-autofill__actions">
+                    {(['soft', 'balanced', 'contrast'] as const).map((variantName) => (
+                      <button
+                        type="button"
+                        className={`small-action palette-variant-btn${activePaletteVariant === variantName ? ' is-active' : ''}`}
+                        key={variantName}
+                        onClick={() => void applySuggestedPalette(variantName)}
+                      >
+                        {variantName === 'soft' ? 'Soft' : variantName === 'balanced' ? 'Balanced' : 'Contrast'}
+                      </button>
+                    ))}
+                  </div>
+                  <div className="palette-autofill__preview">
+                    {paletteSuggestions?.[activePaletteVariant]
+                      ? PALETTE_KEYS.map((key) => (
+                        <div className="palette-preview-swatch" key={key}>
+                          <div className="palette-preview-swatch__color" style={{ background: paletteSuggestions[activePaletteVariant][key] }}></div>
+                          <div className="palette-preview-swatch__meta">
+                            <span className="palette-preview-swatch__label">{PALETTE_LABELS[key]}</span>
+                            <strong className="palette-preview-swatch__value">{paletteSuggestions[activePaletteVariant][key]}</strong>
+                          </div>
+                        </div>
+                      ))
+                      : null}
+                  </div>
+                </div>
+              ) : null}
+            </>
           ) : null}
         </section>
 
@@ -2873,20 +2888,25 @@ function ProjectEditorPage({
             </div>
           </div>
           <div className="asset-tabs" role="tablist" aria-label="Тип ассетов">
-            {ASSET_TYPES.map((type) => (
+            {ASSET_TYPES.map((type) => {
+              const isIllustrationsLocked = isDemoMode && type === 'illustrations'
+              return (
               <button
                 type="button"
-                className={`asset-tab${activeAssetType === type ? ' asset-tab--active' : ''}${isDemoMode && type === 'illustrations' ? ' asset-tab--locked' : ''}`}
+                className={`asset-tab${activeAssetType === type && !isIllustrationsLocked ? ' asset-tab--active' : ''}${isIllustrationsLocked ? ' asset-tab--locked' : ''}`}
                 role="tab"
-                aria-selected={activeAssetType === type ? 'true' : 'false'}
-                aria-controls={`asset-panel-${type}`}
+                aria-selected={activeAssetType === type && !isIllustrationsLocked ? 'true' : 'false'}
+                aria-controls={isIllustrationsLocked ? undefined : `asset-panel-${type}`}
+                aria-disabled={isIllustrationsLocked ? 'true' : undefined}
                 id={`asset-tab-${type}`}
                 key={type}
+                disabled={isIllustrationsLocked}
                 onClick={() => setActiveAssetType(type)}
               >
-                {ASSET_LABELS[type]}{isDemoMode && type === 'illustrations' ? ' 🔒' : ''}
+                {ASSET_LABELS[type]}
+                {isIllustrationsLocked ? <DemoTabLockIcon /> : null}
               </button>
-            ))}
+            )})}
           </div>
 
           {isDemoMode ? (
@@ -2895,7 +2915,7 @@ function ProjectEditorPage({
             </p>
           ) : null}
 
-          {ASSET_TYPES.map((type) => (
+          {(isDemoMode ? ASSET_TYPES.filter((type) => type !== 'illustrations') : ASSET_TYPES).map((type) => (
             <div
               id={`asset-panel-${type}`}
               className={`asset-panel${activeAssetType === type ? ' asset-panel--active' : ''}`}
@@ -2904,138 +2924,130 @@ function ProjectEditorPage({
               hidden={activeAssetType !== type}
               key={type}
             >
-              {isDemoMode && type === 'illustrations' ? (
-                <div className="demo-asset-locked">
-                  <h3>Иллюстрации</h3>
-                  <p>Доступны после регистрации. В демо вы получите логотип, иконки и паттерн.</p>
-                  <Link to="/register" className="btn btn-primary btn-inline">Зарегистрироваться</Link>
-                </div>
-              ) : (
-              <>
-              <label className="editor-field">
-                <span>Промпт</span>
-                <textarea
-                  rows={4}
-                  placeholder={ASSET_PLACEHOLDERS[type]}
-                  autoComplete="off"
-                  value={promptFields[type]}
-                  onChange={(event) => setPromptFields((current) => ({ ...current, [type]: event.target.value }))}
-                />
-              </label>
-
-              {type === 'icons' ? (
-                <div className="editor-grid">
+                <>
                   <label className="editor-field">
-                    <span>Stroke Width (px)</span>
-                    <input type="number" min="0" step="0.5" value={iconStrokeWidth} onChange={(event) => setIconStrokeWidth(Number(event.target.value || 0))} />
-                  </label>
-                  <label className="editor-field">
-                    <span>Corner</span>
-                    <select value={iconCorner} onChange={(event) => setIconCorner(event.target.value)}>
-                      <option value="rounded">Rounded</option>
-                      <option value="square">Square</option>
-                      <option value="butt">Butt</option>
-                    </select>
-                  </label>
-                  <label className="editor-field">
-                    <span>Fill</span>
-                    <select value={iconFill} onChange={(event) => setIconFill(event.target.value)}>
-                      <option value="outline">Outline</option>
-                      <option value="filled">Filled</option>
-                      <option value="duotone">Duotone</option>
-                    </select>
-                  </label>
-                </div>
-              ) : null}
-
-              {type === 'illustrations' ? (
-                <div className="illustration-format-row" role="radiogroup" aria-label="Формат иллюстрации">
-                  <label className="illustration-format-check">
-                    <input
-                      type="radio"
-                      name={`illustration-format-${projectSlug}`}
-                      value="vector"
-                      checked={illustrationFormat === 'vector'}
-                      onChange={() => setIllustrationFormat('vector')}
+                    <span>Промпт</span>
+                    <textarea
+                      rows={4}
+                      placeholder={ASSET_PLACEHOLDERS[type]}
+                      autoComplete="off"
+                      value={promptFields[type]}
+                      onChange={(event) => setPromptFields((current) => ({ ...current, [type]: event.target.value }))}
                     />
-                    <span>Вектор</span>
                   </label>
-                  <label className="illustration-format-check">
-                    <input
-                      type="radio"
-                      name={`illustration-format-${projectSlug}`}
-                      value="raster"
-                      checked={illustrationFormat === 'raster'}
-                      onChange={() => setIllustrationFormat('raster')}
-                    />
-                    <span>Растр</span>
-                  </label>
-                </div>
-              ) : null}
 
-              <div className="editor-grid editor-grid--narrow asset-panel-counts">
-                <label className="editor-field">
-                  <span>{assetCountLabel(type)}</span>
-                  <input
-                    type="number"
-                    min="1"
-                    max="20"
-                    value={isDemoMode ? DEMO_ASSET_COUNTS[type] : assetCounts[type]}
-                    disabled={isDemoMode}
-                    onChange={(event) => setAssetCount(type, event.target.value)}
-                  />
-                </label>
-              </div>
-
-              <div className="asset-panel-refs">
-                <span className="asset-panel-refs__title">{ASSET_REF_LABELS[type]}</span>
-                <p className="asset-panel-refs__hint">
-                  {isDemoMode
-                    ? 'В демо можно загрузить 1 референс на весь проект (до 2 МБ).'
-                    : 'Изображения, которые задают желаемую эстетику для этого типа ассетов.'}
-                </p>
-                <label
-                  className={`btn btn-primary btn-upload btn-upload--compact asset-panel-refs__upload${demoRefLimitReached ? ' asset-panel-refs__upload--disabled' : ''}`}
-                >
-                  <input
-                    type="file"
-                    multiple={!isDemoMode}
-                    accept=".png,.jpg,.jpeg,.webp,.gif,.bmp"
-                    hidden
-                    disabled={refsLoadingType === type || demoRefLimitReached}
-                    onChange={(event) => {
-                      void handleUploadRefs(type, event.target.files)
-                      event.currentTarget.value = ''
-                    }}
-                  />
-                  <span>{refsLoadingType === type ? 'Загружаем...' : 'Загрузить'}</span>
-                </label>
-                <div className="refs-grid refs-grid--compact">
-                  {refsLoadingType === type && !assetRefs[type].length ? <div className="refs-empty">Загрузка...</div> : null}
-                  {refsLoadingType !== type && !assetRefs[type].length ? <div className="refs-empty">Референсы пока не загружены</div> : null}
-                  {assetRefs[type].map((ref) => (
-                    <div className="ref-card" key={`${type}-${ref.path}`}>
-                      <a href={ref.url} target="_blank" rel="noopener" className="ref-card__preview">
-                        <img src={ref.url} alt={ref.name} className="ref-card__image" />
-                      </a>
-                      <button
-                        type="button"
-                        className="ref-delete"
-                        disabled={refsLoadingType === type}
-                        onClick={(event) => {
-                          event.preventDefault()
-                          event.stopPropagation()
-                          void handleDeleteRef(type, ref.path)
-                        }}
-                      >
-                        Удалить
-                      </button>
+                  {type === 'icons' ? (
+                    <div className="editor-grid">
+                      <label className="editor-field">
+                        <span>Stroke Width (px)</span>
+                        <input type="number" min="0" step="0.5" value={iconStrokeWidth} onChange={(event) => setIconStrokeWidth(Number(event.target.value || 0))} />
+                      </label>
+                      <label className="editor-field">
+                        <span>Corner</span>
+                        <select value={iconCorner} onChange={(event) => setIconCorner(event.target.value)}>
+                          <option value="rounded">Rounded</option>
+                          <option value="square">Square</option>
+                          <option value="butt">Butt</option>
+                        </select>
+                      </label>
+                      <label className="editor-field">
+                        <span>Fill</span>
+                        <select value={iconFill} onChange={(event) => setIconFill(event.target.value)}>
+                          <option value="outline">Outline</option>
+                          <option value="filled">Filled</option>
+                          <option value="duotone">Duotone</option>
+                        </select>
+                      </label>
                     </div>
-                  ))}
-                </div>
-              </div>
-              </>
-              )}
+                  ) : null}
+
+                  {type === 'illustrations' ? (
+                    <div className="illustration-format-row" role="radiogroup" aria-label="Формат иллюстрации">
+                      <label className="illustration-format-check">
+                        <input
+                          type="radio"
+                          name={`illustration-format-${projectSlug}`}
+                          value="vector"
+                          checked={illustrationFormat === 'vector'}
+                          onChange={() => setIllustrationFormat('vector')}
+                        />
+                        <span>Вектор</span>
+                      </label>
+                      <label className="illustration-format-check">
+                        <input
+                          type="radio"
+                          name={`illustration-format-${projectSlug}`}
+                          value="raster"
+                          checked={illustrationFormat === 'raster'}
+                          onChange={() => setIllustrationFormat('raster')}
+                        />
+                        <span>Растр</span>
+                      </label>
+                    </div>
+                  ) : null}
+
+                  <div className="editor-grid editor-grid--narrow asset-panel-counts">
+                    <label className="editor-field">
+                      <span>{assetCountLabel(type)}</span>
+                      <input
+                        type="number"
+                        min="1"
+                        max="20"
+                        value={isDemoMode ? DEMO_ASSET_COUNTS[type] : assetCounts[type]}
+                        disabled={isDemoMode}
+                        onChange={(event) => setAssetCount(type, event.target.value)}
+                      />
+                    </label>
+                  </div>
+
+                  <div className="asset-panel-refs">
+                    <span className="asset-panel-refs__title">{ASSET_REF_LABELS[type]}</span>
+                    <p className="asset-panel-refs__hint">
+                      {isDemoMode
+                        ? 'В демо можно загрузить 1 референс на весь проект (до 2 МБ).'
+                        : 'Изображения, которые задают желаемую эстетику для этого типа ассетов.'}
+                    </p>
+                    <label
+                      className={`btn btn-primary btn-upload btn-upload--compact asset-panel-refs__upload${demoRefLimitReached ? ' asset-panel-refs__upload--disabled' : ''}`}
+                    >
+                      <input
+                        type="file"
+                        multiple={!isDemoMode}
+                        accept=".png,.jpg,.jpeg,.webp,.gif,.bmp"
+                        hidden
+                        disabled={refsLoadingType === type || demoRefLimitReached}
+                        onChange={(event) => {
+                          void handleUploadRefs(type, event.target.files)
+                          event.currentTarget.value = ''
+                        }}
+                      />
+                      <span>{refsLoadingType === type ? 'Загружаем...' : 'Загрузить'}</span>
+                    </label>
+                    <div className="refs-grid refs-grid--compact">
+                      {refsLoadingType === type && !assetRefs[type].length ? <div className="refs-empty">Загрузка...</div> : null}
+                      {refsLoadingType !== type && !assetRefs[type].length && !demoRefLimitReached ? <div className="refs-empty">Референсы пока не загружены</div> : null}
+                      {assetRefs[type].map((ref) => (
+                        <div className="ref-card" key={`${type}-${ref.path}`}>
+                          <a href={ref.url} target="_blank" rel="noopener" className="ref-card__preview">
+                            <img src={ref.url} alt={ref.name} className="ref-card__image" />
+                          </a>
+                          <button
+                            type="button"
+                            className="ref-delete"
+                            disabled={refsLoadingType === type}
+                            onClick={(event) => {
+                              event.preventDefault()
+                              event.stopPropagation()
+                              void handleDeleteRef(type, ref.path)
+                            }}
+                          >
+                            Удалить
+                          </button>
+                        </div>
+                      ))}
+                    </div>
+                  </div>
+                </>
             </div>
           ))}
         </section>
@@ -3070,29 +3082,30 @@ function ProjectEditorPage({
 
           {isDemoMode ? (
             <div className="demo-provider-box">
-              <span className="demo-provider-box__label">Провайдер</span>
-              <strong>{DEMO_PROVIDER_LABEL}</strong>
+              <p className="demo-provider-box__provider">
+                <strong>Провайдер: {DEMO_PROVIDER_LABEL}</strong>
+              </p>
               <p>После регистрации вы сможете выбрать Recraft, Flux, Seedream и другие модели, а также подключить свои API-ключи.</p>
             </div>
           ) : (
-          <div className="editor-field generation-providers-pick">
-            <span>Нейросети для этого запуска</span>
-            <p className="generation-providers-hint">
-              Отметьте модели, которые должны выдать ассеты. Без Recraft в проекте должен&nbsp;быть сохранён Style&nbsp;ID.
-            </p>
-            <div className="generation-providers-checkboxes" role="group" aria-label="Провайдеры генерации">
-              {GENERATION_PROVIDERS.map((p) => (
-                <label key={p.slug} className="generation-provider-check">
-                  <input
-                    type="checkbox"
-                    checked={selectedGenerationProviders.includes(p.slug)}
-                    onChange={(event) => toggleGenerationProvider(p.slug, event.target.checked)}
-                  />
-                  <span>{p.label}</span>
-                </label>
-              ))}
+            <div className="editor-field generation-providers-pick">
+              <span>Нейросети для этого запуска</span>
+              <p className="generation-providers-hint">
+                Отметьте модели, которые должны выдать ассеты. Без Recraft в проекте должен&nbsp;быть сохранён Style&nbsp;ID.
+              </p>
+              <div className="generation-providers-checkboxes" role="group" aria-label="Провайдеры генерации">
+                {GENERATION_PROVIDERS.map((p) => (
+                  <label key={p.slug} className="generation-provider-check">
+                    <input
+                      type="checkbox"
+                      checked={selectedGenerationProviders.includes(p.slug)}
+                      onChange={(event) => toggleGenerationProvider(p.slug, event.target.checked)}
+                    />
+                    <span>{p.label}</span>
+                  </label>
+                ))}
+              </div>
             </div>
-          </div>
           )}
 
           <div className="generated-summary">
@@ -3106,11 +3119,11 @@ function ProjectEditorPage({
                 </>
               ) : (
                 <>
-              <li>Иконки в заданном стиле и цветовой палитре</li>
-              <li>Варианты логотипов в едином стиле бренда</li>
-              <li>Seamless паттерны с заданными мотивами</li>
-              <li>Иллюстрации в едином визуальном стиле</li>
-              <li>JSON-токены для интеграции с Figma</li>
+                  <li>Иконки в заданном стиле и цветовой палитре</li>
+                  <li>Варианты логотипов в едином стиле бренда</li>
+                  <li>Seamless паттерны с заданными мотивами</li>
+                  <li>Иллюстрации в едином визуальном стиле</li>
+                  <li>JSON-токены для интеграции с Figma</li>
                 </>
               )}
             </ul>
@@ -3152,8 +3165,8 @@ function ProjectEditorPage({
           </button>
           {!isDemoMode ? (
             <>
-          <a href={`/projects/${projectSlug}/download`} className="btn btn-outline btn-inline">Скачать конфигурацию проекта</a>
-          <a href={`/projects/${projectSlug}/download-bundle`} className="btn btn-outline btn-inline">Скачать ZIP (с референсами)</a>
+              <a href={`/projects/${projectSlug}/download`} className="btn btn-outline btn-inline">Скачать конфигурацию проекта</a>
+              <a href={`/projects/${projectSlug}/download-bundle`} className="btn btn-outline btn-inline">Скачать ZIP (с референсами)</a>
             </>
           ) : null}
           <button type="button" className="btn btn-inline btn-reset-light" disabled={isSaving} onClick={handleReset}>Сброс</button>
@@ -3495,7 +3508,8 @@ function FigmaPluginPage() {
         </p>
         <div className="figma-plugin-actions">
           <a href="/figma-plugin/download" className="btn btn-primary">
-            Скачать плагин KYBBY
+            Скачать плагин{' '}
+            <span className="btn__brand">KYBBY</span>
           </a>
         </div>
         <p className="figma-plugin-note">
@@ -3956,7 +3970,7 @@ function ProjectsDashboard() {
             <form className="dashboard-create-form projects-create-form" onSubmit={(event) => event.preventDefault()}>
               <input type="hidden" name="name" value="Новый проект" />
               <button type="button" className="btn btn-primary dashboard-create-btn projects-create-btn" disabled={isCreating || isImporting} onClick={handleCreateProject}>
-                {isCreating ? 'Создаём...' : 'Создать проект'}
+                {isCreating ? 'Создаём...' : 'создать проект'}
               </button>
             </form>
             <button
@@ -3965,7 +3979,7 @@ function ProjectsDashboard() {
               disabled={isCreating || isImporting}
               onClick={handleImportClick}
             >
-              {isImporting ? 'Импортируем...' : 'Импортировать проект'}
+              {isImporting ? 'Импортируем...' : 'импортировать проект'}
             </button>
             <input
               ref={importInputRef}
@@ -3990,19 +4004,28 @@ function ProjectsDashboard() {
           {projects.map((project) => (
             <article className="project-card" key={project.slug}>
               <Link to={`/projects/${project.slug}/results`} className="project-card__main-link" aria-label={`Открыть результаты генерации ${project.name}`}></Link>
-              <div className="project-card__icon">
-                <span>✦</span>
-                <span>✦</span>
-              </div>
               <div className="project-card__body">
-                <h2>{project.name}</h2>
-                <p>Дата создания:</p>
-                <span>{project.created_at.slice(0, 10)}</span>
+                <div className="project-card__title-row">
+                  <div className="project-card__icon" aria-hidden="true">
+                    <img
+                      className="project-card__icon-img"
+                      src="/app/static/img/landing/stars.png"
+                      alt=""
+                      width={28}
+                      height={28}
+                    />
+                  </div>
+                  <div className="project-card__heading">
+                    <h2>{project.name}</h2>
+                    <p>Дата создания:</p>
+                    <span>{project.created_at.slice(0, 10)}</span>
+                  </div>
+                </div>
               </div>
               <div className="project-card__aside">
                 {project.is_imported ? (
                   <div className="project-card__status">
-                    <span className="project-card__badge" title="Проект импортирован из ZIP-архива">Внешний</span>
+                    <span className="project-card__badge" title="Проект импортирован из ZIP-архива">внешний</span>
                   </div>
                 ) : null}
                 <div className="project-card__actions">
@@ -4093,10 +4116,21 @@ function LockIcon() {
   )
 }
 
+function DemoTabLockIcon() {
+  return (
+    <svg className="asset-tab__lock-icon" viewBox="0 0 16 16" xmlns="http://www.w3.org/2000/svg" aria-hidden="true">
+      <path
+        fill="currentColor"
+        d="M4.75 7V5.5a3.25 3.25 0 1 1 6.5 0V7h.75c.69 0 1.25.56 1.25 1.25v5.5c0 .69-.56 1.25-1.25 1.25h-7.5c-.69 0-1.25-.56-1.25-1.25v-5.5c0-.69.56-1.25 1.25-1.25h.75zm2 0h2.5V5.5a1.25 1.25 0 1 0-2.5 0V7z"
+      />
+    </svg>
+  )
+}
+
 function QuestionIcon() {
   return (
     <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="1.5" strokeLinecap="round" strokeLinejoin="round">
-      <circle cx="12" cy="12" r="9" />
+      <rect x="3" y="3" width="18" height="18" />
       <path d="M9.5 9.4a2.6 2.6 0 0 1 4.6 1.3c0 1.6-2.1 2-2.1 3.7" />
       <circle cx="12" cy="17.2" r="0.9" fill="currentColor" stroke="none" />
     </svg>

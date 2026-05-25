@@ -1,4 +1,4 @@
-import { type CSSProperties, useCallback, useEffect, useMemo, useState, type ImgHTMLAttributes } from 'react'
+import { type CSSProperties, type ReactNode, useCallback, useEffect, useMemo, useState, type ImgHTMLAttributes } from 'react'
 import { GENERATION_PROVIDERS, providerLabel } from '../../constants/generationProviders'
 import type { ProjectResultsResponse } from '../../types/results'
 import { MockupConstructor } from './MockupConstructor'
@@ -12,7 +12,7 @@ import {
 import { buildMockupCopy, type MockupCopy } from './mockupCopy'
 import { TrimmedMockupLogo } from './TrimmedMockupLogo'
 
-type MockupKind = 'landing' | 'business-card' | 'instagram'
+type MockupKind = 'landing' | 'business-card' | 'vk'
 type AssetKind = 'logos' | 'icons' | 'patterns' | 'illustrations'
 
 export type BrandPreviewData = {
@@ -34,7 +34,7 @@ export type BrandPreviewData = {
 const MOCKUPS: { key: MockupKind; label: string }[] = [
   { key: 'landing', label: 'Лендинг' },
   { key: 'business-card', label: 'Визитка' },
-  { key: 'instagram', label: 'Instagram' },
+  { key: 'vk', label: 'ВКонтакте' },
 ]
 
 const ASSET_KINDS: AssetKind[] = ['logos', 'icons', 'patterns', 'illustrations']
@@ -134,18 +134,22 @@ function LandingBrandMark({ brand }: { brand: BrandPreviewData }) {
   return <strong className="brand-mockup-landing__logo">{brand.name}</strong>
 }
 
-function InstagramAvatar({ brand }: { brand: BrandPreviewData }) {
+function VkAvatar({ brand }: { brand: BrandPreviewData }) {
   if (brand.logo) {
-    return <img src={brand.logo} alt="" className="brand-mockup-instagram__avatar brand-mockup-instagram__avatar--logo" />
+    return <img src={brand.logo} alt="" className="brand-mockup-vk__avatar brand-mockup-vk__avatar--logo" />
   }
   if (brand.icon) {
     return (
-      <span className="brand-mockup-instagram__avatar-ring">
+      <span className="brand-mockup-vk__avatar brand-mockup-vk__avatar--icon">
         <MockupIcon src={brand.icon} />
       </span>
     )
   }
-  return <strong className="brand-mockup-instagram__avatar">{brand.name}</strong>
+  return <strong className="brand-mockup-vk__avatar brand-mockup-vk__avatar--initial">{brand.name.charAt(0)}</strong>
+}
+
+function VkActionIcon({ children }: { children: ReactNode }) {
+  return <span className="brand-mockup-vk__action-icon" aria-hidden="true">{children}</span>
 }
 
 function BusinessCardBrandMark({ brand }: { brand: BrandPreviewData }) {
@@ -205,29 +209,62 @@ function BusinessCardMockup({ brand }: { brand: BrandPreviewData }) {
   )
 }
 
-function InstagramMockup({ brand }: { brand: BrandPreviewData }) {
+function VkMockup({ brand }: { brand: BrandPreviewData }) {
   return (
-    <div className="brand-mockup brand-mockup--instagram" style={brandStyle(brand)}>
-      <div className="brand-mockup-instagram__phone">
-        <div className="brand-mockup-instagram__top">
-          <InstagramAvatar brand={brand} />
-          <span>{brand.name.toLowerCase().replace(/\s+/g, '_')}</span>
-        </div>
+    <div className="brand-mockup brand-mockup--vk" style={brandStyle(brand)}>
+      <article className="brand-mockup-vk__post">
+        <header className="brand-mockup-vk__header">
+          <VkAvatar brand={brand} />
+          <div className="brand-mockup-vk__meta">
+            <strong className="brand-mockup-vk__name">{brand.name}</strong>
+            <span className="brand-mockup-vk__time">сейчас</span>
+          </div>
+        </header>
         <div
-          className="brand-mockup-instagram__media"
-          style={brand.pattern ? { backgroundImage: `url(${brand.pattern})`, backgroundSize: 'cover' } : undefined}
+          className="brand-mockup-vk__media"
+          style={
+            brand.illustration && brand.pattern
+              ? { backgroundImage: `url(${brand.pattern})`, backgroundSize: 'cover' }
+              : undefined
+          }
         >
-          {brand.illustration ? <img src={brand.illustration} alt="" /> : brand.icon ? <MockupIcon src={brand.icon} /> : null}
+          {brand.illustration ? (
+            <img src={brand.illustration} alt="" />
+          ) : brand.pattern ? (
+            <img src={brand.pattern} alt="" />
+          ) : brand.icon ? (
+            <MockupIcon src={brand.icon} />
+          ) : null}
         </div>
-        <div className="brand-mockup-instagram__actions" aria-hidden="true">
-          <span>♡</span>
-          <span>◎</span>
-          <span>↗</span>
-        </div>
-        <p className="brand-mockup-instagram__caption">
-          <strong>{brand.name.toLowerCase().replace(/\s+/g, '_')}</strong> {brand.copy.instagramCaption}
-        </p>
-      </div>
+        <p className="brand-mockup-vk__text">{brand.copy.vkCaption}</p>
+        <footer className="brand-mockup-vk__actions" aria-hidden="true">
+          <span className="brand-mockup-vk__action">
+            <VkActionIcon>
+              <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="1.75" strokeLinecap="round" strokeLinejoin="round">
+                <path d="M20.8 4.6a5.5 5.5 0 0 0-7.8 0L12 5.6l-1-1a5.5 5.5 0 0 0-7.8 7.8l1 1L12 21l7.8-7.6 1-1a5.5 5.5 0 0 0 0-7.8z" />
+              </svg>
+            </VkActionIcon>
+            Нравится
+          </span>
+          <span className="brand-mockup-vk__action">
+            <VkActionIcon>
+              <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="1.75" strokeLinecap="round" strokeLinejoin="round">
+                <path d="M21 11.5a8.4 8.4 0 0 1-8.4 8.4H8.4L3 21V11.5A8.4 8.4 0 0 1 11.4 3h.7A8.4 8.4 0 0 1 21 11.5z" />
+              </svg>
+            </VkActionIcon>
+            Комментировать
+          </span>
+          <span className="brand-mockup-vk__action">
+            <VkActionIcon>
+              <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="1.75" strokeLinecap="round" strokeLinejoin="round">
+                <path d="M4 21L18 6" />
+                <path d="M13.5 6H18V10.5" />
+              </svg>
+            </VkActionIcon>
+            Поделиться
+          </span>
+        </footer>
+      </article>
     </div>
   )
 }
@@ -318,14 +355,19 @@ export function BrandMockupsPreview({ results }: { results: ProjectResultsRespon
         </p>
       </div>
 
-      <div className="brand-mockups-provider-tabs" role="tablist" aria-label="Провайдер для превью">
+      <div
+        className="asset-tabs brand-mockups-provider-tabs"
+        role="tablist"
+        aria-label="Провайдер для превью"
+        style={{ gridTemplateColumns: `repeat(${mockupProviders.length}, minmax(0, 1fr))` }}
+      >
         {mockupProviders.map((slug) => (
           <button
             key={slug}
             type="button"
             role="tab"
             aria-selected={activeProvider === slug}
-            className={`brand-mockups-provider-tab${activeProvider === slug ? ' brand-mockups-provider-tab--active' : ''}`}
+            className={`asset-tab${activeProvider === slug ? ' asset-tab--active' : ''}`}
             onClick={() => setActiveProvider(slug)}
           >
             {providerLabel(slug)}
@@ -333,18 +375,18 @@ export function BrandMockupsPreview({ results }: { results: ProjectResultsRespon
         ))}
       </div>
 
-      <div className="brand-mockups-tabs" role="tablist" aria-label="Тип превью бренда">
+      <div className="illustration-format-row brand-mockups-format-row" role="radiogroup" aria-label="Тип превью бренда">
         {MOCKUPS.map((item) => (
-          <button
-            key={item.key}
-            type="button"
-            role="tab"
-            aria-selected={activeMockup === item.key}
-            className={`brand-mockups-tab${activeMockup === item.key ? ' brand-mockups-tab--active' : ''}`}
-            onClick={() => setActiveMockup(item.key)}
-          >
-            {item.label}
-          </button>
+          <label key={item.key} className="illustration-format-check">
+            <input
+              type="radio"
+              name={`mockup-kind-${results.project.slug}`}
+              value={item.key}
+              checked={activeMockup === item.key}
+              onChange={() => setActiveMockup(item.key)}
+            />
+            <span>{item.label}</span>
+          </label>
         ))}
       </div>
 
@@ -358,7 +400,7 @@ export function BrandMockupsPreview({ results }: { results: ProjectResultsRespon
       <div className="brand-mockups-stage" role="tabpanel">
         {activeMockup === 'landing' ? <LandingMockup brand={brand} /> : null}
         {activeMockup === 'business-card' ? <BusinessCardMockup brand={brand} /> : null}
-        {activeMockup === 'instagram' ? <InstagramMockup brand={brand} /> : null}
+        {activeMockup === 'vk' ? <VkMockup brand={brand} /> : null}
       </div>
     </section>
   )
