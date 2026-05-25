@@ -339,29 +339,29 @@ function LandingHeader({ session, onLogout }: { session: AuthMeResponse | null; 
       </div>
 
       <nav className="header-actions landing-header__nav" id="landing-menu">
-          {session?.authenticated ? (
-            <>
-              <Link to="/dashboard" className="btn btn-primary" onClick={closeMenu}>
-                Мои проекты
-              </Link>
-              <Link to="/profile" className="header-user-pill header-user-pill--link" onClick={closeMenu}>
-                {session.user?.name || 'Пользователь'}
-              </Link>
-              <a href="/logout" className="btn btn-outline" onClick={handleLogoutClick}>
-                Выйти
-              </a>
-            </>
-          ) : (
-            <>
-              <Link to="/login" className="btn btn-outline" onClick={closeMenu}>
-                войти
-              </Link>
-              <Link to="/register" className="btn btn-primary" onClick={closeMenu}>
-                зарегистрироваться
-              </Link>
-            </>
-          )}
-        </nav>
+        {session?.authenticated ? (
+          <>
+            <Link to="/dashboard" className="btn btn-primary" onClick={closeMenu}>
+              Мои проекты
+            </Link>
+            <Link to="/profile" className="header-user-pill header-user-pill--link" onClick={closeMenu}>
+              {session.user?.name || 'Пользователь'}
+            </Link>
+            <a href="/logout" className="btn btn-outline" onClick={handleLogoutClick}>
+              Выйти
+            </a>
+          </>
+        ) : (
+          <>
+            <Link to="/login" className="btn btn-outline" onClick={closeMenu}>
+              войти
+            </Link>
+            <Link to="/register" className="btn btn-primary" onClick={closeMenu}>
+              зарегистрироваться
+            </Link>
+          </>
+        )}
+      </nav>
       {menuOpen ? (
         <button
           type="button"
@@ -563,7 +563,7 @@ function LandingBackdrop({
             <div className="hero-tile hero-tile--filled hero-tile--icons"><span>иконки</span></div>
             <div className="hero-tile hero-tile--filled hero-tile--illustrations">
               <span>
-                иллюст-
+                иллюст<span className="hero-tile__hyphen">-</span>
                 <br className="hero-tile__break" />
                 рации
               </span>
@@ -587,7 +587,7 @@ function LandingBackdrop({
               ))}
             </ul>
           </div>
-  
+
         </div>
       </section>
       <section className="features-section section-block" id="features">
@@ -2891,22 +2891,23 @@ function ProjectEditorPage({
             {ASSET_TYPES.map((type) => {
               const isIllustrationsLocked = isDemoMode && type === 'illustrations'
               return (
-              <button
-                type="button"
-                className={`asset-tab${activeAssetType === type && !isIllustrationsLocked ? ' asset-tab--active' : ''}${isIllustrationsLocked ? ' asset-tab--locked' : ''}`}
-                role="tab"
-                aria-selected={activeAssetType === type && !isIllustrationsLocked ? 'true' : 'false'}
-                aria-controls={isIllustrationsLocked ? undefined : `asset-panel-${type}`}
-                aria-disabled={isIllustrationsLocked ? 'true' : undefined}
-                id={`asset-tab-${type}`}
-                key={type}
-                disabled={isIllustrationsLocked}
-                onClick={() => setActiveAssetType(type)}
-              >
-                {ASSET_LABELS[type]}
-                {isIllustrationsLocked ? <DemoTabLockIcon /> : null}
-              </button>
-            )})}
+                <button
+                  type="button"
+                  className={`asset-tab${activeAssetType === type && !isIllustrationsLocked ? ' asset-tab--active' : ''}${isIllustrationsLocked ? ' asset-tab--locked' : ''}`}
+                  role="tab"
+                  aria-selected={activeAssetType === type && !isIllustrationsLocked ? 'true' : 'false'}
+                  aria-controls={isIllustrationsLocked ? undefined : `asset-panel-${type}`}
+                  aria-disabled={isIllustrationsLocked ? 'true' : undefined}
+                  id={`asset-tab-${type}`}
+                  key={type}
+                  disabled={isIllustrationsLocked}
+                  onClick={() => setActiveAssetType(type)}
+                >
+                  {ASSET_LABELS[type]}
+                  {isIllustrationsLocked ? <DemoTabLockIcon /> : null}
+                </button>
+              )
+            })}
           </div>
 
           {isDemoMode ? (
@@ -2924,130 +2925,130 @@ function ProjectEditorPage({
               hidden={activeAssetType !== type}
               key={type}
             >
-                <>
+              <>
+                <label className="editor-field">
+                  <span>Промпт</span>
+                  <textarea
+                    rows={4}
+                    placeholder={ASSET_PLACEHOLDERS[type]}
+                    autoComplete="off"
+                    value={promptFields[type]}
+                    onChange={(event) => setPromptFields((current) => ({ ...current, [type]: event.target.value }))}
+                  />
+                </label>
+
+                {type === 'icons' ? (
+                  <div className="editor-grid">
+                    <label className="editor-field">
+                      <span>Stroke Width (px)</span>
+                      <input type="number" min="0" step="0.5" value={iconStrokeWidth} onChange={(event) => setIconStrokeWidth(Number(event.target.value || 0))} />
+                    </label>
+                    <label className="editor-field">
+                      <span>Corner</span>
+                      <select value={iconCorner} onChange={(event) => setIconCorner(event.target.value)}>
+                        <option value="rounded">Rounded</option>
+                        <option value="square">Square</option>
+                        <option value="butt">Butt</option>
+                      </select>
+                    </label>
+                    <label className="editor-field">
+                      <span>Fill</span>
+                      <select value={iconFill} onChange={(event) => setIconFill(event.target.value)}>
+                        <option value="outline">Outline</option>
+                        <option value="filled">Filled</option>
+                        <option value="duotone">Duotone</option>
+                      </select>
+                    </label>
+                  </div>
+                ) : null}
+
+                {type === 'illustrations' ? (
+                  <div className="illustration-format-row" role="radiogroup" aria-label="Формат иллюстрации">
+                    <label className="illustration-format-check">
+                      <input
+                        type="radio"
+                        name={`illustration-format-${projectSlug}`}
+                        value="vector"
+                        checked={illustrationFormat === 'vector'}
+                        onChange={() => setIllustrationFormat('vector')}
+                      />
+                      <span>Вектор</span>
+                    </label>
+                    <label className="illustration-format-check">
+                      <input
+                        type="radio"
+                        name={`illustration-format-${projectSlug}`}
+                        value="raster"
+                        checked={illustrationFormat === 'raster'}
+                        onChange={() => setIllustrationFormat('raster')}
+                      />
+                      <span>Растр</span>
+                    </label>
+                  </div>
+                ) : null}
+
+                <div className="editor-grid editor-grid--narrow asset-panel-counts">
                   <label className="editor-field">
-                    <span>Промпт</span>
-                    <textarea
-                      rows={4}
-                      placeholder={ASSET_PLACEHOLDERS[type]}
-                      autoComplete="off"
-                      value={promptFields[type]}
-                      onChange={(event) => setPromptFields((current) => ({ ...current, [type]: event.target.value }))}
+                    <span>{assetCountLabel(type)}</span>
+                    <input
+                      type="number"
+                      min="1"
+                      max="20"
+                      value={isDemoMode ? DEMO_ASSET_COUNTS[type] : assetCounts[type]}
+                      disabled={isDemoMode}
+                      onChange={(event) => setAssetCount(type, event.target.value)}
                     />
                   </label>
+                </div>
 
-                  {type === 'icons' ? (
-                    <div className="editor-grid">
-                      <label className="editor-field">
-                        <span>Stroke Width (px)</span>
-                        <input type="number" min="0" step="0.5" value={iconStrokeWidth} onChange={(event) => setIconStrokeWidth(Number(event.target.value || 0))} />
-                      </label>
-                      <label className="editor-field">
-                        <span>Corner</span>
-                        <select value={iconCorner} onChange={(event) => setIconCorner(event.target.value)}>
-                          <option value="rounded">Rounded</option>
-                          <option value="square">Square</option>
-                          <option value="butt">Butt</option>
-                        </select>
-                      </label>
-                      <label className="editor-field">
-                        <span>Fill</span>
-                        <select value={iconFill} onChange={(event) => setIconFill(event.target.value)}>
-                          <option value="outline">Outline</option>
-                          <option value="filled">Filled</option>
-                          <option value="duotone">Duotone</option>
-                        </select>
-                      </label>
-                    </div>
-                  ) : null}
-
-                  {type === 'illustrations' ? (
-                    <div className="illustration-format-row" role="radiogroup" aria-label="Формат иллюстрации">
-                      <label className="illustration-format-check">
-                        <input
-                          type="radio"
-                          name={`illustration-format-${projectSlug}`}
-                          value="vector"
-                          checked={illustrationFormat === 'vector'}
-                          onChange={() => setIllustrationFormat('vector')}
-                        />
-                        <span>Вектор</span>
-                      </label>
-                      <label className="illustration-format-check">
-                        <input
-                          type="radio"
-                          name={`illustration-format-${projectSlug}`}
-                          value="raster"
-                          checked={illustrationFormat === 'raster'}
-                          onChange={() => setIllustrationFormat('raster')}
-                        />
-                        <span>Растр</span>
-                      </label>
-                    </div>
-                  ) : null}
-
-                  <div className="editor-grid editor-grid--narrow asset-panel-counts">
-                    <label className="editor-field">
-                      <span>{assetCountLabel(type)}</span>
-                      <input
-                        type="number"
-                        min="1"
-                        max="20"
-                        value={isDemoMode ? DEMO_ASSET_COUNTS[type] : assetCounts[type]}
-                        disabled={isDemoMode}
-                        onChange={(event) => setAssetCount(type, event.target.value)}
-                      />
-                    </label>
+                <div className="asset-panel-refs">
+                  <span className="asset-panel-refs__title">{ASSET_REF_LABELS[type]}</span>
+                  <p className="asset-panel-refs__hint">
+                    {isDemoMode
+                      ? 'В демо можно загрузить 1 референс на весь проект (до 2 МБ).'
+                      : 'Изображения, которые задают желаемую эстетику для этого типа ассетов.'}
+                  </p>
+                  <label
+                    className={`btn btn-primary btn-upload btn-upload--compact asset-panel-refs__upload${demoRefLimitReached ? ' asset-panel-refs__upload--disabled' : ''}`}
+                  >
+                    <input
+                      type="file"
+                      multiple={!isDemoMode}
+                      accept=".png,.jpg,.jpeg,.webp,.gif,.bmp"
+                      hidden
+                      disabled={refsLoadingType === type || demoRefLimitReached}
+                      onChange={(event) => {
+                        void handleUploadRefs(type, event.target.files)
+                        event.currentTarget.value = ''
+                      }}
+                    />
+                    <span>{refsLoadingType === type ? 'Загружаем...' : 'Загрузить'}</span>
+                  </label>
+                  <div className="refs-grid refs-grid--compact">
+                    {refsLoadingType === type && !assetRefs[type].length ? <div className="refs-empty">Загрузка...</div> : null}
+                    {refsLoadingType !== type && !assetRefs[type].length && !demoRefLimitReached ? <div className="refs-empty">Референсы пока не загружены</div> : null}
+                    {assetRefs[type].map((ref) => (
+                      <div className="ref-card" key={`${type}-${ref.path}`}>
+                        <a href={ref.url} target="_blank" rel="noopener" className="ref-card__preview">
+                          <img src={ref.url} alt={ref.name} className="ref-card__image" />
+                        </a>
+                        <button
+                          type="button"
+                          className="ref-delete"
+                          disabled={refsLoadingType === type}
+                          onClick={(event) => {
+                            event.preventDefault()
+                            event.stopPropagation()
+                            void handleDeleteRef(type, ref.path)
+                          }}
+                        >
+                          Удалить
+                        </button>
+                      </div>
+                    ))}
                   </div>
-
-                  <div className="asset-panel-refs">
-                    <span className="asset-panel-refs__title">{ASSET_REF_LABELS[type]}</span>
-                    <p className="asset-panel-refs__hint">
-                      {isDemoMode
-                        ? 'В демо можно загрузить 1 референс на весь проект (до 2 МБ).'
-                        : 'Изображения, которые задают желаемую эстетику для этого типа ассетов.'}
-                    </p>
-                    <label
-                      className={`btn btn-primary btn-upload btn-upload--compact asset-panel-refs__upload${demoRefLimitReached ? ' asset-panel-refs__upload--disabled' : ''}`}
-                    >
-                      <input
-                        type="file"
-                        multiple={!isDemoMode}
-                        accept=".png,.jpg,.jpeg,.webp,.gif,.bmp"
-                        hidden
-                        disabled={refsLoadingType === type || demoRefLimitReached}
-                        onChange={(event) => {
-                          void handleUploadRefs(type, event.target.files)
-                          event.currentTarget.value = ''
-                        }}
-                      />
-                      <span>{refsLoadingType === type ? 'Загружаем...' : 'Загрузить'}</span>
-                    </label>
-                    <div className="refs-grid refs-grid--compact">
-                      {refsLoadingType === type && !assetRefs[type].length ? <div className="refs-empty">Загрузка...</div> : null}
-                      {refsLoadingType !== type && !assetRefs[type].length && !demoRefLimitReached ? <div className="refs-empty">Референсы пока не загружены</div> : null}
-                      {assetRefs[type].map((ref) => (
-                        <div className="ref-card" key={`${type}-${ref.path}`}>
-                          <a href={ref.url} target="_blank" rel="noopener" className="ref-card__preview">
-                            <img src={ref.url} alt={ref.name} className="ref-card__image" />
-                          </a>
-                          <button
-                            type="button"
-                            className="ref-delete"
-                            disabled={refsLoadingType === type}
-                            onClick={(event) => {
-                              event.preventDefault()
-                              event.stopPropagation()
-                              void handleDeleteRef(type, ref.path)
-                            }}
-                          >
-                            Удалить
-                          </button>
-                        </div>
-                      ))}
-                    </div>
-                  </div>
-                </>
+                </div>
+              </>
             </div>
           ))}
         </section>

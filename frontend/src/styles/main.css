@@ -87,9 +87,6 @@ img {
 
 .site-header {
     position: static;
-    backdrop-filter: blur(12px);
-    background: rgba(8, 3, 18, 0.72);
-    border-bottom: 1px solid rgba(255, 255, 255, 0.04);
 }
 
 .header-inner {
@@ -685,7 +682,8 @@ img {
 }
 
 @media (min-width: 981px) {
-    .hero-tile__break {
+    .hero-tile__break,
+    .hero-tile__hyphen {
         display: none;
     }
 
