@@ -1,5 +1,8 @@
 from __future__ import annotations
 
+import io
+import zipfile
+
 from fastapi.testclient import TestClient
 
 from app.core.paths import OUT_DIR
@@ -120,3 +123,26 @@ def test_results_reject_unknown_generation_job(authenticated_client: TestClient)
     response = authenticated_client.get(f"/api/projects/{project['slug']}/results?job=missing-job")
 
     assert response.status_code == 404
+
+
+def test_download_all_generated_assets_from_legacy_output(authenticated_client: TestClient) -> None:
+    project = _create_project(authenticated_client, 'Downloadable Brand')
+    tokens = _editor_tokens(authenticated_client, project['slug'])
+    tokens['brand_id'] = 'downloadable-brand'
+    _save_tokens(authenticated_client, project['slug'], tokens)
+
+    logo_file = OUT_DIR / 'recraft' / 'downloadable-brand' / 'logos' / 'logo.png'
+    logo_file.parent.mkdir(parents=True, exist_ok=True)
+    logo_file.write_bytes(b'fake-logo')
+    meta_file = OUT_DIR / '_meta' / 'downloadable-brand' / 'manifest.json'
+    meta_file.parent.mkdir(parents=True, exist_ok=True)
+    meta_file.write_text('{"ok": true}', encoding='utf-8')
+
+    response = authenticated_client.get(f"/projects/{project['slug']}/downloads/all")
+
+    assert response.status_code == 200
+    assert response.headers['content-type'] == 'application/zip'
+    with zipfile.ZipFile(io.BytesIO(response.content)) as archive:
+        assert 'recraft/logos/logo.png' in archive.namelist()
+        assert '_meta/manifest.json' in archive.namelist()
+        assert 'tokens.json' in archive.namelist()

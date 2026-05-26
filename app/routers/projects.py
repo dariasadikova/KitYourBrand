@@ -8,6 +8,7 @@ from fastapi.responses import FileResponse, JSONResponse, RedirectResponse
 
 from app.schemas.palette import PaletteSuggestRequest, PaletteSuggestResponse
 from app.core.demo_mode import DEMO_ASSET_COUNTS, DEMO_PROVIDER_SLUG
+from app.core.paths import OUT_DIR
 from app.core.project_access import (
     demo_generation_used,
     mark_demo_generation_used,

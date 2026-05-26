@@ -1,0 +1,638 @@
+@media (max-width: 760px) {
+    .landing-shell .features-section.section-block {
+        scroll-margin-top: 12px;
+    }
+}
+
+/* Узкие экраны и мобильный контроль (~375–480 CSS px) */
+@media (max-width: 480px) {
+    .project-editor {
+        padding: 8px 0px 44px;
+    }
+
+    .page-dashboard .dashboard-main,
+    .page-dashboard .dashboard-main.project-main,
+    .page-dashboard .dashboard-main.results-main {
+        padding-left: 20px;
+        padding-right: 20px;
+    }
+
+    .editor-card {
+        padding: 18px 14px 20px;
+        gap: 18px;
+        border-radius: 0;
+    }
+
+    .editor-card--cta {
+        padding: 28px 14px 26px;
+    }
+
+    .editor-card__head h2 {
+        font-size: 21px;
+        line-height: 1.2;
+    }
+
+    .editor-generate-btn {
+        width: 100%;
+        max-width: 100%;
+        white-space: normal;
+        text-align: center;
+        min-height: 48px;
+        padding-left: 20px;
+        padding-right: 20px;
+    }
+
+    .asset-panel-refs__upload {
+        align-self: stretch;
+        width: 100%;
+        max-width: 100%;
+        min-height: 42px;
+        justify-content: center;
+        text-align: center;
+    }
+
+    .editor-actions-row,
+    .editor-inline-actions {
+        flex-direction: column;
+        align-items: stretch;
+    }
+
+    .editor-actions-row .btn,
+    .editor-inline-actions .btn {
+        width: 100%;
+        justify-content: center;
+    }
+
+    .asset-tabs {
+        grid-template-columns: repeat(2, minmax(0, 1fr));
+        border-radius: 0;
+    }
+
+    .asset-tab {
+        min-height: 44px;
+        font-size: 0.86rem;
+        padding-inline: 6px;
+    }
+
+    .generation-provider-check {
+        min-height: 44px;
+        padding: 10px 12px;
+    }
+
+    .generation-provider-check input[type="checkbox"] {
+        width: 20px;
+        height: 20px;
+    }
+
+    .build-style-box input[type="checkbox"] {
+        width: 20px;
+        height: 20px;
+    }
+
+    .generation-history-select-all input[type="checkbox"],
+    .generation-history-row-select {
+        width: 20px;
+        height: 20px;
+    }
+
+    .generation-history-table th,
+    .generation-history-table td {
+        padding: 12px 10px;
+        font-size: 0.88rem;
+    }
+
+    .generation-history-table__actions {
+        white-space: normal;
+    }
+
+    .generation-history-table__actions .generation-history-action-btn {
+        display: flex;
+        min-width: 0;
+        width: 100%;
+        max-width: 100%;
+        justify-content: center;
+        box-sizing: border-box;
+    }
+
+    .generation-history-bulk-actions {
+        flex-direction: column;
+        align-items: stretch;
+        gap: 12px;
+    }
+
+    .generation-history-bulk-actions__buttons {
+        width: 100%;
+    }
+
+    .generation-history-bulk-actions__buttons .btn {
+        width: 100%;
+        justify-content: center;
+    }
+
+    .generation-history-footer {
+        flex-direction: column;
+        align-items: flex-start;
+    }
+
+    .generation-history-table-scroll {
+        margin: 0 -12px;
+        padding: 0 12px;
+        -webkit-overflow-scrolling: touch;
+    }
+
+    .floating-toast {
+        left: 12px;
+        right: 12px;
+        min-width: 0;
+        max-width: none;
+        bottom: max(16px, env(safe-area-inset-bottom, 0px));
+        padding: 14px 16px;
+        box-sizing: border-box;
+    }
+
+    .generation-history-modal {
+        padding: max(10px, env(safe-area-inset-top, 0px)) max(12px, env(safe-area-inset-right, 0px))
+            max(12px, env(safe-area-inset-bottom, 0px)) max(12px, env(safe-area-inset-left, 0px));
+    }
+
+    .generation-history-modal__dialog {
+        width: 100%;
+        max-width: 100%;
+        max-height: min(88dvh, calc(100dvh - env(safe-area-inset-top, 0px) - env(safe-area-inset-bottom, 0px) - 24px));
+        overflow-y: auto;
+        padding: 22px max(16px, env(safe-area-inset-right, 0px)) max(18px, env(safe-area-inset-bottom, 0px))
+            max(16px, env(safe-area-inset-left, 0px));
+        border-radius: 0;
+    }
+
+    .auth-modal {
+        width: calc(100vw - 1.25rem);
+        max-width: 420px;
+        margin-left: auto;
+        margin-right: auto;
+        margin-top: max(1.5rem, env(safe-area-inset-top, 0px));
+        margin-bottom: 1.5rem;
+        padding: 28px 18px 24px;
+        transform: none;
+    }
+
+    .auth-backdrop-content {
+        padding-top: max(120px, env(safe-area-inset-top, 0px));
+    }
+
+    .results-page {
+        padding-inline: 0px;
+    }
+
+    .results-card {
+        padding: 18px 14px 20px;
+        border-radius: 0;
+    }
+
+    .results-card__title h2 {
+        font-size: 1.42rem;
+    }
+}
+
+/*
+ * Мобильный дашборд (≤980px): shell/main и «Мои проекты» на всю ширину экрана.
+ * Раньше .dashboard-shell с 244px+1fr шёл после media и сжимал main (~50% viewport).
+ */
+@media (max-width: 980px) {
+    .page-dashboard .dashboard-head h1,
+    .page-dashboard .profile-page__head h1,
+    .page-dashboard .results-page__head h1,
+    .page-dashboard .project-page-head h1,
+    .page-dashboard .generation-history-head h1,
+    .page-dashboard .stub-card h1,
+    .page-demo .project-page-head h1,
+    .page-demo .results-page__head h1 {
+        font-size: 24px;
+        line-height: 1.25;
+        letter-spacing: -0.01em;
+        margin-top: 0;
+    }
+
+    .page-dashboard .project-page-head p,
+    .page-dashboard .results-page__head p,
+    .page-dashboard .profile-page__head p,
+    .page-dashboard .generation-history-subtitle,
+    .page-dashboard .stub-card h1 + p,
+    .page-dashboard .figma-plugin-page .profile-page__head p,
+    .page-demo .project-page-head p,
+    .page-demo .results-page__head p {
+        font-size: 16px;
+        line-height: 1.45;
+        margin-top: 8px;
+    }
+
+    .dashboard-page.page-dashboard,
+    .page-dashboard .dashboard-shell,
+    .page-dashboard .dashboard-main,
+    .page-dashboard .dashboard-main.profile-main,
+    .page-dashboard .dashboard-main .projects-dashboard.dashboard-content,
+    .page-dashboard .dashboard-main .projects-dashboard .projects-grid.project-grid,
+    .page-dashboard .dashboard-main .projects-dashboard .dashboard-head.projects-head,
+    .page-dashboard .dashboard-main .projects-dashboard .projects-actions.dashboard-head__actions,
+    .page-dashboard .dashboard-main .projects-dashboard .projects-primary-actions,
+    .page-dashboard .dashboard-main .projects-dashboard .projects-create-form.dashboard-create-form,
+    .page-dashboard .dashboard-main .projects-dashboard .projects-import-btn.dashboard-import-btn,
+    .page-dashboard .dashboard-main .projects-dashboard .projects-create-btn.dashboard-create-btn {
+        width: 100%;
+        max-width: none;
+        min-width: 0;
+        box-sizing: border-box;
+    }
+
+    .page-dashboard .dashboard-main .projects-dashboard .dashboard-head.projects-head {
+        display: flex;
+        flex-direction: column;
+        align-items: stretch;
+        align-content: stretch;
+    }
+
+    .page-dashboard .dashboard-main .projects-dashboard .projects-actions.dashboard-head__actions {
+        display: flex;
+        flex: none;
+        flex-grow: 0;
+        flex-shrink: 0;
+        flex-basis: auto;
+        flex-direction: column;
+        align-items: stretch;
+        align-self: stretch;
+        gap: 12px;
+    }
+
+    .page-dashboard .dashboard-main .projects-dashboard .projects-primary-actions {
+        display: flex;
+        flex-direction: column;
+        align-items: stretch;
+        gap: 12px;
+        width: 100%;
+    }
+
+    .page-dashboard .dashboard-main .projects-dashboard .projects-create-form.dashboard-create-form {
+        display: block;
+        margin: 0;
+        width: 100%;
+    }
+
+    .page-dashboard .dashboard-main .projects-dashboard .projects-import-btn.dashboard-import-btn,
+    .page-dashboard .dashboard-main .projects-dashboard .projects-create-btn.dashboard-create-btn {
+        display: flex;
+        align-items: center;
+        justify-content: center;
+        flex: none;
+        width: 100%;
+    }
+}
+
+@media (max-width: 760px) {
+    .page-dashboard .dashboard-main .projects-dashboard .projects-actions .btn {
+        flex: none;
+        width: 100%;
+        max-width: none;
+    }
+}
+
+/* Профиль (≤980px): карточки и кнопки на всю ширину main, как на макете */
+@media (max-width: 980px) {
+    .page-dashboard .dashboard-main.profile-main .profile-page,
+    .page-dashboard .dashboard-main.profile-main .profile-form,
+    .page-dashboard .dashboard-main.profile-main .profile-card,
+    .page-dashboard .dashboard-main.profile-main .profile-credentials-row,
+    .page-dashboard .dashboard-main.profile-main .profile-actions {
+        width: 100%;
+        max-width: none;
+        min-width: 0;
+        box-sizing: border-box;
+    }
+
+    .page-dashboard .dashboard-main.profile-main .profile-page {
+        padding: 0 0 28px;
+        gap: 16px;
+    }
+
+    .page-dashboard .dashboard-main.profile-main .profile-page__head p {
+        margin-top: 8px;
+        font-size: 16px;
+        line-height: 1.45;
+    }
+
+    .page-dashboard .dashboard-main.profile-main .profile-form {
+        gap: 18px;
+    }
+
+    .page-dashboard .dashboard-main.profile-main .profile-card {
+        padding: 20px;
+        border-radius: 0;
+        box-shadow: none;
+    }
+
+    .page-dashboard .dashboard-main.profile-main .profile-card h2 {
+        margin-bottom: 16px;
+        font-size: 1.125rem;
+        font-weight: 600;
+    }
+
+    .page-dashboard .dashboard-main.profile-main .profile-info-grid {
+        gap: 20px;
+    }
+
+    .page-dashboard .dashboard-main.profile-main .profile-avatar-block {
+        justify-items: stretch;
+        margin: 0 auto;
+    }
+
+    .page-dashboard .dashboard-main.profile-main .profile-fields {
+        gap: 20px;
+    }
+
+    .page-dashboard .dashboard-main.profile-main .profile-credentials-row {
+        gap: 20px;
+    }
+
+    .page-dashboard .dashboard-main.profile-main .profile-password-grid {
+        gap: 22px;
+    }
+
+    .page-dashboard .dashboard-main.profile-main .profile-actions {
+        flex-direction: column;
+        align-items: stretch;
+        gap: 12px;
+        margin-top: 4px;
+    }
+
+    .page-dashboard .dashboard-main.profile-main .profile-actions .btn {
+        width: 100%;
+        max-width: none;
+        min-height: 48px;
+        flex: none;
+        justify-content: center;
+        display: flex;
+    }
+
+    .page-dashboard .dashboard-main.profile-main .profile-actions .btn-primary {
+        color: #0a0a0a;
+    }
+}
+
+@media (max-width: 980px) {
+    .page-dashboard .dashboard-main.generation-history-main .generation-history-page,
+    .page-dashboard .dashboard-main.generation-history-main .generation-history-table-wrap {
+        width: 100%;
+        max-width: none;
+        min-width: 0;
+        box-sizing: border-box;
+    }
+
+    .page-dashboard .dashboard-main.generation-history-main .generation-history-page {
+        padding: 0 0 28px;
+    }
+
+    .page-dashboard .dashboard-main.generation-history-main .generation-history-subtitle {
+        font-size: 16px;
+        line-height: 1.45;
+    }
+
+    .page-dashboard .dashboard-main.generation-history-main .generation-history-table-wrap {
+        padding: 20px;
+    }
+}
+
+/* Figma-плагин (≤980px) */
+@media (max-width: 980px) {
+    .page-dashboard .dashboard-main.figma-plugin-main .figma-plugin-page,
+    .page-dashboard .dashboard-main.figma-plugin-main .figma-plugin-page .profile-card {
+        width: 100%;
+        max-width: none;
+        min-width: 0;
+        box-sizing: border-box;
+    }
+
+    .page-dashboard .dashboard-main.figma-plugin-main .figma-plugin-page {
+        padding: 0 0 28px;
+        gap: 16px;
+    }
+
+    .page-dashboard .dashboard-main.figma-plugin-main .figma-plugin-page .profile-page__head p {
+        margin-top: 8px;
+        font-size: 16px;
+        line-height: 1.45;
+    }
+
+    .page-dashboard .dashboard-main.figma-plugin-main .figma-plugin-page .profile-card {
+        padding: 20px;
+    }
+
+    .page-dashboard .dashboard-main.figma-plugin-main .figma-plugin-page .profile-card h2 {
+        margin-bottom: 16px;
+        font-size: 1.125rem;
+        font-weight: 600;
+    }
+
+    .figma-plugin-tags {
+        gap: 14px 20px;
+    }
+}
+
+.hero-demo-note {
+    margin: 14px auto 0;
+    max-width: 520px;
+    font-size: 0.88rem;
+    color: color-mix(in srgb, var(--text-muted, #64748b) 88%, white);
+}
+
+.hero-demo-error {
+    margin-top: 10px;
+    color: #b42318;
+    font-size: 0.9rem;
+}
+
+.page-demo {
+    min-height: 100vh;
+    display: flex;
+    flex-direction: column;
+    background: #010101;
+    color: #fff;
+}
+
+.page-demo.landing-shell .site-header {
+    position: static;
+    top: auto;
+    left: auto;
+    right: auto;
+    width: 100%;
+    flex-shrink: 0;
+    pointer-events: auto;
+}
+
+@media (min-width: 981px) {
+    .page-demo.landing-shell .landing-page-header {
+        justify-content: space-between;
+        align-items: center;
+        padding: 18px 28px;
+        min-height: 72px;
+        box-sizing: border-box;
+    }
+
+    .page-demo.landing-shell .landing-page-header__brand {
+        display: flex;
+        padding: 0;
+    }
+
+    .page-demo.landing-shell .landing-header__brand-logo,
+    .page-demo.landing-shell .landing-header__brand-text {
+        display: none;
+    }
+
+    .page-demo.landing-shell .landing-header__wordmark {
+        display: inline;
+    }
+
+    .page-demo.landing-shell .landing-page-header > .landing-header__nav {
+        margin-left: auto;
+    }
+}
+
+.page-demo .demo-register-card h2 {
+    margin: 0 0 8px;
+    font-size: 1.75rem;
+    font-weight: 600;
+    color: #fff;
+}
+
+.page-demo .demo-register-card__actions .btn-primary {
+    text-transform: lowercase;
+}
+
+.page-demo .dashboard-shell {
+    flex: 1 1 auto;
+}
+
+.page-demo .demo-main .btn-primary {
+    color: #000;
+    background: #00aeff;
+    border: 0;
+    border-radius: 0;
+}
+
+.page-demo .demo-main .btn-primary:hover {
+    color: #000;
+    background: #67ccff;
+    transform: none;
+}
+
+.page-demo .demo-main .btn-outline {
+    border: 1px solid #ffffff;
+    color: #ffffff;
+    background: transparent;
+    border-radius: 0;
+}
+
+.page-demo .demo-main .btn-outline:hover {
+    border-color: #67ccff;
+    color: #67ccff;
+    background: rgba(0, 174, 255, 0.08);
+    transform: none;
+}
+
+.page-demo .demo-main .btn {
+    min-height: 52px;
+    padding: 0 28px;
+    font-size: 1rem;
+    line-height: normal;
+}
+
+.page-demo .demo-main .btn-inline {
+    min-height: 42px;
+    padding: 0 18px;
+}
+
+.page-demo .demo-main .btn-upload--compact {
+    min-height: 38px;
+    padding-inline: 14px;
+    font-size: 1rem;
+}
+
+.page-demo .demo-sidebar-nav__item {
+    cursor: default;
+}
+
+.demo-inline-note {
+    color: #99a1af;
+}
+
+.palette-item--demo-locked {
+    opacity: 0.45;
+}
+
+.page-demo .demo-provider-box {
+    padding: 0;
+    border: 0;
+    background: transparent;
+}
+
+.page-demo .demo-provider-box__provider {
+    margin: 0;
+    color: rgba(255, 255, 255, 0.95);
+    line-height: 1.45;
+}
+
+.page-demo .demo-provider-box__provider strong {
+    color: #ffffff;
+    font-weight: 600;
+}
+
+.page-demo .demo-provider-box p {
+    margin: 8px 0 0;
+    color: rgba(255, 255, 255, 0.72);
+    line-height: 1.45;
+}
+
+.page-demo .demo-asset-locked,
+.page-demo .demo-locked-action {
+    padding: 18px;
+    border-radius: 0;
+    background: rgba(0, 0, 0, 0.25);
+    border: 1px solid rgba(121, 121, 121, 0.8);
+}
+
+.page-demo .demo-asset-locked h3 {
+    margin: 0 0 8px;
+}
+
+.page-demo .demo-asset-locked p,
+.page-demo .demo-register-card p,
+.page-demo .demo-locked-action__hint {
+    margin: 0 0 12px;
+    color: rgba(255, 255, 255, 0.72);
+    line-height: 1.45;
+}
+
+.demo-register-card__actions,
+.demo-locked-action {
+    display: flex;
+    flex-wrap: wrap;
+    gap: 10px;
+    align-items: center;
+}
+
+.asset-tab--locked {
+    opacity: 0.72;
+    cursor: not-allowed;
+}
+
+.asset-tab--locked:disabled {
+    color: #99a1af;
+}
+
+.asset-tab__lock-icon {
+    width: 0.95em;
+    height: 0.95em;
+    margin-left: 0.25em;
+    display: inline-block;
+    vertical-align: -0.08em;
+    color: #00aeff;
+    flex-shrink: 0;
+}
