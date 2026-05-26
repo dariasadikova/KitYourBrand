@@ -881,14 +881,6 @@ class ProjectService:
                 (user_id,),
             ).fetchall()
             deleted_jobs = [(str(row['job_id']), str(row['project_slug'])) for row in rows]
-            cur = conn.execute(
-                """
-                DELETE FROM generation_jobs_history
-                WHERE user_id = ? AND status NOT IN ('pending', 'running')
-                """,
-                (user_id,),
-            )
-            deleted = int(cur.rowcount or 0)
             if deleted_jobs:
                 job_ids = [job_id for job_id, _ in deleted_jobs]
                 placeholders = ', '.join(['?'] * len(job_ids))
@@ -906,6 +898,14 @@ class ProjectService:
                     params,
                 )
                 self._delete_generation_job_related(conn, job_ids)
+            cur = conn.execute(
+                """
+                DELETE FROM generation_jobs_history
+                WHERE user_id = ? AND status NOT IN ('pending', 'running')
+                """,
+                (user_id,),
+            )
+            deleted = int(cur.rowcount or 0)
             conn.commit()
         self._delete_generation_result_snapshots(user_id, deleted_jobs)
         skipped = max(0, total - deleted)
@@ -933,16 +933,6 @@ class ProjectService:
                 params,
             ).fetchall()
             deleted_jobs = [(str(row['job_id']), str(row['project_slug'])) for row in rows]
-            cur = conn.execute(
-                f"""
-                DELETE FROM generation_jobs_history
-                WHERE user_id = ?
-                  AND job_id IN ({placeholders})
-                  AND status NOT IN ('pending', 'running')
-                """,
-                params,
-            )
-            deleted = int(cur.rowcount or 0)
             if deleted_jobs:
                 deletable_ids = [job_id for job_id, _ in deleted_jobs]
                 delete_placeholders = ', '.join(['?'] * len(deletable_ids))
@@ -960,6 +950,16 @@ class ProjectService:
                     delete_params,
                 )
                 self._delete_generation_job_related(conn, deletable_ids)
+            cur = conn.execute(
+                f"""
+                DELETE FROM generation_jobs_history
+                WHERE user_id = ?
+                  AND job_id IN ({placeholders})
+                  AND status NOT IN ('pending', 'running')
+                """,
+                params,
+            )
+            deleted = int(cur.rowcount or 0)
             conn.commit()
         self._delete_generation_result_snapshots(user_id, deleted_jobs)
         skipped = max(0, len(unique_ids) - deleted)
