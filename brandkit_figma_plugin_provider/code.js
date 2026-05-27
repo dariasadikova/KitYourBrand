@@ -29,7 +29,7 @@ const STORAGE_KEY = 'brandkit_importer_settings';
 const DEFAULT_SETTINGS = {
   brandId: '',
   provider: 'both',
-  baseUrl: 'http://localhost:8000'
+  baseUrl: 'https://kybby-app.amvera.io'
 };
 
 function stripTrailingSlash(url) {
@@ -100,11 +100,11 @@ function safeRescale(node, scale) {
   try {
     node.rescale(scale);
     return;
-  } catch (e) {}
+  } catch (e) { }
   try {
     // Some node types may support resize
     node.resize(node.width * scale, node.height * scale);
-  } catch (e) {}
+  } catch (e) { }
 }
 
 async function ensureInterFonts() {
@@ -112,7 +112,7 @@ async function ensureInterFonts() {
   await figma.loadFontAsync({ family: 'Inter', style: 'Regular' });
   await figma.loadFontAsync({ family: 'Inter', style: 'Medium' }).catch(async () => {
     // fallback
-    await figma.loadFontAsync({ family: 'Inter', style: 'Bold' }).catch(() => {});
+    await figma.loadFontAsync({ family: 'Inter', style: 'Bold' }).catch(() => { });
   });
 }
 
@@ -221,16 +221,16 @@ async function placeAssetsGrid(parentFrame, items, opts) {
         node.name = it.name || `svg-${i + 1}`;
         cell.appendChild(node);
 
-      // Scale to fit the cell (with padding)
-      const padInner = 12;
-      const availW = Math.max(1, cellW - padInner * 2);
-      const availH = Math.max(1, cellH - padInner * 2);
-      const scale = Math.min(availW / Math.max(1, node.width), availH / Math.max(1, node.height), 1);
-      safeRescale(node, scale);
+        // Scale to fit the cell (with padding)
+        const padInner = 12;
+        const availW = Math.max(1, cellW - padInner * 2);
+        const availH = Math.max(1, cellH - padInner * 2);
+        const scale = Math.min(availW / Math.max(1, node.width), availH / Math.max(1, node.height), 1);
+        safeRescale(node, scale);
 
-      // Center
-      node.x = Math.round((cellW - node.width) / 2);
-      node.y = Math.round((cellH - node.height) / 2);
+        // Center
+        node.x = Math.round((cellW - node.width) / 2);
+        node.y = Math.round((cellH - node.height) / 2);
       }
     } else {
       // Raster (PNG/JPG) → createImage + rectangle fill
@@ -279,25 +279,25 @@ async function placeAssetsGrid(parentFrame, items, opts) {
       if (handledAsSvg) {
         // Already placed SVG fallback
       } else {
-      const r = figma.createRectangle();
-      r.name = it.name || `asset-${i + 1}`;
-      r.resize(cellW, cellH);
-      r.x = 0;
-      r.y = 0;
+        const r = figma.createRectangle();
+        r.name = it.name || `asset-${i + 1}`;
+        r.resize(cellW, cellH);
+        r.x = 0;
+        r.y = 0;
 
-      if (image) {
-        // Seamless patterns are tileable in Figma, but TILE uses native px size —
-        // a 1024×1024 tile in a 320×320 frame shows only a cropped corner.
-        // FIT shows the full pattern like the KYBBY results page; switch to Tile in Figma if needed.
-        const scaleMode = 'FIT';
-        r.fills = [{ type: 'IMAGE', imageHash: image.hash, scaleMode }];
-      } else {
-        r.fills = [];
-        r.strokes = [{ type: 'SOLID', color: { r: 0.8, g: 0.2, b: 0.2 } }];
-        r.strokeWeight = 2;
-      }
+        if (image) {
+          // Seamless patterns are tileable in Figma, but TILE uses native px size —
+          // a 1024×1024 tile in a 320×320 frame shows only a cropped corner.
+          // FIT shows the full pattern like the KYBBY results page; switch to Tile in Figma if needed.
+          const scaleMode = 'FIT';
+          r.fills = [{ type: 'IMAGE', imageHash: image.hash, scaleMode }];
+        } else {
+          r.fills = [];
+          r.strokes = [{ type: 'SOLID', color: { r: 0.8, g: 0.2, b: 0.2 } }];
+          r.strokeWeight = 2;
+        }
 
-      cell.appendChild(r);
+        cell.appendChild(r);
       }
     }
 
@@ -414,8 +414,9 @@ async function importBrandKit({ brandId, provider, baseUrl }) {
 
   cursorY += docs.height + 24;
 
-  // Sections
+  // Sections (order matches brand kit: logos → icons → patterns → illustrations)
   const sections = [
+    { key: 'logos', title: 'Logos', cellW: 240, cellH: 240, perRow: 4, gap: 24 },
     { key: 'icons', title: 'Icons', cellW: 120, cellH: 120, perRow: 8, gap: 16 },
     { key: 'patterns', title: 'Patterns', cellW: 320, cellH: 320, perRow: 3, gap: 24 },
     { key: 'illustrations', title: 'Illustrations', cellW: 520, cellH: 340, perRow: 2, gap: 24 }

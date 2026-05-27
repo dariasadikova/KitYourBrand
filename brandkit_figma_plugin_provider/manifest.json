@@ -9,7 +9,7 @@
   "networkAccess": {
     "allowedDomains": ["none"],
     "devAllowedDomains": [
-      "http://localhost:8000"
+      "https://kybby-app.amvera.io"
     ]
   }
 }

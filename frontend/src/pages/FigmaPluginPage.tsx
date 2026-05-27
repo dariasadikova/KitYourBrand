@@ -41,7 +41,7 @@ export function FigmaPluginPage() {
           </a>
         </div>
         <p className="figma-plugin-note">
-          Плагин устанавливается в ваш аккаунт Figma и остаётся доступным для повторного использования. В поле адреса KYBBY используйте <strong>http://localhost:8000</strong> (не 127.0.0.1), если работаете локально.
+          Плагин устанавливается в ваш аккаунт Figma и остаётся доступным для повторного использования. На хостинге в поле адреса KYBBY укажите <strong>https://kybby-app.amvera.io</strong> (без <code>/app</code>). Для локальной разработки — <strong>http://localhost:8000</strong> (не 127.0.0.1).
         </p>
       </article>
 
