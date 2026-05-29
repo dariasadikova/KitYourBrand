@@ -1,10 +1,18 @@
 import { type FormEvent, useEffect, useState } from 'react'
-import { Link } from 'react-router-dom'
-import { getProfile, updateProfile } from '../services/profileApi'
+import { createPortal } from 'react-dom'
+import { Link, useNavigate } from 'react-router-dom'
+import { deleteAccount, getProfile, updateProfile } from '../services/profileApi'
 import type { Profile } from '../types/profile'
 import { EmailIcon, LockIcon, UserIcon } from '../components/icons'
 
-export function ProfilePage({ onSessionRefresh }: { onSessionRefresh: () => Promise<void> }) {
+export function ProfilePage({
+  onSessionRefresh,
+  onLogout,
+}: {
+  onSessionRefresh: () => Promise<void>
+  onLogout: () => Promise<void>
+}) {
+  const navigate = useNavigate()
   const [profile, setProfile] = useState<Profile | null>(null)
   const [name, setName] = useState('')
   const [currentPassword, setCurrentPassword] = useState('')
@@ -18,6 +26,22 @@ export function ProfilePage({ onSessionRefresh }: { onSessionRefresh: () => Prom
   const [isLoading, setIsLoading] = useState(true)
   const [isSaving, setIsSaving] = useState(false)
   const [highlightMissingCurrentPassword, setHighlightMissingCurrentPassword] = useState(false)
+  const [deleteConfirmOpen, setDeleteConfirmOpen] = useState(false)
+  const [deletePassword, setDeletePassword] = useState('')
+  const [isDeletingAccount, setIsDeletingAccount] = useState(false)
+
+  useEffect(() => {
+    if (!deleteConfirmOpen) return
+    document.body.classList.add('modal-open')
+    function onKeyDown(event: KeyboardEvent) {
+      if (event.key === 'Escape' && !isDeletingAccount) setDeleteConfirmOpen(false)
+    }
+    window.addEventListener('keydown', onKeyDown)
+    return () => {
+      document.body.classList.remove('modal-open')
+      window.removeEventListener('keydown', onKeyDown)
+    }
+  }, [deleteConfirmOpen, isDeletingAccount])
 
   useEffect(() => {
     let alive = true
@@ -105,6 +129,29 @@ export function ProfilePage({ onSessionRefresh }: { onSessionRefresh: () => Prom
       }
     } finally {
       setIsSaving(false)
+    }
+  }
+
+  async function handleDeleteAccount() {
+    if (!deletePassword.trim()) {
+      setError('Введите пароль для подтверждения удаления аккаунта.')
+      return
+    }
+
+    setIsDeletingAccount(true)
+    setError('')
+    setSuccess('')
+
+    try {
+      await deleteAccount(deletePassword)
+      setDeleteConfirmOpen(false)
+      setDeletePassword('')
+      await onLogout()
+      navigate('/', { replace: true })
+    } catch (err) {
+      setError(err instanceof Error ? err.message : 'Не удалось удалить аккаунт.')
+    } finally {
+      setIsDeletingAccount(false)
     }
   }
 
@@ -340,6 +387,101 @@ export function ProfilePage({ onSessionRefresh }: { onSessionRefresh: () => Prom
           </button>
         </div>
       </form>
+
+      <article className="profile-card profile-card--danger">
+        <h2>Удаление аккаунта</h2>
+        <p className="profile-danger-text">
+          Будут безвозвратно удалены профиль, проекты, история генераций, загруженные файлы и сохранённые API-ключи.
+          Это действие нельзя отменить.
+        </p>
+        <button
+          type="button"
+          className="btn btn-danger btn-inline"
+          onClick={() => {
+            setError('')
+            setSuccess('')
+            setDeletePassword('')
+            setDeleteConfirmOpen(true)
+          }}
+        >
+          Удалить аккаунт
+        </button>
+      </article>
+
+      {deleteConfirmOpen && typeof document !== 'undefined'
+        ? createPortal(
+          <div className="app-confirm-modal" role="presentation">
+            <button
+              type="button"
+              className="app-confirm-modal__backdrop"
+              aria-label="Закрыть"
+              disabled={isDeletingAccount}
+              onClick={() => {
+                if (!isDeletingAccount) setDeleteConfirmOpen(false)
+              }}
+            />
+            <div
+              className="app-confirm-modal__dialog"
+              role="alertdialog"
+              aria-modal="true"
+              aria-labelledby="profile-delete-account-title"
+              aria-describedby="profile-delete-account-message"
+            >
+              <button
+                type="button"
+                className="app-confirm-modal__close"
+                aria-label="Закрыть"
+                disabled={isDeletingAccount}
+                onClick={() => setDeleteConfirmOpen(false)}
+              >
+                ×
+              </button>
+              <h2 className="app-confirm-modal__title" id="profile-delete-account-title">
+                Удалить аккаунт?
+              </h2>
+              <p className="app-confirm-modal__message" id="profile-delete-account-message">
+                Введите текущий пароль, чтобы подтвердить удаление. Все данные аккаунта будут удалены без возможности восстановления.
+              </p>
+              <label className="editor-field profile-delete-password-field">
+                <span>Текущий пароль</span>
+                <span className="profile-input-wrap">
+                  <span className="profile-input-icon" aria-hidden="true">
+                    <LockIcon />
+                  </span>
+                  <input
+                    type="password"
+                    name="delete_account_password"
+                    placeholder="Введите пароль"
+                    value={deletePassword}
+                    autoComplete="current-password"
+                    disabled={isDeletingAccount}
+                    onChange={(event) => setDeletePassword(event.target.value)}
+                  />
+                </span>
+              </label>
+              <div className="app-confirm-modal__actions">
+                <button
+                  type="button"
+                  className="btn btn-outline btn-inline app-confirm-modal__cancel"
+                  disabled={isDeletingAccount}
+                  onClick={() => setDeleteConfirmOpen(false)}
+                >
+                  Отмена
+                </button>
+                <button
+                  type="button"
+                  className="btn btn-danger btn-inline"
+                  disabled={isDeletingAccount}
+                  onClick={() => void handleDeleteAccount()}
+                >
+                  {isDeletingAccount ? 'Удаляем...' : 'Удалить аккаунт'}
+                </button>
+              </div>
+            </div>
+          </div>,
+          document.body,
+        )
+        : null}
     </section>
   )
 }

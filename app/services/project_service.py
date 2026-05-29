@@ -15,6 +15,8 @@ from pathlib import Path, PurePosixPath
 from typing import Any, Optional
 
 from app.core.demo_mode import GUEST_USER_ID
+from app.core.paths import OUT_DIR
+from app.core.providers import iter_asset_providers
 
 
 DEFAULT_TOKENS = {
@@ -1568,3 +1570,84 @@ class ProjectService:
                 import_path(str(rel_path), 'logos')
 
         return self.normalize_references_block(new_block)
+
+    def purge_user_account_data(self, user_id: int) -> None:
+        """Удаляет проекты, историю генераций, файлы и артефакты пользователя из БД и диска."""
+        if int(user_id) == GUEST_USER_ID:
+            raise ValueError('Нельзя удалить гостевой аккаунт.')
+
+        brand_ids: set[str] = set()
+        project_ids: list[int] = []
+        job_ids: list[str] = []
+
+        with self._connect() as conn:
+            project_rows = conn.execute(
+                'SELECT id, brand_id FROM projects WHERE user_id = ?',
+                (user_id,),
+            ).fetchall()
+            for row in project_rows:
+                project_ids.append(int(row['id']))
+                brand_id = str(row['brand_id'] or '').strip()
+                if brand_id:
+                    brand_ids.add(brand_id)
+
+            job_rows = conn.execute(
+                'SELECT job_id FROM generation_jobs_history WHERE user_id = ?',
+                (user_id,),
+            ).fetchall()
+            job_ids = [str(row['job_id']) for row in job_rows]
+
+        for brand_id in brand_ids:
+            for provider in iter_asset_providers():
+                brand_root = provider.out_root / brand_id
+                if brand_root.exists():
+                    shutil.rmtree(brand_root, ignore_errors=True)
+            meta_dir = OUT_DIR / '_meta' / brand_id
+            if meta_dir.exists():
+                shutil.rmtree(meta_dir, ignore_errors=True)
+
+        user_dir = self.storage_dir / str(user_id)
+        if user_dir.exists():
+            shutil.rmtree(user_dir, ignore_errors=True)
+
+        with self._connect() as conn:
+            if job_ids:
+                placeholders = ','.join('?' * len(job_ids))
+                conn.execute(
+                    f'DELETE FROM generation_job_log_entries WHERE job_id IN ({placeholders})',
+                    job_ids,
+                )
+                conn.execute(
+                    f'DELETE FROM generation_provider_runs WHERE job_id IN ({placeholders})',
+                    job_ids,
+                )
+            conn.execute('DELETE FROM generation_jobs_history WHERE user_id = ?', (user_id,))
+
+            if project_ids:
+                project_placeholders = ','.join('?' * len(project_ids))
+                conn.execute(
+                    f'DELETE FROM assets WHERE project_id IN ({project_placeholders})',
+                    project_ids,
+                )
+                conn.execute(
+                    f'DELETE FROM asset_manifests WHERE project_id IN ({project_placeholders})',
+                    project_ids,
+                )
+                conn.execute(
+                    f'DELETE FROM error_logs WHERE project_id IN ({project_placeholders})',
+                    project_ids,
+                )
+                conn.execute(
+                    f'DELETE FROM project_reference_images WHERE project_id IN ({project_placeholders})',
+                    project_ids,
+                )
+                conn.execute(
+                    f'DELETE FROM style_profiles WHERE project_id IN ({project_placeholders})',
+                    project_ids,
+                )
+
+            conn.execute('DELETE FROM error_logs WHERE user_id = ?', (user_id,))
+            conn.execute('DELETE FROM projects WHERE user_id = ?', (user_id,))
+            conn.execute('DELETE FROM user_sessions WHERE user_id = ?', (user_id,))
+            conn.execute('DELETE FROM password_reset_tokens WHERE user_id = ?', (user_id,))
+            conn.commit()

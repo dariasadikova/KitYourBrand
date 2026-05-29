@@ -259,6 +259,20 @@ class AuthService:
         except sqlite3.OperationalError:
             return
 
+    def verify_current_password(self, user_id: int, password: str) -> None:
+        row = self.get_user_by_id(user_id)
+        if row is None:
+            raise ValueError('Пользователь не найден.')
+        if not (password or '').strip():
+            raise ValueError('Введите пароль для подтверждения.')
+        if not self.verify_password(password, str(row['password_hash'])):
+            raise ValueError('Неверный пароль.')
+
+    def delete_user(self, user_id: int) -> None:
+        with self._connect() as conn:
+            conn.execute('DELETE FROM users WHERE id = ?', (int(user_id),))
+            conn.commit()
+
     def create_password_reset_token(self, email: str) -> Optional[str]:
         """Создаёт токен сброса. None, если email не зарегистрирован (без утечки в API)."""
         normalized_email = email.strip().lower()

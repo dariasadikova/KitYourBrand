@@ -139,7 +139,7 @@ function ProtectedProfile({ session, onLogout, onSessionRefresh }: { session: Au
 
   return (
     <MigrationShell session={session} activePath="/profile" mainClassName="profile-main" onLogout={onLogout}>
-      <ProfilePage onSessionRefresh={onSessionRefresh} />
+      <ProfilePage onSessionRefresh={onSessionRefresh} onLogout={onLogout} />
     </MigrationShell>
   )
 }

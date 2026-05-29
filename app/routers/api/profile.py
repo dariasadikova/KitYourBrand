@@ -7,7 +7,7 @@ from fastapi import APIRouter, File, Form, HTTPException, Request, UploadFile, s
 from fastapi.responses import JSONResponse
 
 from app.core.settings import settings
-from app.db import auth_service
+from app.db import auth_service, project_service
 
 router = APIRouter(prefix='/api/profile', tags=['api-profile'])
 
@@ -146,3 +146,36 @@ async def update_profile(
     request.session['user_name'] = (name or '').strip() or request.session.get('user_name')
     updated = auth_service.get_user_by_id(user_id)
     return JSONResponse({'ok': True, 'profile': _profile_payload(updated)})
+
+
+@router.post('/delete-account')
+async def delete_account(
+    request: Request,
+    password: str = Form(''),
+) -> JSONResponse:
+    user_id = _require_user_id(request)
+    row = auth_service.get_user_by_id(user_id)
+    if row is None:
+        raise HTTPException(status_code=404, detail='Пользователь не найден.')
+
+    try:
+        auth_service.verify_current_password(user_id, password)
+    except ValueError as exc:
+        return JSONResponse({'ok': False, 'error': str(exc)}, status_code=400)
+
+    avatar_path = str(row['avatar_path']) if row['avatar_path'] else ''
+    if avatar_path:
+        avatar_file = PROFILE_AVATARS_DIR / avatar_path
+        if avatar_file.exists():
+            avatar_file.unlink()
+
+    try:
+        project_service.purge_user_account_data(user_id)
+    except ValueError as exc:
+        return JSONResponse({'ok': False, 'error': str(exc)}, status_code=400)
+
+    auth_service.revoke_user_session(request.session.get('db_session_id'))
+    auth_service.delete_user(user_id)
+    request.session.clear()
+
+    return JSONResponse({'ok': True, 'message': 'Аккаунт удалён.'})

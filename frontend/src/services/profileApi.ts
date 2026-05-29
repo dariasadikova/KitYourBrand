@@ -11,3 +11,12 @@ export function updateProfile(formData: FormData): Promise<ProfileResponse> {
     body: formData,
   })
 }
+
+export function deleteAccount(password: string): Promise<{ ok: boolean; message?: string; error?: string }> {
+  const formData = new FormData()
+  formData.append('password', password)
+  return apiClient<{ ok: boolean; message?: string; error?: string }>('/api/profile/delete-account', {
+    method: 'POST',
+    body: formData,
+  })
+}

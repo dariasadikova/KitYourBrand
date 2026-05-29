@@ -57,6 +57,39 @@ def test_update_profile_rejects_short_name(authenticated_client: TestClient) -> 
     assert 'Имя' in payload['error']
 
 
+def test_delete_account_requires_password(authenticated_client: TestClient) -> None:
+    response = authenticated_client.post('/api/profile/delete-account', data={'password': ''})
+
+    assert response.status_code == 400
+    payload = response.json()
+    assert payload['ok'] is False
+    assert 'пароль' in payload['error'].lower()
+
+
+def test_delete_account_rejects_wrong_password(authenticated_client: TestClient) -> None:
+    response = authenticated_client.post('/api/profile/delete-account', data={'password': 'wrong-password'})
+
+    assert response.status_code == 400
+    payload = response.json()
+    assert payload['ok'] is False
+    assert 'Неверный пароль' in payload['error']
+
+
+def test_delete_account_removes_user_and_logs_out(authenticated_client: TestClient) -> None:
+    response = authenticated_client.post('/api/profile/delete-account', data={'password': 'strongpass123'})
+
+    assert response.status_code == 200
+    payload = response.json()
+    assert payload['ok'] is True
+
+    me = authenticated_client.get('/api/auth/me')
+    assert me.status_code == 200
+    assert me.json()['authenticated'] is False
+
+    profile = authenticated_client.get('/api/profile')
+    assert profile.status_code == 401
+
+
 def test_update_profile_rejects_invalid_avatar_type(authenticated_client: TestClient) -> None:
     response = authenticated_client.post(
         '/api/profile/update',

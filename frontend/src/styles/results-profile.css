@@ -627,6 +627,21 @@
     }
 }
 
+.profile-card--danger {
+    margin-top: 24px;
+    border-color: rgba(248, 113, 113, 0.55);
+}
+
+.profile-danger-text {
+    margin: 0 0 16px;
+    color: #99a1af;
+    max-width: 52rem;
+}
+
+.profile-delete-password-field {
+    margin: 0 0 20px;
+}
+
 .ref-card__footer {
   display: flex;
   align-items: center;
