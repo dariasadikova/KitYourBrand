@@ -1,5 +1,6 @@
 import { type FormEvent, useEffect, useState } from 'react'
 import { Link, Navigate, useNavigate, useSearchParams } from 'react-router-dom'
+import { setPendingHelpGuide } from '../config/helpGuide'
 import { login, register, requestPasswordReset, resetPasswordWithToken, validatePasswordResetToken } from '../services/authApi'
 import type { AuthMeResponse, LoginResponse } from '../types/auth'
 import { AuthModalBrand, AuthScreenShell } from '../components/layout/AppLayout'
@@ -29,6 +30,11 @@ export function LoginPage({
 
     try {
       const nextSession = await login({ email, password })
+      const welcomeAfterRegister = searchParams.get('registered') === '1'
+      const userId = nextSession.user?.id
+      if (welcomeAfterRegister && userId != null) {
+        setPendingHelpGuide(userId)
+      }
       onSessionChange(nextSession)
       if (nextSession.claimed_demo_project?.editor_url) {
         navigate(nextSession.claimed_demo_project.editor_url.replace(/^\/app/, ''), { replace: true })

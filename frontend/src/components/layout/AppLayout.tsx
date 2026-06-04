@@ -1,5 +1,6 @@
-import { type MouseEvent, type ReactNode, useEffect, useState } from 'react'
+import { type MouseEvent, type ReactNode, useCallback, useEffect, useState } from 'react'
 import { Link, useLocation, useNavigate } from 'react-router-dom'
+import { clearPendingHelpGuide, hasPendingHelpGuide } from '../../config/helpGuide'
 import {
   PROVIDER_NEWS_ENTRIES,
   PROVIDER_NEWS_VERSION,
@@ -7,6 +8,7 @@ import {
   readSeenProviderNewsVersion,
 } from '../../config/providerNews'
 import type { AuthMeResponse } from '../../types/auth'
+import { DashboardHelpGuide, DashboardHelpIcon } from './DashboardHelpGuide'
 
 export function DashboardWordmark({ className }: { className?: string }) {
   return (
@@ -235,6 +237,7 @@ export function MigrationShell({
   const navigate = useNavigate()
   const location = useLocation()
   const [mobileNavOpen, setMobileNavOpen] = useState(false)
+  const [helpOpen, setHelpOpen] = useState(false)
   const userName = session?.user?.name || 'Пользователь'
   const userEmail = session?.user?.email || ''
   const userId = session?.user?.id
@@ -256,12 +259,27 @@ export function MigrationShell({
   }, [location.pathname])
 
   useEffect(() => {
+    if (userId == null || activePath !== '/dashboard') return
+    if (hasPendingHelpGuide(userId)) {
+      setHelpOpen(true)
+    }
+  }, [userId, activePath])
+
+  const closeHelpGuide = useCallback(() => {
+    setHelpOpen(false)
+    if (userId != null) clearPendingHelpGuide(userId)
+  }, [userId])
+
+  useEffect(() => {
     function onKeyDown(event: KeyboardEvent) {
-      if (event.key === 'Escape') setMobileNavOpen(false)
+      if (event.key === 'Escape') {
+        setMobileNavOpen(false)
+        closeHelpGuide()
+      }
     }
     window.addEventListener('keydown', onKeyDown)
     return () => window.removeEventListener('keydown', onKeyDown)
-  }, [])
+  }, [closeHelpGuide])
 
   useEffect(() => {
     if (!mobileNavOpen) return
@@ -298,12 +316,21 @@ export function MigrationShell({
     <div className="dashboard-page page-dashboard">
       <header className={`dashboard-page-header${mobileNavOpen ? ' landing-header--open' : ''}`}>
         <div className="dashboard-page-header__brand">
-          <Link to="/dashboard" className="dashboard-brand dashboard-brand--header" aria-label="KYBBY dashboard">
+          <Link to="/" className="dashboard-brand dashboard-brand--header" aria-label="KYBBY — на главную">
             <DashboardWordmark />
           </Link>
         </div>
         <div className="dashboard-page-header__actions">
           <div className="dashboard-userbar">
+            <button
+              type="button"
+              className="dashboard-icon-btn dashboard-help-btn"
+              aria-label="Краткая инструкция по работе с KYBBY"
+              aria-expanded={helpOpen}
+              onClick={() => setHelpOpen(true)}
+            >
+              <DashboardHelpIcon />
+            </button>
             <div className="dashboard-notify" onMouseEnter={markProviderNewsSeen}>
               <button
                 type="button"
@@ -353,6 +380,7 @@ export function MigrationShell({
           </div>
         </div>
       </header>
+      <DashboardHelpGuide open={helpOpen} onClose={closeHelpGuide} />
       {mobileNavOpen ? (
         <>
           <button type="button" className="dashboard-mobile-nav-overlay" aria-label="Закрыть меню" onClick={() => setMobileNavOpen(false)} />

@@ -400,28 +400,21 @@
         display: flex;
         flex-direction: column;
         overflow: hidden;
-        box-sizing: border-box;
     }
 
     .landing-shell .hero-board {
-        flex: 1 1 auto;
+        flex: 1;
         min-height: 0;
-        width: 100%;
-        max-width: 1344px;
-        margin-inline: auto;
         display: flex;
         flex-direction: column;
-        justify-content: flex-start;
-        align-items: stretch;
-        container-type: size;
     }
 
-    /* Uniform scale: same aspect ratio on all laptops; shrinks only when width or height is tight */
     .landing-shell .hero-board__frame {
-        width: min(1344px, 100cqw, calc(100cqh * 1344 / 619));
-        max-height: 100cqh;
+        width: min(100%, 1344px, calc((100svh - var(--landing-hero-gutter)) * 1344 / 619));
+        max-height: calc(100svh - var(--landing-hero-gutter));
         margin-inline: auto;
-        flex-shrink: 0;
+        flex-shrink: 1;
+        min-height: 0;
     }
 }
 
@@ -461,7 +454,7 @@
 }
 
 .landing-shell .hero-tile--filled {
-    font-size: clamp(12px, 1.19cqw, 16px);
+    font-size: 16px;
 }
 
 .landing-shell .hero-tile--logos {
@@ -570,13 +563,13 @@
 
 .landing-shell .hero-board__wordmark {
     position: absolute;
-    left: 29.017%;
+    left: 390px;
     top: 38%;
     z-index: 1;
     margin: 0;
     transform: translateX(-50%);
     font-family: "Doto", monospace;
-    font-size: clamp(4rem, 10.12cqw, 8.5rem);
+    font-size: 8.5rem;
     font-weight: 500;
     line-height: 0.95;
     letter-spacing: 0;
@@ -726,7 +719,7 @@
     cursor: pointer;
     text-transform: lowercase;
     font-family: 'Roboto', sans-serif;
-    font-size: clamp(12px, 1.19cqw, 16px);
+    font-size: 16px;
     font-weight: 400;
     line-height: normal;
     text-align: left;
