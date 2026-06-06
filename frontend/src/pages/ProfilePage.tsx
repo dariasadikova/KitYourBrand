@@ -339,17 +339,6 @@ export function ProfilePage({
                     onChange={(event) => setRecraftApiKey(event.target.value)}
                     autoComplete="off"
                   />
-                  <button
-                    type="button"
-                    className="profile-api-info-btn profile-input-adorned__hint"
-                    aria-label="Подсказка: Recraft API key"
-                    aria-describedby="profile-api-hint-recraft"
-                  >
-                    i
-                  </button>
-                  <span id="profile-api-hint-recraft" className="profile-input-adorned__tooltip" role="tooltip">
-                    Оставьте поле пустым, чтобы сохранить текущий ключ
-                  </span>
                 </div>
               </label>
               <label className="editor-field">

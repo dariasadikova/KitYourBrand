@@ -956,7 +956,7 @@ export function ProjectEditorPage({
   const [iconStrokeWidth, setIconStrokeWidth] = useState(2)
   const [iconCorner, setIconCorner] = useState('rounded')
   const [iconFill, setIconFill] = useState('outline')
-  const [illustrationFormat, setIllustrationFormat] = useState<'vector' | 'raster'>('raster')
+  const [illustrationFormat, setIllustrationFormat] = useState<'vector' | 'raster'>('vector')
   const [assetRefs, setAssetRefs] = useState<Record<AssetType, StyleRef[]>>(() => ({
     logos: [],
     icons: [],

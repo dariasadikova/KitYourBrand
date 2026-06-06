@@ -171,20 +171,22 @@ def build_prompts(tokens: Dict, kind: str, name: str) -> Tuple[str, str]:
 
     if kind == "patterns":
         prompt = (
-            f"Seamless repeating pattern: {name}. "
+            f"Seamless repeating pattern texture: {name}. "
             f"{style_prompt} {pal_txt} "
-            f"Tileable, seamless, minimal, no text, no watermark."
+            f"Tileable wallpaper, seamless edges, ornamental repeat, minimal, no text, no watermark."
         )
         return prompt.strip(), f"{negative}, {palette_artifact_negative}".strip(", ")
 
     illustration_negative = (
         "text, letters, words, captions, labels, typography, watermark, logo, "
+        "seamless pattern, repeating tile, wallpaper, ornamental texture fill, "
         f"{palette_artifact_negative}"
     )
     prompt = (
-        f"Illustration for brand UI: {name}. "
+        f"Single standalone brand illustration scene: {name}. "
         f"{style_prompt} "
         f"{pal_txt} "
+        f"One clear subject or scene, not a seamless pattern, not tileable, not wallpaper. "
         f"Create a clean standalone image only: no text, no labels, no captions, "
         f"no hex codes, no color swatches, no palette chips, no callouts, no UI overlays. "
         f"Modern, friendly, clean composition, no watermark."

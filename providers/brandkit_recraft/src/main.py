@@ -30,10 +30,11 @@ def build_prompt(base_prompt, tokens, kind):
                   f"brand palette {pal.get('primary','')}/{pal.get('secondary','')}/{pal.get('accent','')}",
                   transparent]
     elif kind=='pattern':
-        parts += [f"seamless background, motifs: {', '.join(tex.get('motifs', []))}, density: {tex.get('density','medium')}",
+        parts += [f"seamless repeating tile pattern, motifs: {', '.join(tex.get('motifs', []))}, density: {tex.get('density','medium')}",
                   f"brand palette {pal.get('primary','')}/{pal.get('secondary','')}/{pal.get('accent','')}"]
     else:
         parts += [f"{ill.get('prompt_suffix','minimal')}",
+                  "single scene brand illustration, clear subject, not a seamless pattern, not repeating tile, not wallpaper",
                   f"brand palette {pal.get('primary','')}/{pal.get('secondary','')}/{pal.get('accent','')}"]
     return '; '.join([p for p in parts if p])
 
@@ -173,11 +174,12 @@ def main():
     if ill_vector and not ill_raster:
         ill_style = 'vector_illustration'
     elif ill_raster and not ill_vector:
-        ill_style = 'digital_illustration'
+        # digital_illustration совпадает со стилем паттернов и даёт плиточный результат.
+        ill_style = 'realistic_image'
     elif ill_vector and ill_raster:
-        ill_style = 'digital_illustration'
+        ill_style = 'vector_illustration'
     else:
-        ill_style = 'digital_illustration'
+        ill_style = 'vector_illustration'
     n_ill = min(len(ill_prompts), args.illustrations)
     info('--- Иллюстрации: до %s (из %s), vector=%s raster=%s ill_style=%s ---', n_ill, len(ill_prompts), ill_vector, ill_raster, ill_style)
     for i, base in enumerate(ill_prompts[:args.illustrations], 1):

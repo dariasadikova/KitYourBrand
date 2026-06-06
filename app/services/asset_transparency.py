@@ -13,6 +13,9 @@ from app.core.providers import ASSET_PROVIDER_SLUGS
 logger = logging.getLogger(__name__)
 
 _RASTER_SUFFIXES = {'.png', '.jpg', '.jpeg', '.webp'}
+_MAX_MASK_SIDE = 768
+# Recraft CLI уже вызывает remove_flat_background в postprocess_dirs.
+_SKIP_TRANSPARENCY_PROVIDERS = frozenset({'recraft'})
 
 
 def _corner_background_rgb(image: Image.Image) -> tuple[int, int, int]:
@@ -29,12 +32,25 @@ def _corner_background_rgb(image: Image.Image) -> tuple[int, int, int]:
     return tuple(sum(channel) // len(samples) for channel in zip(*samples, strict=True))
 
 
+def _edges_already_transparent(image: Image.Image, *, min_alpha: int = 12) -> bool:
+    rgba = image.convert('RGBA')
+    width, height = rgba.size
+    if width == 0 or height == 0:
+        return False
+    corners = (
+        rgba.getpixel((0, 0))[3],
+        rgba.getpixel((width - 1, 0))[3],
+        rgba.getpixel((0, height - 1))[3],
+        rgba.getpixel((width - 1, height - 1))[3],
+    )
+    return all(alpha <= min_alpha for alpha in corners)
+
+
 def _color_close(first: tuple[int, int, int], second: tuple[int, int, int], tolerance: int) -> bool:
     return all(abs(int(first[i]) - int(second[i])) <= tolerance for i in range(3))
 
 
-def remove_flat_background(image: Image.Image, *, tolerance: int = 34) -> Image.Image:
-    """Убирает однотонный фон, связанный с краями кадра (flood fill)."""
+def _flood_fill_flat_background(image: Image.Image, *, tolerance: int = 34) -> Image.Image:
     rgba = image.convert('RGBA')
     width, height = rgba.size
     if width == 0 or height == 0:
@@ -72,6 +88,27 @@ def remove_flat_background(image: Image.Image, *, tolerance: int = 34) -> Image.
     return rgba
 
 
+def remove_flat_background(image: Image.Image, *, tolerance: int = 34) -> Image.Image:
+    """Убирает однотонный фон, связанный с краями кадра (flood fill)."""
+    rgba = image.convert('RGBA')
+    if _edges_already_transparent(rgba):
+        return rgba
+
+    width, height = rgba.size
+    longest = max(width, height)
+    if longest <= _MAX_MASK_SIDE:
+        return _flood_fill_flat_background(rgba, tolerance=tolerance)
+
+    scale = _MAX_MASK_SIDE / longest
+    small_size = (max(1, int(width * scale)), max(1, int(height * scale)))
+    small = rgba.resize(small_size, Image.Resampling.BILINEAR)
+    processed_small = _flood_fill_flat_background(small, tolerance=tolerance)
+    alpha = processed_small.split()[3].resize((width, height), Image.Resampling.BILINEAR)
+    result = rgba.copy()
+    result.putalpha(alpha)
+    return result
+
+
 def process_raster_asset_transparency(path: Path, *, tolerance: int = 34) -> Path | None:
     if path.suffix.lower() not in _RASTER_SUFFIXES:
         return None
@@ -96,6 +133,8 @@ def process_brand_logos_icons_transparency(
 ) -> int:
     converted = 0
     for provider in ASSET_PROVIDER_SLUGS:
+        if provider in _SKIP_TRANSPARENCY_PROVIDERS:
+            continue
         if only_providers is not None and provider not in only_providers:
             continue
         for kind in ('logos', 'icons'):

@@ -930,6 +930,20 @@ class GenerationService:
                 only_providers=active_providers,
             )
 
+        if patterns_count or illustrations_count:
+            from app.services.asset_palette import extract_brand_palette_hex, process_brand_rasters_palette
+
+            palette_hex = extract_brand_palette_hex(tokens)
+            if palette_hex:
+                palette_progress = _PROGRESS_WEBP + (2 if (logos_count or icons_count) else 1)
+                report(palette_progress, 'Подгонка паттернов и иллюстраций к палитре бренда')
+                process_brand_rasters_palette(
+                    self.out_root,
+                    brand_id,
+                    palette_hex,
+                    only_providers=active_providers,
+                )
+
         manifest, counts, export_path = self.build_and_save_figma_manifest(
             user_id,
             project_slug,

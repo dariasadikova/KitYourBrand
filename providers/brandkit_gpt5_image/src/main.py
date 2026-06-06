@@ -107,9 +107,9 @@ def build_icon_prompt(tokens: Dict, name: str) -> Tuple[str, str]:
 def build_pattern_prompt(tokens: Dict, name: str) -> Tuple[str, str]:
     style_prompt, negative = style_text(tokens)
     prompt = (
-        f"Create a seamless repeating pattern: {name}. "
+        f"Create a seamless repeating pattern texture: {name}. "
         f"{style_prompt} {palette_text(tokens)} "
-        f"Tileable, seamless edges, minimal, clean. No text, no watermark."
+        f"Tileable wallpaper, seamless edges, ornamental repeat, minimal, clean. No text, no watermark."
     )
     return prompt.strip(), negative
 
@@ -117,8 +117,9 @@ def build_pattern_prompt(tokens: Dict, name: str) -> Tuple[str, str]:
 def build_illustration_prompt(tokens: Dict, name: str) -> Tuple[str, str]:
     style_prompt, negative = style_text(tokens)
     prompt = (
-        f"Create a brand illustration for UI: {name}. "
+        f"Create a single standalone brand illustration scene for UI: {name}. "
         f"{style_prompt} {palette_text(tokens)} "
+        f"One clear subject or scene, not a seamless pattern, not tileable, not wallpaper. "
         f"Modern, friendly, clean composition. No text, no watermark."
     )
     return prompt.strip(), negative
