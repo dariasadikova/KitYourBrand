@@ -6,6 +6,10 @@ import re
 import subprocess
 from typing import Any
 
+_GENERIC_FAILURE = 'Не удалось завершить генерацию. Проверьте ключи API в профиле, баланс провайдера и повторите попытку.'
+_PROFILE_KEYS_HINT = 'Откройте профиль → API-ключи провайдеров, проверьте значения и повторите запуск.'
+_ERROR_LINE = re.compile(r'^[A-Z][A-Za-z0-9_]*(?:Error|Exception):\s*.+')
+
 
 class ProviderGenerationError(RuntimeError):
     """Исключение с уже нормализованной ошибкой конкретного провайдера."""
@@ -33,7 +37,9 @@ def _collect_text(exc: BaseException) -> str:
         return '\n'.join(p for p in parts if p and str(p).strip())
 
     if isinstance(exc, subprocess.CalledProcessError):
-        parts = [exc.stderr or '', exc.stdout or '', str(exc)]
+        stdout = getattr(exc, 'stdout', None) or getattr(exc, 'output', None) or ''
+        stderr = getattr(exc, 'stderr', None) or ''
+        parts = [stderr, stdout, str(exc)]
         return '\n'.join(p for p in parts if p and str(p).strip())
 
     return str(exc) or ''
@@ -58,6 +64,8 @@ def _extract_provider(exc: BaseException, provider: str | None) -> str | None:
     blob = _collect_text(exc).lower()
     if 'recraft' in blob:
         return 'recraft'
+    if 'alice ai art' in blob or 'yandex_cloud' in blob or 'yandex cloud' in blob:
+        return 'alice_ai_art'
     if 'openrouter' in blob:
         return 'openrouter'
     return None
@@ -81,29 +89,73 @@ def _extract_http_code(blob: str) -> int | None:
     return None
 
 
+def _extract_root_error_line(blob: str) -> str | None:
+    last: str | None = None
+    for line in blob.splitlines():
+        s = line.strip()
+        if _ERROR_LINE.match(s):
+            last = s
+    return last
+
+
+def _known_failure(blob: str) -> tuple[str, str | None] | None:
+    low = blob.lower()
+
+    if 'no space left on device' in low or 'errno 28' in low:
+        return (
+            'Недостаточно места на диске для сохранения сгенерированных файлов.',
+            'Освободите место на диске сервера и запустите генерацию снова.',
+        )
+
+    if 'yandex_cloud_folder is empty' in low or (
+        'yandex_cloud' in low and ('not set' in low or 'не задан' in low or 'empty' in low)
+    ):
+        return (
+            'Не заданы ключи Yandex Cloud для Alice AI ART.',
+            'В профиле укажите Yandex Cloud API Key и Folder ID, затем повторите запуск.',
+        )
+
+    if 'alice ai art response does not contain image data' in low or 'does not contain b64_json' in low:
+        return (
+            'Alice AI ART не вернула изображение.',
+            'Проверьте ключи Yandex Cloud, квоту AI Studio и повторите попытку.',
+        )
+
+    if 'recraft_api_key' in low and ('не задан' in low or 'not set' in low):
+        return 'Не задан ключ API Recraft.', _PROFILE_KEYS_HINT
+
+    if 'openrouter_api_key' in low and ('не задан' in low or 'not set' in low):
+        return 'Не задан ключ API OpenRouter.', _PROFILE_KEYS_HINT
+
+    return None
+
+
 def _provider_hint(provider: str | None, code: int | None, blob: str, primary: str) -> str | None:
     provider = (provider or '').strip().lower()
     low = primary.lower()
     blob_low = blob.lower()
 
-    if provider in ('seedream', 'flux', 'openrouter', 'nano_banana', 'gpt5_image'):
+    if provider == 'alice_ai_art' or 'yandex cloud' in blob_low or 'yandex_cloud' in blob_low:
+        api_name = 'Yandex Cloud'
+        keys_hint = 'Yandex Cloud API Key и Folder ID в профиле'
+    elif provider in ('seedream', 'flux', 'openrouter', 'nano_banana', 'gpt5_image'):
         api_name = 'OpenRouter'
-        env_name = 'OPENROUTER_API_KEY'
+        keys_hint = 'OpenRouter API Key в профиле'
     else:
         api_name = 'Recraft'
-        env_name = 'RECRAFT_API_KEY'
+        keys_hint = 'Recraft API Key в профиле'
 
     if code == 401 or 'unauthorized' in low or 'request unauthorized' in blob_low or 'missing authentication header' in low:
-        return (
-            f'Ключ {api_name} отклонён (401). Проверьте {env_name} в .env '
-            f'в корне проекта и что у аккаунта есть доступ к API.'
-        )
+        return f'Ключ {api_name} отклонён (401). Проверьте {keys_hint}.'
 
     if code == 402:
         return f'Проверьте баланс и тариф в панели {api_name}.'
 
     if code == 429 or 'rate limit' in blob_low:
         return f'Слишком много запросов к API {api_name}. Подождите и повторите попытку.'
+
+    if 'no space left on device' in blob_low or 'errno 28' in blob_low:
+        return 'Освободите место на диске сервера и запустите генерацию снова.'
 
     return None
 
@@ -112,10 +164,28 @@ def _contains_cyrillic(text: str) -> bool:
     return bool(re.search(r'[\u0400-\u04FF]', text))
 
 
+def _is_generic_user_message(text: str) -> bool:
+    cleaned = ' '.join(str(text or '').split()).lower()
+    if not cleaned:
+        return True
+    generic_markers = (
+        'генерация не удалась',
+        'не удалось завершить генерацию',
+        'подробности смотрите',
+        'консоли сервера',
+        'консоли, где запущен сервер',
+        'non-zero exit status',
+        'calledprocesserror',
+    )
+    return any(marker in cleaned for marker in generic_markers)
+
+
 def _russianize_provider_detail(raw: str) -> str:
-    """Краткое объяснение для журнала UI: по возможности без сырого англ. вывода консоли."""
+    """Краткое объяснение для журнала UI без сырого traceback."""
     cleaned = ' '.join(str(raw or '').split())
     if not cleaned:
+        return ''
+    if _is_generic_user_message(cleaned):
         return ''
     if _contains_cyrillic(cleaned):
         return cleaned[:280] + ('…' if len(cleaned) > 280 else '')
@@ -124,7 +194,7 @@ def _russianize_provider_detail(raw: str) -> str:
     code = _extract_http_code(cleaned)
 
     if code == 401 or 'unauthorized' in low or 'invalid api key' in low or 'incorrect api key' in low:
-        return 'Ошибка доступа: API отклонил ключ (401). Проверьте ключ в профиле или в .env.'
+        return 'Ошибка доступа: API отклонил ключ (401). Проверьте ключ в профиле.'
     if code == 402 or ('payment' in low and 'required' in low) or 'insufficient' in low and (
         'credit' in low or 'balance' in low or 'quota' in low
     ):
@@ -138,18 +208,18 @@ def _russianize_provider_detail(raw: str) -> str:
     if code is not None and 500 <= code < 600:
         return f'Сбой на стороне сервиса (HTTP {code}). Повторите позже.'
 
+    if 'no space left on device' in low or 'errno 28' in low:
+        return 'Недостаточно места на диске для сохранения сгенерированных файлов.'
     if 'timeout' in low or 'timed out' in low or 'read operation timed out' in low:
         return 'Превышено время ожидания ответа от API. Повторите попытку или уменьшите объём генерации.'
     if 'connection' in low or 'name or service not known' in low or 'failed to establish' in low:
         return 'Нет соединения с сервером API. Проверьте интернет, VPN и DNS.'
     if 'non-zero exit status' in low or 'calledprocesserror' in low:
-        return 'Процесс провайдера завершился с ошибкой (подробный вывод — в консоли сервера).'
+        return 'Провайдер завершил работу с ошибкой. Проверьте ключи API, баланс и повторите запуск.'
     if 'bad gateway' in low or 'gateway timeout' in low or 'service unavailable' in low or '503' in cleaned:
         return 'Сервис временно недоступен (шлюз / 503). Повторите позже.'
 
-    return (
-        'Запрос к внешнему API завершился ошибкой. Проверьте ключи в профиле, баланс и доступность моделей.'
-    )
+    return 'Запрос к внешнему API завершился ошибкой. Проверьте ключи в профиле, баланс и доступность моделей.'
 
 
 def user_log_line_for_provider_error(provider_slug: str, message: str | None, hint: str | None) -> str:
@@ -162,13 +232,15 @@ def user_log_line_for_provider_error(provider_slug: str, message: str | None, hi
     hint_str = str(hint or '').strip()
     detail = _russianize_provider_detail(msg) if msg else ''
 
-    parts: list[str] = [f'— {label}: сбой генерации.']
     if detail:
-        parts.append(detail)
+        parts: list[str] = [f'— {label}: {detail}']
+    else:
+        parts = [f'— {label}: не удалось сгенерировать ассеты.']
+
     if hint_str:
         combined = ' '.join(parts)
         if hint_str not in combined:
-            parts.append(f'Подсказка: {hint_str}')
+            parts.append(hint_str if hint_str.startswith('Подсказка:') else f'Подсказка: {hint_str}')
     return ' '.join(parts)
 
 
@@ -178,8 +250,18 @@ def summarize_generation_failure(exc: BaseException, provider: str | None = None
     Возвращает (сообщение для пользователя, опциональная подсказка).
     """
     if isinstance(exc, ProviderGenerationError):
-        primary = _norm_primary(exc.user_message or 'Генерация не удалась.')
+        primary = _norm_primary(exc.user_message or _GENERIC_FAILURE)
         hint = exc.hint
+        if _is_generic_user_message(primary):
+            blob = _collect_text(exc)
+            known = _known_failure(blob)
+            if known:
+                primary, hint = known
+            else:
+                root_error = _extract_root_error_line(blob)
+                if root_error:
+                    translated = _russianize_provider_detail(root_error)
+                    primary = translated or _GENERIC_FAILURE
         if hint is None:
             blob = _collect_text(exc)
             code = _extract_http_code(blob)
@@ -195,6 +277,10 @@ def summarize_generation_failure(exc: BaseException, provider: str | None = None
     hint: str | None = None
     primary: str | None = None
     resolved_provider = _extract_provider(exc, provider)
+
+    known = _known_failure(blob)
+    if known:
+        return known
 
     m = re.search(r'response text \(head\):\s*(.+?)(?:\r?\n|$)', blob, re.IGNORECASE | re.MULTILINE)
     if m:
@@ -232,14 +318,9 @@ def summarize_generation_failure(exc: BaseException, provider: str | None = None
             primary = f"HTTP {mh.group(1)}: {mh.group(2).strip()}"
 
     if not primary:
-        if 'RECRAFT_API_KEY' in blob and ('не задан' in blob or 'not set' in blob.lower()):
-            primary = 'Не задан ключ API Recraft (RECRAFT_API_KEY).'
-            hint = 'Добавьте RECRAFT_API_KEY в файл .env в корне проекта и перезапустите сервер.'
-
-    if not primary:
-        if 'OPENROUTER_API_KEY' in blob and ('не задан' in blob or 'not set' in blob.lower()):
-            primary = 'Не задан ключ API OpenRouter (OPENROUTER_API_KEY).'
-            hint = 'Добавьте OPENROUTER_API_KEY в файл .env в корне проекта и перезапустите сервер.'
+        root_error = _extract_root_error_line(blob)
+        if root_error:
+            primary = _russianize_provider_detail(root_error) or root_error
 
     if not primary:
         mconn = re.search(
@@ -263,6 +344,8 @@ def summarize_generation_failure(exc: BaseException, provider: str | None = None
                 continue
             if re.search(r'\[(DEBUG|INFO|WARN)\]', s, re.IGNORECASE):
                 continue
+            if re.match(r'^\[[^\]]+\]\[[^\]]+\]\s*generating:', s, re.IGNORECASE):
+                continue
             if '[ERROR]' in s and 'response text' not in s.lower():
                 inner = re.sub(r'^\[[^\]]+\]\s*(\[[^\]]+\]\s*)*', '', s)
                 inner = re.sub(r'^\[ERROR\]\s*', '', inner, flags=re.IGNORECASE).strip()
@@ -271,9 +354,9 @@ def summarize_generation_failure(exc: BaseException, provider: str | None = None
                     break
 
     if not primary:
-        primary = 'Генерация не удалась. Подробности смотрите в консоли, где запущен сервер.'
+        primary = _GENERIC_FAILURE
 
-    primary = _norm_primary(primary)
+    primary = _norm_primary(_russianize_provider_detail(primary) or primary)
 
     if hint is None:
         code = _extract_http_code(blob)

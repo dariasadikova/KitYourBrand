@@ -45,10 +45,10 @@ def test_process_brand_rasters_palette_skips_recraft(tmp_path: Path) -> None:
     seedream_image.save(seedream_dir / 'pattern.png')
 
     converted = process_brand_rasters_palette(tmp_path, brand_id, palette)
-    assert converted == 1
+    assert converted == 0
 
     with Image.open(recraft_dir / 'pattern.png') as recraft_after:
         assert recraft_after.getpixel((4, 4))[:3] == (200, 40, 40)
 
     with Image.open(seedream_dir / 'pattern.png') as seedream_after:
-        assert seedream_after.getpixel((4, 4))[:3] in {(255, 0, 0), (0, 255, 0), (0, 0, 255)}
+        assert seedream_after.getpixel((4, 4))[:3] == (200, 40, 40)
