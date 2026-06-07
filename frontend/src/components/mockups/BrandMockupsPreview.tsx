@@ -12,7 +12,7 @@ import {
 import { buildMockupCopy, type MockupCopy } from './mockupCopy'
 import { TrimmedMockupLogo } from './TrimmedMockupLogo'
 
-type MockupKind = 'landing' | 'business-card' | 'vk'
+type MockupKind = 'landing' | 'banner' | 'vk'
 type AssetKind = 'logos' | 'icons' | 'patterns' | 'illustrations'
 
 export type BrandPreviewData = {
@@ -33,7 +33,7 @@ export type BrandPreviewData = {
 
 const MOCKUPS: { key: MockupKind; label: string }[] = [
   { key: 'landing', label: 'Лендинг' },
-  { key: 'business-card', label: 'Визитка' },
+  { key: 'banner', label: 'Цифровой билборд' },
   { key: 'vk', label: 'ВКонтакте' },
 ]
 
@@ -152,14 +152,19 @@ function VkActionIcon({ children }: { children: ReactNode }) {
   return <span className="brand-mockup-vk__action-icon" aria-hidden="true">{children}</span>
 }
 
-function BusinessCardBrandMark({ brand }: { brand: BrandPreviewData }) {
-  if (brand.logo) {
-    return <img src={brand.logo} alt="" className="brand-mockup-card__logo" />
+function BannerBrandMark({ brand }: { brand: BrandPreviewData }) {
+  const src = brand.logo || brand.icon
+  const iconOnly = !brand.logo && Boolean(brand.icon)
+  if (src) {
+    return (
+      <TrimmedMockupLogo
+        src={src}
+        className={`brand-mockup-banner__logo${iconOnly ? ' brand-mockup-banner__logo--icon-only' : ''}`}
+        wrapClassName="brand-mockup-banner__logo-wrap"
+      />
+    )
   }
-  if (brand.icon) {
-    return <MockupIcon src={brand.icon} className="brand-mockup-card__icon-mark" />
-  }
-  return <strong className="brand-mockup-card__logo">{brand.name}</strong>
+  return <strong className="brand-mockup-banner__logo">{brand.name}</strong>
 }
 
 function LandingMockup({ brand }: { brand: BrandPreviewData }) {
@@ -189,20 +194,54 @@ function LandingMockup({ brand }: { brand: BrandPreviewData }) {
   )
 }
 
-function BusinessCardMockup({ brand }: { brand: BrandPreviewData }) {
+function bannerSiteSlug(name: string): string {
+  const slug = name.toLowerCase().replace(/[^a-z0-9]+/g, '').slice(0, 24)
+  return slug || 'brand'
+}
+
+function BannerMockup({ brand }: { brand: BrandPreviewData }) {
+  const siteSlug = bannerSiteSlug(brand.name)
+
   return (
-    <div className="brand-mockup brand-mockup--business-card" style={brandStyle(brand)}>
-      <div
-        className="brand-mockup-card__sheet"
-        style={brand.pattern ? { backgroundImage: `linear-gradient(rgba(255,255,255,0.92), rgba(255,255,255,0.92)), url(${brand.pattern})`, backgroundSize: 'cover' } : undefined}
-      >
-        <div className="brand-mockup-card__accent" aria-hidden="true" />
-        <BusinessCardBrandMark brand={brand} />
-        <p className="brand-mockup-card__name">{brand.name}</p>
-        <p className="brand-mockup-card__role">{brand.copy.businessRole}</p>
-        <div className="brand-mockup-card__contacts">
-          <span>hello@{brand.name.toLowerCase().replace(/\s+/g, '')}.com</span>
-          <span>+7 (900) 000-00-00</span>
+    <div className="brand-mockup brand-mockup--banner" style={brandStyle(brand)}>
+      <div className="brand-mockup-banner__screen" aria-label={`Цифровой билборд бренда ${brand.name}`}>
+        <div
+          className="brand-mockup-banner__canvas"
+          style={
+            brand.pattern
+              ? {
+                  backgroundImage: `linear-gradient(180deg, color-mix(in srgb, var(--brand-secondary) 92%, white) 0%, color-mix(in srgb, var(--brand-secondary) 78%, white) 100%), url(${brand.pattern})`,
+                  backgroundSize: 'cover',
+                }
+              : undefined
+          }
+        >
+          <header className="brand-mockup-banner__header">
+            <div className="brand-mockup-banner__brand">
+              <BannerBrandMark brand={brand} />
+              <strong className="brand-mockup-banner__name">{brand.name}</strong>
+            </div>
+          </header>
+
+          <div className="brand-mockup-banner__copy">
+            <p className="brand-mockup-banner__tagline">{brand.copy.bannerTagline}</p>
+          </div>
+
+          <div className="brand-mockup-banner__hero">
+            {brand.illustration ? (
+              <img src={brand.illustration} alt="" />
+            ) : brand.pattern ? (
+              <img src={brand.pattern} alt="" />
+            ) : brand.icon ? (
+              <MockupIcon src={brand.icon} className="brand-mockup-banner__hero-icon" />
+            ) : null}
+          </div>
+
+          <footer className="brand-mockup-banner__footer">
+            <span className="brand-mockup-banner__site">{siteSlug}.ru</span>
+            <span className="brand-mockup-banner__phone">8 800 000-00-00</span>
+            <span className="brand-mockup-banner__email">hello@{siteSlug}.ru</span>
+          </footer>
         </div>
       </div>
     </div>
@@ -399,7 +438,7 @@ export function BrandMockupsPreview({ results }: { results: ProjectResultsRespon
 
       <div className="brand-mockups-stage" role="tabpanel">
         {activeMockup === 'landing' ? <LandingMockup brand={brand} /> : null}
-        {activeMockup === 'business-card' ? <BusinessCardMockup brand={brand} /> : null}
+        {activeMockup === 'banner' ? <BannerMockup brand={brand} /> : null}
         {activeMockup === 'vk' ? <VkMockup brand={brand} /> : null}
       </div>
     </section>

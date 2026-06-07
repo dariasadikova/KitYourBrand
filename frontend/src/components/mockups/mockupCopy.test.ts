@@ -7,7 +7,7 @@ describe('mockup copy helpers', () => {
     expect(buildMockupCopy('NOVA', '')).toEqual({
       landingHeadline: 'Визуальный стиль, который запоминается',
       landingButton: 'Начать',
-      businessRole: 'Представитель бренда',
+      bannerTagline: 'Визуальный стиль, который запоминается',
       vkCaption: 'Новый визуальный язык бренда NOVA — палитра, паттерн и графика в одном комплекте.',
     })
   })
@@ -16,7 +16,7 @@ describe('mockup copy helpers', () => {
     expect(buildMockupCopy('NOVA', '  Умный дом для спокойной жизни.  Второе предложение.  ')).toEqual({
       landingHeadline: 'Умный дом для спокойной жизни',
       landingButton: 'Подробнее',
-      businessRole: 'Умный дом для спокойной жизни',
+      bannerTagline: 'Умный дом для спокойной жизни. Второе предложение.',
       vkCaption: 'Умный дом для спокойной жизни. Второе предложение.',
     })
   })
@@ -29,7 +29,7 @@ describe('mockup copy helpers', () => {
 
     expect(copy.landingHeadline.endsWith('…')).toBe(true)
     expect(copy.landingHeadline.length).toBeLessThanOrEqual(96)
-    expect(copy.businessRole.length).toBeLessThanOrEqual(72)
+    expect(copy.bannerTagline.length).toBeLessThanOrEqual(120)
     expect(copy.vkCaption).not.toContain('  ')
   })
 })

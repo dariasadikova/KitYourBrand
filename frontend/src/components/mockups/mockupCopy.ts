@@ -1,7 +1,7 @@
 export type MockupCopy = {
   landingHeadline: string
   landingButton: string
-  businessRole: string
+  bannerTagline: string
   vkCaption: string
 }
 
@@ -19,7 +19,7 @@ export function buildMockupCopy(name: string, description: string): MockupCopy {
     return {
       landingHeadline: 'Визуальный стиль, который запоминается',
       landingButton: 'Начать',
-      businessRole: 'Представитель бренда',
+      bannerTagline: 'Визуальный стиль, который запоминается',
       vkCaption: `Новый визуальный язык бренда ${name} — палитра, паттерн и графика в одном комплекте.`,
     }
   }
@@ -30,7 +30,7 @@ export function buildMockupCopy(name: string, description: string): MockupCopy {
   return {
     landingHeadline: headline,
     landingButton: 'Подробнее',
-    businessRole: truncate(headline, 72),
+    bannerTagline: truncate(desc, 120),
     vkCaption: truncate(desc, 220),
   }
 }
