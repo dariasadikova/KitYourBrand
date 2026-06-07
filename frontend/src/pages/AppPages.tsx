@@ -1809,7 +1809,7 @@ export function ProjectEditorPage({
             <div className="editor-field generation-providers-pick">
               <span>Нейросети для этого запуска</span>
               <p className="generation-providers-hint">
-                Отметьте модели, которые должны выдать ассеты. Без Recraft в проекте должен&nbsp;быть сохранён Style&nbsp;ID.
+                Отметьте модели, которые должны выдать ассеты. Style&nbsp;ID нужен только для Recraft; остальные провайдеры работают по описанию бренда и палитре.
               </p>
               <div className="generation-providers-checkboxes" role="group" aria-label="Провайдеры генерации">
                 {GENERATION_PROVIDERS.map((p) => (

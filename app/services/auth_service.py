@@ -58,6 +58,10 @@ class AuthService:
                 conn.execute('ALTER TABLE users ADD COLUMN recraft_api_key TEXT')
             if 'openrouter_api_key' not in col_names:
                 conn.execute('ALTER TABLE users ADD COLUMN openrouter_api_key TEXT')
+            if 'yandex_cloud_api_key' not in col_names:
+                conn.execute('ALTER TABLE users ADD COLUMN yandex_cloud_api_key TEXT')
+            if 'yandex_cloud_folder' not in col_names:
+                conn.execute('ALTER TABLE users ADD COLUMN yandex_cloud_folder TEXT')
             conn.commit()
 
     def email_exists(self, email: str) -> bool:
@@ -71,14 +75,14 @@ class AuthService:
     def get_user_by_email(self, email: str) -> Optional[sqlite3.Row]:
         with self._connect() as conn:
             return conn.execute(
-                "SELECT id, name, email, password_hash, is_active, avatar_path, had_projects, recraft_api_key, openrouter_api_key FROM users WHERE lower(email) = lower(?) LIMIT 1",
+                "SELECT id, name, email, password_hash, is_active, avatar_path, had_projects, recraft_api_key, openrouter_api_key, yandex_cloud_api_key, yandex_cloud_folder FROM users WHERE lower(email) = lower(?) LIMIT 1",
                 (email.strip(),),
             ).fetchone()
 
     def get_user_by_id(self, user_id: int) -> Optional[sqlite3.Row]:
         with self._connect() as conn:
             return conn.execute(
-                "SELECT id, name, email, password_hash, is_active, avatar_path, had_projects, recraft_api_key, openrouter_api_key FROM users WHERE id = ? LIMIT 1",
+                "SELECT id, name, email, password_hash, is_active, avatar_path, had_projects, recraft_api_key, openrouter_api_key, yandex_cloud_api_key, yandex_cloud_folder FROM users WHERE id = ? LIMIT 1",
                 (user_id,),
             ).fetchone()
 
@@ -90,6 +94,8 @@ class AuthService:
         avatar_path: str | None,
         recraft_api_key: str | None = None,
         openrouter_api_key: str | None = None,
+        yandex_cloud_api_key: str | None = None,
+        yandex_cloud_folder: str | None = None,
     ) -> None:
         normalized_name = (name or "").strip()
         if len(normalized_name) < 2:
@@ -101,10 +107,20 @@ class AuthService:
                 SET name = ?,
                     avatar_path = ?,
                     recraft_api_key = COALESCE(?, recraft_api_key),
-                    openrouter_api_key = COALESCE(?, openrouter_api_key)
+                    openrouter_api_key = COALESCE(?, openrouter_api_key),
+                    yandex_cloud_api_key = COALESCE(?, yandex_cloud_api_key),
+                    yandex_cloud_folder = COALESCE(?, yandex_cloud_folder)
                 WHERE id = ?
                 """,
-                (normalized_name, avatar_path, recraft_api_key, openrouter_api_key, user_id),
+                (
+                    normalized_name,
+                    avatar_path,
+                    recraft_api_key,
+                    openrouter_api_key,
+                    yandex_cloud_api_key,
+                    yandex_cloud_folder,
+                    user_id,
+                ),
             )
             conn.commit()
 
@@ -112,10 +128,17 @@ class AuthService:
     def get_user_api_keys(self, user_id: int) -> dict[str, str]:
         row = self.get_user_by_id(user_id)
         if row is None:
-            return {'recraft_api_key': '', 'openrouter_api_key': ''}
+            return {
+                'recraft_api_key': '',
+                'openrouter_api_key': '',
+                'yandex_cloud_api_key': '',
+                'yandex_cloud_folder': '',
+            }
         return {
             'recraft_api_key': str(row['recraft_api_key'] or '').strip(),
             'openrouter_api_key': str(row['openrouter_api_key'] or '').strip(),
+            'yandex_cloud_api_key': str(row['yandex_cloud_api_key'] or '').strip(),
+            'yandex_cloud_folder': str(row['yandex_cloud_folder'] or '').strip(),
         }
 
     def change_password(self, user_id: int, *, new_password: str, current_password: str) -> None:

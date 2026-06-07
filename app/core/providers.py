@@ -69,6 +69,15 @@ PROVIDERS: dict[str, ProviderConfig] = {
         main_path=PROVIDERS_DIR / 'brandkit_gpt5_image' / 'src' / 'main.py',
         standard_cli=True,
     ),
+    'alice_ai_art': ProviderConfig(
+        slug='alice_ai_art',
+        label='Alice AI ART',
+        kind='yandex_image',
+        provider_dir=PROVIDERS_DIR / 'brandkit_alice_ai_art',
+        out_root=OUT_DIR / 'alice_ai_art',
+        main_path=PROVIDERS_DIR / 'brandkit_alice_ai_art' / 'src' / 'main.py',
+        standard_cli=True,
+    ),
 }
 
 

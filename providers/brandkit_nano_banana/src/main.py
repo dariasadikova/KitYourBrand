@@ -14,6 +14,7 @@ from dotenv import load_dotenv
 from providers.openrouter_nano_banana import (
     NanoBananaRequest,
     OpenRouterNanoBananaClient,
+    describe_empty_image_response,
     mime_to_ext,
     parse_data_url,
 )
@@ -257,12 +258,18 @@ def main() -> int:
                 image_size=image_size,
                 seed=args.seed,
             )
-            urls, _raw_response = client.generate(request)
+            urls, raw_response = client.generate(request)
             if not urls:
-                raise RuntimeError(f"No images in response for {kind}:{name}.")
+                detail = describe_empty_image_response(raw_response)
+                raise RuntimeError(f"No images in response for {kind}:{name}. {detail}")
 
-            for index, data_url in enumerate(urls, start=1):
-                mime, raw = parse_data_url(data_url)
+            for index, image_ref in enumerate(urls, start=1):
+                if image_ref.startswith("data:image/"):
+                    mime, raw = parse_data_url(image_ref)
+                elif image_ref.startswith(("http://", "https://")):
+                    mime, raw = client.fetch_url_image(image_ref, timeout_secs=timeout_secs)
+                else:
+                    raise RuntimeError(f"Unsupported image reference for {kind}:{name}.")
                 base_name = slugify(name)
                 if len(urls) > 1:
                     base_name = f"{base_name}-{index:02d}"

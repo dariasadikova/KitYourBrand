@@ -38,6 +38,8 @@ def _profile_payload(row) -> dict:
     avatar_path = str(row['avatar_path']) if row and row['avatar_path'] else ''
     recraft_api_key = str(row['recraft_api_key']) if row and row['recraft_api_key'] else ''
     openrouter_api_key = str(row['openrouter_api_key']) if row and row['openrouter_api_key'] else ''
+    yandex_cloud_api_key = str(row['yandex_cloud_api_key']) if row and row['yandex_cloud_api_key'] else ''
+    yandex_cloud_folder = str(row['yandex_cloud_folder']) if row and row['yandex_cloud_folder'] else ''
 
     return {
         'name': user_name,
@@ -52,6 +54,13 @@ def _profile_payload(row) -> dict:
             'openrouter': {
                 'configured': bool(openrouter_api_key),
                 'masked': _mask_api_key(openrouter_api_key),
+            },
+            'yandex_cloud': {
+                'configured': bool(yandex_cloud_api_key and yandex_cloud_folder),
+                'api_key_configured': bool(yandex_cloud_api_key),
+                'api_key_masked': _mask_api_key(yandex_cloud_api_key),
+                'folder_configured': bool(yandex_cloud_folder),
+                'folder_masked': _mask_api_key(yandex_cloud_folder),
             },
         },
     }
@@ -77,6 +86,8 @@ async def update_profile(
     remove_avatar: str = Form('0'),
     recraft_api_key: str = Form(''),
     openrouter_api_key: str = Form(''),
+    yandex_cloud_api_key: str = Form(''),
+    yandex_cloud_folder: str = Form(''),
     avatar: UploadFile | None = File(None),
 ) -> JSONResponse:
     user_id = _require_user_id(request)
@@ -117,6 +128,8 @@ async def update_profile(
             avatar_path=avatar_path,
             recraft_api_key=recraft_api_key.strip() or None,
             openrouter_api_key=openrouter_api_key.strip() or None,
+            yandex_cloud_api_key=yandex_cloud_api_key.strip() or None,
+            yandex_cloud_folder=yandex_cloud_folder.strip() or None,
         )
         current_raw = current_password.strip()
         new_raw = new_password.strip()

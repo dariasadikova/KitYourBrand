@@ -135,16 +135,24 @@ class GenerationService:
 
         recraft_api_key = (settings.recraft_api_key or '').strip()
         openrouter_api_key = (settings.openrouter_api_key or '').strip()
+        yandex_cloud_api_key = (settings.yandex_cloud_api_key or '').strip()
+        yandex_cloud_folder = (settings.yandex_cloud_folder or '').strip()
 
         if user_id is not None:
             user_keys = auth_service.get_user_api_keys(user_id)
             recraft_api_key = user_keys.get('recraft_api_key') or recraft_api_key
             openrouter_api_key = user_keys.get('openrouter_api_key') or openrouter_api_key
+            yandex_cloud_api_key = user_keys.get('yandex_cloud_api_key') or yandex_cloud_api_key
+            yandex_cloud_folder = user_keys.get('yandex_cloud_folder') or yandex_cloud_folder
 
         if recraft_api_key:
             env['RECRAFT_API_KEY'] = recraft_api_key
         if openrouter_api_key:
             env['OPENROUTER_API_KEY'] = openrouter_api_key
+        if yandex_cloud_api_key:
+            env['YANDEX_CLOUD_API_KEY'] = yandex_cloud_api_key
+        if yandex_cloud_folder:
+            env['YANDEX_CLOUD_FOLDER'] = yandex_cloud_folder
         if settings.openrouter_referer:
             env['OPENROUTER_REFERER'] = settings.openrouter_referer
         if settings.openrouter_title:
@@ -716,10 +724,6 @@ class GenerationService:
                 'Создание стиля Recraft несовместимо с отключённым провайдером Recraft. '
                 'Включите Recraft или отключите опцию «Создать новый стиль».'
             )
-        if 'recraft' not in active_providers and not style_id:
-            raise ValueError(
-                'Укажите Style ID в проекте или включите провайдера Recraft для этой генерации.'
-            )
 
         setup_steps = 5 if build_style else 3
         si = 0
@@ -936,7 +940,7 @@ class GenerationService:
             palette_hex = extract_brand_palette_hex(tokens)
             if palette_hex:
                 palette_progress = _PROGRESS_WEBP + (2 if (logos_count or icons_count) else 1)
-                report(palette_progress, 'Подгонка паттернов и иллюстраций к палитре бренда')
+                report(palette_progress, 'Подгонка паттернов к палитре бренда')
                 process_brand_rasters_palette(
                     self.out_root,
                     brand_id,

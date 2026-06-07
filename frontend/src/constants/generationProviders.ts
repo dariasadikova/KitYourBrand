@@ -3,7 +3,8 @@ export const GENERATION_PROVIDERS = [
   { slug: 'seedream', label: 'Seedream' },
   { slug: 'flux', label: 'Flux' },
   { slug: 'nano_banana', label: 'Nano Banana' },
-  { slug: 'gpt5_image', label: 'GPT-5 Image' },
+  { slug: 'gpt5_image', label: 'GPT-5 Image Mini' },
+  { slug: 'alice_ai_art', label: 'Alice AI ART' },
 ] as const
 
 export function providerLabel(slug: string): string {

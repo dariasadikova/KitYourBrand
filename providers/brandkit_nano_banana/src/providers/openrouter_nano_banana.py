@@ -1,6 +1,8 @@
 import base64
 import os
+import re
 import sys
+import time
 from dataclasses import dataclass
 from pathlib import Path
 from typing import Any, Dict, List, Optional, Tuple
@@ -12,6 +14,9 @@ if _KIT not in sys.path:
     sys.path.insert(0, _KIT)
 
 from app.integrations.provider_http import request_with_retries
+
+_DATA_IMAGE_RE = re.compile(r'data:image/[a-zA-Z0-9.+-]+;base64,[A-Za-z0-9+/=\s]+', re.IGNORECASE)
+_MAX_EMPTY_RESPONSE_DETAIL = 280
 
 
 @dataclass
@@ -25,6 +30,50 @@ class NanoBananaRequest:
     aspect_ratio: Optional[str] = None
     image_size: Optional[str] = None
     seed: Optional[int] = None
+
+
+def _assistant_message(resp_json: Dict[str, Any]) -> Dict[str, Any]:
+    choices = resp_json.get('choices') or []
+    if not choices:
+        return {}
+    message = (choices[0] or {}).get('message') or {}
+    return message if isinstance(message, dict) else {}
+
+
+def _assistant_text(message: Dict[str, Any]) -> str:
+    content = message.get('content')
+    if isinstance(content, str):
+        return content.strip()
+    if isinstance(content, list):
+        parts: List[str] = []
+        for item in content:
+            if not isinstance(item, dict):
+                continue
+            if item.get('type') == 'text':
+                text = item.get('text')
+                if isinstance(text, str) and text.strip():
+                    parts.append(text.strip())
+        return ' '.join(parts)
+    return ''
+
+
+def describe_empty_image_response(resp_json: Dict[str, Any]) -> str:
+    message = _assistant_message(resp_json)
+    text = _assistant_text(message)
+    finish_reason = (resp_json.get('choices') or [{}])[0].get('finish_reason')
+    error = resp_json.get('error')
+    parts: List[str] = []
+    if isinstance(error, dict):
+        err_msg = error.get('message') or error.get('code')
+        if err_msg:
+            parts.append(f'API error: {err_msg}')
+    if finish_reason:
+        parts.append(f'finish_reason={finish_reason}')
+    if text:
+        parts.append(f'assistant text: {text[:_MAX_EMPTY_RESPONSE_DETAIL]}')
+    elif not parts:
+        parts.append('assistant returned no image and no text')
+    return ' '.join(parts)
 
 
 class OpenRouterNanoBananaClient:
@@ -48,31 +97,69 @@ class OpenRouterNanoBananaClient:
     @staticmethod
     def _extract_data_urls(resp_json: Dict[str, Any]) -> List[str]:
         urls: List[str] = []
-        choices = resp_json.get("choices") or []
-        if not choices:
-            return urls
+        seen: set[str] = set()
 
-        msg = (choices[0] or {}).get("message") or {}
+        def add(url: str) -> None:
+            candidate = (url or '').strip().replace('\n', '').replace('\r', '')
+            if not candidate or candidate in seen:
+                return
+            if candidate.startswith('data:image/') or candidate.startswith(('http://', 'https://')):
+                seen.add(candidate)
+                urls.append(candidate)
 
-        images = msg.get("images") or []
-        for image in images:
-            image_url = image.get("image_url") or image.get("imageUrl") or {}
-            url = image_url.get("url")
-            if isinstance(url, str) and url.startswith("data:image/"):
-                urls.append(url)
+        def walk(obj: Any) -> None:
+            if isinstance(obj, dict):
+                inline = obj.get('inline_data') or obj.get('inlineData')
+                if isinstance(inline, dict):
+                    data = inline.get('data')
+                    mime = inline.get('mime_type') or inline.get('mimeType') or 'image/png'
+                    if isinstance(data, str) and data.strip():
+                        add(f'data:{mime};base64,{data.strip()}')
 
-        content = msg.get("content")
-        if isinstance(content, list):
-            for item in content:
-                if not isinstance(item, dict):
-                    continue
-                image_url = item.get("image_url") or item.get("imageUrl") or {}
-                url = image_url.get("url") if isinstance(image_url, dict) else None
-                if isinstance(url, str) and url.startswith("data:image/"):
-                    urls.append(url)
+                for key in ('url', 'b64_json', 'b64'):
+                    value = obj.get(key)
+                    if not isinstance(value, str) or not value.strip():
+                        continue
+                    if value.startswith('data:image/') or value.startswith(('http://', 'https://')):
+                        add(value)
+                    elif key in {'b64_json', 'b64'}:
+                        add(f'data:image/png;base64,{value.strip()}')
+
+                image_url = obj.get('image_url') or obj.get('imageUrl')
+                if isinstance(image_url, dict):
+                    walk(image_url)
+                elif isinstance(image_url, str):
+                    add(image_url)
+
+                for value in obj.values():
+                    walk(value)
+            elif isinstance(obj, list):
+                for item in obj:
+                    walk(item)
+            elif isinstance(obj, str):
+                for match in _DATA_IMAGE_RE.findall(obj):
+                    add(match)
+
+        message = _assistant_message(resp_json)
+        walk(message.get('images'))
+        walk(message.get('content'))
+        if not urls:
+            walk(resp_json)
         return urls
 
-    def generate(self, req: NanoBananaRequest) -> Tuple[List[str], Dict[str, Any]]:
+    def fetch_url_image(self, url: str, *, timeout_secs: int) -> Tuple[str, bytes]:
+        response = request_with_retries(
+            'GET',
+            url,
+            timeout=float(timeout_secs),
+            label='openrouter.nano_banana.image',
+        )
+        if response.status_code >= 400:
+            raise RuntimeError(f'Failed to download image ({response.status_code})')
+        mime = (response.headers.get('content-type') or 'image/png').split(';')[0].strip() or 'image/png'
+        return mime, response.content
+
+    def generate_once(self, req: NanoBananaRequest) -> Tuple[List[str], Dict[str, Any]]:
         payload: Dict[str, Any] = {
             "model": req.model,
             "messages": [{"role": "user", "content": req.prompt}],
@@ -104,6 +191,22 @@ class OpenRouterNanoBananaClient:
             raise RuntimeError(f"OpenRouter error ({response.status_code}): {response.text[:1000]}")
         data = response.json()
         return self._extract_data_urls(data), data
+
+    def generate(
+        self,
+        req: NanoBananaRequest,
+        *,
+        max_attempts: int = 3,
+        retry_pause_secs: float = 2.0,
+    ) -> Tuple[List[str], Dict[str, Any]]:
+        last_data: Dict[str, Any] = {}
+        for attempt in range(max(1, max_attempts)):
+            urls, last_data = self.generate_once(req)
+            if urls:
+                return urls, last_data
+            if attempt < max_attempts - 1:
+                time.sleep(retry_pause_secs * (attempt + 1))
+        return [], last_data
 
 
 def parse_data_url(data_url: str) -> Tuple[str, bytes]:

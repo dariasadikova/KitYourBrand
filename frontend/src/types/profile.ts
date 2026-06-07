@@ -3,6 +3,14 @@ export type ProfileApiKeyState = {
   masked: string
 }
 
+export type YandexCloudApiKeyState = {
+  configured: boolean
+  api_key_configured: boolean
+  api_key_masked: string
+  folder_configured: boolean
+  folder_masked: string
+}
+
 export type Profile = {
   name: string
   email: string
@@ -11,6 +19,7 @@ export type Profile = {
   api_keys?: {
     recraft: ProfileApiKeyState
     openrouter: ProfileApiKeyState
+    yandex_cloud: YandexCloudApiKeyState
   }
 }
 

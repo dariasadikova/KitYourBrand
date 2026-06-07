@@ -186,6 +186,11 @@ def summarize_generation_failure(exc: BaseException, provider: str | None = None
             hint = _provider_hint(_extract_provider(exc, provider), code, blob, primary)
         return primary, hint
 
+    if isinstance(exc, ValueError):
+        message = str(exc).strip()
+        if message:
+            return _norm_primary(message), None
+
     blob = _collect_text(exc)
     hint: str | None = None
     primary: str | None = None

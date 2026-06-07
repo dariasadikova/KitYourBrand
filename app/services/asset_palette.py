@@ -1,4 +1,4 @@
-"""Постобработка растров: подгонка паттернов и иллюстраций к палитре бренда."""
+"""Постобработка растров: подгонка паттернов к палитре бренда."""
 
 from __future__ import annotations
 
@@ -14,7 +14,9 @@ from app.core.providers import ASSET_PROVIDER_SLUGS
 logger = logging.getLogger(__name__)
 
 _RASTER_SUFFIXES = {'.png', '.jpg', '.jpeg', '.webp'}
-_PALETTE_QUANTIZE_KINDS = ('patterns', 'illustrations')
+# Иллюстрации оставляем как сгенерировала модель: жёсткая квантизация
+# к 2–3 цветам палитры убивает фотореализм и даёт «залитую краской» картинку.
+_PALETTE_QUANTIZE_KINDS = ('patterns',)
 # Recraft CLI уже выполняет quantize_to_palette в postprocess_dirs.
 _SKIP_PALETTE_PROVIDERS = frozenset({'recraft'})
 

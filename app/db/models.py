@@ -20,6 +20,8 @@ class User(Base):
     avatar_path: Mapped[str | None] = mapped_column(sa.Text, nullable=True)
     recraft_api_key: Mapped[str | None] = mapped_column(sa.Text, nullable=True)
     openrouter_api_key: Mapped[str | None] = mapped_column(sa.Text, nullable=True)
+    yandex_cloud_api_key: Mapped[str | None] = mapped_column(sa.Text, nullable=True)
+    yandex_cloud_folder: Mapped[str | None] = mapped_column(sa.Text, nullable=True)
     # DEFAULT в DDL — чтобы INSERT из AuthService без этих полей оставался валидным.
     had_projects: Mapped[int] = mapped_column(sa.Integer, nullable=False, server_default=sa.text('0'))
     auth_provider: Mapped[str] = mapped_column(sa.Text, nullable=False, server_default=sa.text("'local'"))

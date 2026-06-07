@@ -20,6 +20,8 @@ export function ProfilePage({
   const [newPasswordConfirm, setNewPasswordConfirm] = useState('')
   const [recraftApiKey, setRecraftApiKey] = useState('')
   const [openrouterApiKey, setOpenrouterApiKey] = useState('')
+  const [yandexCloudApiKey, setYandexCloudApiKey] = useState('')
+  const [yandexCloudFolder, setYandexCloudFolder] = useState('')
   const [avatar, setAvatar] = useState<File | null>(null)
   const [success, setSuccess] = useState('')
   const [error, setError] = useState('')
@@ -106,6 +108,8 @@ export function ProfilePage({
     formData.append('remove_avatar', '0')
     formData.append('recraft_api_key', recraftApiKey)
     formData.append('openrouter_api_key', openrouterApiKey)
+    formData.append('yandex_cloud_api_key', yandexCloudApiKey)
+    formData.append('yandex_cloud_folder', yandexCloudFolder)
     if (avatar) formData.append('avatar', avatar)
 
     try {
@@ -117,6 +121,8 @@ export function ProfilePage({
       setNewPasswordConfirm('')
       setRecraftApiKey('')
       setOpenrouterApiKey('')
+      setYandexCloudApiKey('')
+      setYandexCloudFolder('')
       setAvatar(null)
       setSuccess('Изменения сохранены')
       setHighlightMissingCurrentPassword(false)
@@ -167,6 +173,8 @@ export function ProfilePage({
     formData.append('remove_avatar', '1')
     formData.append('recraft_api_key', '')
     formData.append('openrouter_api_key', '')
+    formData.append('yandex_cloud_api_key', '')
+    formData.append('yandex_cloud_folder', '')
 
     try {
       const payload = await updateProfile(formData)
@@ -362,6 +370,43 @@ export function ProfilePage({
                   </button>
                   <span id="profile-api-hint-openrouter" className="profile-input-adorned__tooltip" role="tooltip">
                     Используется для Seedream, Flux, Nano Banana и GPT-5 Image Mini
+                  </span>
+                </div>
+              </label>
+              <label className="editor-field">
+                <span>Yandex Cloud API key</span>
+                <div className="profile-input-adorned">
+                  <input
+                    type="password"
+                    name="yandex_cloud_api_key"
+                    placeholder={profile?.api_keys?.yandex_cloud?.api_key_configured ? `Сохранён: ${profile.api_keys.yandex_cloud.api_key_masked}` : 'Введите Yandex Cloud API key'}
+                    value={yandexCloudApiKey}
+                    onChange={(event) => setYandexCloudApiKey(event.target.value)}
+                    autoComplete="off"
+                  />
+                </div>
+              </label>
+              <label className="editor-field">
+                <span>Yandex Cloud Folder ID</span>
+                <div className="profile-input-adorned">
+                  <input
+                    type="password"
+                    name="yandex_cloud_folder"
+                    placeholder={profile?.api_keys?.yandex_cloud?.folder_configured ? `Сохранён: ${profile.api_keys.yandex_cloud.folder_masked}` : 'Введите Yandex Cloud Folder ID'}
+                    value={yandexCloudFolder}
+                    onChange={(event) => setYandexCloudFolder(event.target.value)}
+                    autoComplete="off"
+                  />
+                  <button
+                    type="button"
+                    className="profile-api-info-btn profile-input-adorned__hint"
+                    aria-label="Подсказка: Yandex Cloud ключи"
+                    aria-describedby="profile-api-hint-yandex"
+                  >
+                    i
+                  </button>
+                  <span id="profile-api-hint-yandex" className="profile-input-adorned__tooltip" role="tooltip">
+                    Используется для Alice AI ART. Нужно заполнить и API key, и Folder ID.
                   </span>
                 </div>
               </label>

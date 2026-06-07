@@ -33,6 +33,8 @@ class Settings(BaseSettings):
     openrouter_api_key: str | None = None
     openrouter_referer: str | None = None
     openrouter_title: str | None = None
+    yandex_cloud_api_key: str | None = None
+    yandex_cloud_folder: str | None = None
 
     model_config = SettingsConfigDict(env_file='.env', env_file_encoding='utf-8', extra='ignore')
 

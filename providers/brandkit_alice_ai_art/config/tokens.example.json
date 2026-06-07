@@ -1,0 +1,19 @@
+{
+  "name": "Example Brand",
+  "brand_id": "example-brand",
+  "palette": {
+    "primary": "#2563EB",
+    "secondary": "#111827",
+    "accent": "#F97316"
+  },
+  "style": {
+    "prompt": "modern clean vector-like visual style",
+    "negative": "text, watermark, blurry"
+  },
+  "prompts": {
+    "logos": ["minimal brand mark"],
+    "icons": ["shopping cart icon"],
+    "patterns": ["geometric brand pattern"],
+    "illustrations": ["friendly onboarding illustration"]
+  }
+}

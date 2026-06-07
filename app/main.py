@@ -1,5 +1,5 @@
 from fastapi import FastAPI, Request
-from fastapi.responses import FileResponse, HTMLResponse
+from fastapi.responses import FileResponse, HTMLResponse, Response
 from fastapi.staticfiles import StaticFiles
 from starlette.middleware.sessions import SessionMiddleware
 
@@ -13,6 +13,7 @@ from app.routers.api import projects as api_projects
 from app.routers.api import results as api_results
 
 import logging
+import sys
 
 logging.basicConfig(
     level=logging.INFO,
@@ -20,6 +21,8 @@ logging.basicConfig(
 )
 
 logger = logging.getLogger("kityourbrand")
+
+_QUIET_LOG_PATHS = frozenset({'/favicon.ico'})
 
 FRONTEND_DIST_DIR = settings.project_root / 'frontend' / 'dist'
 FRONTEND_INDEX_FILE = FRONTEND_DIST_DIR / 'index.html'
@@ -35,10 +38,22 @@ def create_app() -> FastAPI:
 
     @app.middleware("http")
     async def log_requests(request: Request, call_next):
-        logger.info("REQ %s %s", request.method, request.url.path)
+        path = request.url.path
+        quiet = path in _QUIET_LOG_PATHS
+        if not quiet:
+            logger.info("REQ %s %s", request.method, path)
         response = await call_next(request)
-        logger.info("RES %s %s -> %s", request.method, request.url.path, response.status_code)
+        if not quiet:
+            logger.info("RES %s %s -> %s", request.method, path, response.status_code)
         return response
+
+    @app.get('/favicon.ico', include_in_schema=False)
+    async def favicon() -> Response:
+        return Response(status_code=204)
+
+    @app.on_event("startup")
+    async def log_runtime_python():
+        logger.info('Python executable: %s', sys.executable)
 
     @app.on_event("startup")
     async def mark_stale_generation_jobs():
