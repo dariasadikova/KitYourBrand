@@ -1,5 +1,5 @@
 /** Увеличивайте при появлении новых провайдеров — у пользователей снова покажется голубой индикатор. */
-export const PROVIDER_NEWS_VERSION = 1
+export const PROVIDER_NEWS_VERSION = 2
 
 export const PROVIDER_NEWS_STORAGE_KEY_PREFIX = 'kybby_seen_provider_news_v'
 
@@ -20,10 +20,8 @@ export type ProviderNewsEntry = {
   body: string
 }
 
-/** Тексты уведомлений в порядке от старых к новым (актуальный блок — последний). */
-export const PROVIDER_NEWS_ENTRIES: ProviderNewsEntry[] = [
-  {
-    title: 'Новые нейросети',
-    body: 'К генерации бренд-комплекта подключены Nano Banana и GPT-5 Image Mini (OpenRouter). Они дополняют Recraft, Seedream и Flux.',
-  },
-]
+/** Актуальное уведомление. При смене текста увеличивайте PROVIDER_NEWS_VERSION — предыдущее сообщение заменяется. */
+export const PROVIDER_NEWS_CURRENT: ProviderNewsEntry = {
+  title: 'Новые нейросети',
+  body: 'К генерации бренд-комплекта подключена Alice AI ART (Yandex Cloud AI Studio). Она дополняет Recraft, Seedream, Flux, Nano Banana и GPT-5 Image Mini.',
+}

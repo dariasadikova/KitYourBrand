@@ -72,7 +72,11 @@ export function DashboardHelpGuide({ open, onClose }: { open: boolean; onClose: 
                 <strong>Recraft API Key</strong> — для генерации через Recraft;
               </li>
               <li>
-                <strong>OpenRouter API Key</strong> — для моделей Seedream, Flux, Nano Banana и GPT-5 Image.
+                <strong>OpenRouter API Key</strong> — для моделей Seedream, Flux, Nano Banana и GPT-5 Image Mini;
+              </li>
+              <li>
+                <strong>Yandex Cloud API Key</strong> и <strong>Yandex Cloud Folder ID</strong> — для генерации через
+                Alice AI ART (нужны оба поля).
               </li>
             </ul>
             <p className="dashboard-help-modal__subhead">Где взять ключи:</p>
@@ -98,6 +102,18 @@ export function DashboardHelpGuide({ open, onClose }: { open: boolean; onClose: 
                   OpenRouter
                 </a>
                 : войдите в аккаунт → откройте раздел Keys / API Keys → создайте и скопируйте API-ключ.
+              </li>
+              <li>
+                <a
+                  href="https://yandex.cloud/ru/docs/iam/operations/api-key/create"
+                  target="_blank"
+                  rel="noopener noreferrer"
+                  className="dashboard-help-link"
+                >
+                  Yandex Cloud
+                </a>
+                : в консоли создайте API-ключ → скопируйте идентификатор каталога (Folder ID), в котором доступен AI
+                Studio / Alice AI ART.
               </li>
             </ul>
             <p className="dashboard-help-note">

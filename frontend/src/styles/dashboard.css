@@ -1220,6 +1220,17 @@
     flex-wrap: wrap;
 }
 
+@media (min-width: 981px) {
+    .page-dashboard .dashboard-head.projects-head {
+        align-items: flex-start;
+    }
+
+    .page-dashboard .dashboard-head.projects-head > .projects-actions {
+        /* Same optical lift as h1 (−0.1 × 32px); title margin stays on h1 only */
+        margin-top: -0.2em;
+    }
+}
+
 .projects-import-input {
     display: none;
 }

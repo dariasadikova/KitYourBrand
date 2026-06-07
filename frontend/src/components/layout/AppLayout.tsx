@@ -2,7 +2,7 @@ import { type MouseEvent, type ReactNode, useCallback, useEffect, useState } fro
 import { Link, useLocation, useNavigate } from 'react-router-dom'
 import { clearPendingHelpGuide, hasPendingHelpGuide } from '../../config/helpGuide'
 import {
-  PROVIDER_NEWS_ENTRIES,
+  PROVIDER_NEWS_CURRENT,
   PROVIDER_NEWS_VERSION,
   providerNewsStorageKey,
   readSeenProviderNewsVersion,
@@ -345,12 +345,10 @@ export function MigrationShell({
                 {hasUnreadProviderNews ? <span className="dashboard-badge" aria-hidden="true" /> : null}
               </button>
               <div className="dashboard-notify-popover" role="region" aria-label="Сообщения о нейросетях">
-                {PROVIDER_NEWS_ENTRIES.map((entry, index) => (
-                  <div className="dashboard-notify-item" key={index}>
-                    <strong className="dashboard-notify-item__title">{entry.title}</strong>
-                    <p className="dashboard-notify-item__body">{entry.body}</p>
-                  </div>
-                ))}
+                <div className="dashboard-notify-item">
+                  <strong className="dashboard-notify-item__title">{PROVIDER_NEWS_CURRENT.title}</strong>
+                  <p className="dashboard-notify-item__body">{PROVIDER_NEWS_CURRENT.body}</p>
+                </div>
               </div>
             </div>
             <div className="dashboard-userpill">
