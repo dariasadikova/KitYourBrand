@@ -12,7 +12,7 @@
 ## Поля плагина
 
 - **Brand ID** — идентификатор набора ассетов (`/assets/<brand_id>/...`)
-- **Provider** — `All` (по умолчанию), `Recraft`, `Seedream`, `Flux`, `Nano Banana`, `GPT-5 Image`
+- **Provider** — `All` (по умолчанию), `Recraft`, `Seedream`, `Flux`, `Nano Banana`, `GPT-5 Image`, `Alice AI ART`
 - **Base URL** — корень сервера KYBBY, например `http://localhost:8000` (без суффикса `/app`)
 
 ## Manifest (HTTP)
@@ -20,9 +20,11 @@
 В зависимости от провайдера плагин запрашивает:
 
 - `.../assets/<brand_id>/figma_plugin_manifest.json` (All)
-- `.../assets/<brand_id>/figma_plugin_manifest_<provider>.json` — recraft, seedream, flux, nano_banana, gpt5_image
+- `.../assets/<brand_id>/figma_plugin_manifest_<provider>.json` — recraft, seedream, flux, nano_banana, gpt5_image, alice_ai_art
 
 Сервер должен отдавать CORS для `/assets/*` (в KYBBY уже настроено).
+
+**Локальная разработка:** в `manifest.json` для dev-режима Figma разрешён только `http://localhost:8000` (не `127.0.0.1` — Figma не принимает IP в manifest). После изменения manifest переимпортируйте плагин. Убедитесь, что uvicorn запущен на порту 8000.
 
 ## Что создаётся в Figma
 

@@ -1,15 +1,19 @@
 {
-  "name": "KYBBY BrandKit Importer",
+  "name": "KYBBY — импорт бренд-кита",
   "id": "brandkit-importer-provider",
   "api": "1.0.0",
   "main": "code.js",
   "ui": "ui.html",
-  "editorType": ["figma"],
+  "editorType": [
+    "figma"
+  ],
   "documentAccess": "dynamic-page",
   "networkAccess": {
-    "allowedDomains": ["none"],
-    "devAllowedDomains": [
+    "allowedDomains": [
       "https://kybby-app.amvera.io"
+    ],
+    "devAllowedDomains": [
+      "http://localhost:8000"
     ]
   }
 }

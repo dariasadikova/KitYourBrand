@@ -107,6 +107,24 @@ def _known_failure(blob: str) -> tuple[str, str | None] | None:
             'Освободите место на диске сервера и запустите генерацию снова.',
         )
 
+    if 'set yandex_cloud_api_key env var' in low or re.search(
+        r'error:\s*set\s+yandex_cloud_api_key',
+        low,
+    ):
+        return (
+            'Не задан Yandex Cloud API Key для Alice AI ART.',
+            'Откройте профиль → API-ключи провайдеров и укажите Yandex Cloud API Key и Folder ID.',
+        )
+
+    if 'set yandex_cloud_folder env var' in low or re.search(
+        r'error:\s*set\s+yandex_cloud_folder',
+        low,
+    ):
+        return (
+            'Не задан Yandex Cloud Folder ID для Alice AI ART.',
+            'Откройте профиль → API-ключи провайдеров и укажите Folder ID каталога Yandex Cloud.',
+        )
+
     if 'yandex_cloud_folder is empty' in low or (
         'yandex_cloud' in low and ('not set' in low or 'не задан' in low or 'empty' in low)
     ):
@@ -230,7 +248,18 @@ def user_log_line_for_provider_error(provider_slug: str, message: str | None, hi
     label = cfg.label if cfg else str(provider_slug).replace('_', ' ').title()
     msg = str(message or '').strip()
     hint_str = str(hint or '').strip()
-    detail = _russianize_provider_detail(msg) if msg else ''
+
+    detail = ''
+    if msg:
+        known = _known_failure(msg)
+        if known:
+            detail = known[0]
+            if not hint_str and known[1]:
+                hint_str = known[1]
+        elif not _is_generic_user_message(msg):
+            detail = _russianize_provider_detail(msg)
+            if not detail and _contains_cyrillic(msg):
+                detail = _norm_primary(msg)
 
     if detail:
         parts: list[str] = [f'— {label}: {detail}']
@@ -346,6 +375,12 @@ def summarize_generation_failure(exc: BaseException, provider: str | None = None
                 continue
             if re.match(r'^\[[^\]]+\]\[[^\]]+\]\s*generating:', s, re.IGNORECASE):
                 continue
+            if re.match(r'^ERROR:\s*.+', s, re.IGNORECASE):
+                known_line = _known_failure(s)
+                if known_line:
+                    return known_line
+                primary = s
+                break
             if '[ERROR]' in s and 'response text' not in s.lower():
                 inner = re.sub(r'^\[[^\]]+\]\s*(\[[^\]]+\]\s*)*', '', s)
                 inner = re.sub(r'^\[ERROR\]\s*', '', inner, flags=re.IGNORECASE).strip()

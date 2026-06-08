@@ -2,6 +2,7 @@
 from __future__ import annotations
 
 import argparse
+import colorsys
 import json
 import os
 import re
@@ -31,6 +32,20 @@ PROVIDER_SLUG = 'alice_ai_art'
 PROVIDER_LABEL = 'Alice AI ART'
 MAX_PROMPT_CHARS = 500
 
+_TRANSPARENT_BG = (
+    'Isolated on fully transparent background (PNG alpha). '
+    'No solid background, no colored backdrop, no gradient fill, no mockup, no scene.'
+)
+_ISOLATED_ASSET_AVOID = (
+    'white background, solid background, colored background, gradient background, backdrop, '
+    'mockup, scene, split screen, split background, diagonal stripe, diagonal band, '
+    'diagonal divider, checkerboard, presentation layout, color swatches, hex codes'
+)
+_PALETTE_ARTIFACT_AVOID = (
+    'hex codes, color codes, visible color values, color swatches, palette chips, '
+    'palette labels, callouts, annotation lines, UI overlays'
+)
+
 
 def load_json(path: str) -> Dict:
     with open(path, 'r', encoding='utf-8') as f:
@@ -55,15 +70,101 @@ def trim_prompt(prompt: str, limit: int = MAX_PROMPT_CHARS) -> str:
     return cleaned[:limit].rstrip()
 
 
-def palette_text(tokens: Dict) -> str:
-    palette = tokens.get('palette') or {}
+def append_avoid_clauses(prompt: str, *avoid_parts: str) -> str:
+    avoid = ', '.join(part.strip() for part in avoid_parts if part and str(part).strip())
+    if not avoid:
+        return trim_prompt(prompt)
+    suffix = f'Avoid: {avoid}'
+    head = re.sub(r'\s+', ' ', (prompt or '').strip())
+    room = MAX_PROMPT_CHARS - len(suffix) - 1
+    if room < 96:
+        return trim_prompt(suffix)
+    if len(head) > room:
+        head = head[:room].rstrip()
+    return f'{head} {suffix}'
+
+
+def hex_to_color_name(value: str) -> str:
+    raw = (value or '').strip().lstrip('#')
+    if len(raw) == 3:
+        raw = ''.join(ch * 2 for ch in raw)
+    if not re.fullmatch(r'[0-9a-fA-F]{6}', raw):
+        return ''
+
+    r = int(raw[0:2], 16) / 255
+    g = int(raw[2:4], 16) / 255
+    b = int(raw[4:6], 16) / 255
+    h, s, v = colorsys.rgb_to_hsv(r, g, b)
+    hue = h * 360
+
+    if s < 0.08:
+        if v < 0.18:
+            return 'near black'
+        if v < 0.45:
+            return 'dark gray'
+        if v < 0.75:
+            return 'gray'
+        if v < 0.92:
+            return 'light gray'
+        return 'near white'
+
+    if 180 <= hue <= 250 and s < 0.45 and v < 0.45:
+        base = 'blue-gray'
+    elif hue < 15 or hue >= 345:
+        base = 'red'
+    elif hue < 40:
+        base = 'orange'
+    elif hue < 65:
+        base = 'yellow'
+    elif hue < 155:
+        base = 'green'
+    elif hue < 190:
+        base = 'teal'
+    elif hue < 255:
+        base = 'blue'
+    elif hue < 285:
+        base = 'purple'
+    elif hue < 330:
+        base = 'pink'
+    else:
+        base = 'crimson'
+
+    if v < 0.28:
+        modifier = 'dark'
+    elif v > 0.82 and s < 0.35:
+        modifier = 'pale'
+    elif s < 0.28:
+        modifier = 'muted'
+    elif v > 0.82 and s > 0.65:
+        modifier = 'vivid'
+    else:
+        modifier = ''
+
+    return f'{modifier} {base}'.strip()
+
+
+def palette_description_for_alice(palette: Dict) -> str:
     if not isinstance(palette, dict):
         return ''
+
+    role_labels = {
+        'primary': 'primary',
+        'secondary': 'secondary',
+        'accent': 'accent',
+    }
     parts = []
-    for key in ('primary', 'secondary', 'accent'):
-        if palette.get(key):
-            parts.append(f'{key}:{palette[key]}')
-    return 'Palette: ' + ', '.join(parts) + '.' if parts else ''
+    for key, label in role_labels.items():
+        color_name = hex_to_color_name(str(palette.get(key) or ''))
+        if color_name:
+            parts.append(f'{label} {color_name}')
+
+    if not parts:
+        return ''
+
+    return (
+        'Use the brand palette as color guidance only: '
+        f"{', '.join(parts)}. Do not draw a palette, color chips, labels, or color codes."
+    )
 
 
 def style_text(tokens: Dict) -> Tuple[str, str]:
@@ -75,38 +176,52 @@ def style_text(tokens: Dict) -> Tuple[str, str]:
 
 def build_logo_prompt(tokens: Dict, name: str) -> Tuple[str, str]:
     style_prompt, negative = style_text(tokens)
+    pal_txt = palette_description_for_alice(tokens.get('palette') or {})
     prompt = (
-        f'Brand logo for {name}. {style_prompt} {palette_text(tokens)} '
-        'Centered mark, clean geometry, minimal vector-like style, transparent background, no text, no watermark.'
+        f'Brand logo for {name}. {style_prompt} {pal_txt} '
+        'Centered mark, clean geometry, minimal vector-like style. '
+        f'{_TRANSPARENT_BG} No split background, no diagonal stripe, no text, no watermark.'
     )
-    return trim_prompt(prompt), negative
+    combined_negative = ', '.join(
+        part for part in (negative, _ISOLATED_ASSET_AVOID, _PALETTE_ARTIFACT_AVOID) if part
+    )
+    return trim_prompt(prompt), combined_negative
 
 
 def build_icon_prompt(tokens: Dict, name: str) -> Tuple[str, str]:
     style_prompt, negative = style_text(tokens)
+    pal_txt = palette_description_for_alice(tokens.get('palette') or {})
     prompt = (
-        f'UI icon for {name}. {style_prompt} {palette_text(tokens)} '
-        'Centered, simple silhouette, high contrast, flat vector-like style, transparent background, no letters, no watermark.'
+        f'UI icon for {name}. {style_prompt} {pal_txt} '
+        'Centered, simple silhouette, high contrast, flat vector-like style. '
+        f'{_TRANSPARENT_BG} No split background, no diagonal stripe, no letters, no watermark.'
     )
-    return trim_prompt(prompt), negative
+    combined_negative = ', '.join(
+        part for part in (negative, _ISOLATED_ASSET_AVOID, _PALETTE_ARTIFACT_AVOID) if part
+    )
+    return trim_prompt(prompt), combined_negative
 
 
 def build_pattern_prompt(tokens: Dict, name: str) -> Tuple[str, str]:
     style_prompt, negative = style_text(tokens)
+    pal_txt = palette_description_for_alice(tokens.get('palette') or {})
     prompt = (
-        f'Seamless repeating brand pattern: {name}. {style_prompt} {palette_text(tokens)} '
+        f'Seamless repeating brand pattern: {name}. {style_prompt} {pal_txt} '
         'Tileable wallpaper, ornamental repeat, clean composition, no text, no watermark.'
     )
-    return trim_prompt(prompt), negative
+    combined_negative = ', '.join(part for part in (negative, _PALETTE_ARTIFACT_AVOID) if part)
+    return trim_prompt(prompt), combined_negative
 
 
 def build_illustration_prompt(tokens: Dict, name: str) -> Tuple[str, str]:
     style_prompt, negative = style_text(tokens)
+    pal_txt = palette_description_for_alice(tokens.get('palette') or {})
     prompt = (
-        f'Brand illustration for UI: {name}. {style_prompt} {palette_text(tokens)} '
+        f'Brand illustration for UI: {name}. {style_prompt} {pal_txt} '
         'Single clear subject, modern friendly composition, not a pattern, no text, no watermark.'
     )
-    return trim_prompt(prompt), negative
+    combined_negative = ', '.join(part for part in (negative, _PALETTE_ARTIFACT_AVOID) if part)
+    return trim_prompt(prompt), combined_negative
 
 
 def build_prompts(tokens: Dict, kind: str, name: str) -> Tuple[str, str]:
@@ -222,8 +337,8 @@ def main() -> int:
         for name in names:
             print(f'[{PROVIDER_SLUG}][{kind}] generating: {name}')
             prompt, negative = build_prompts(tokens, kind, name)
-            if args.append_negative and negative:
-                prompt = trim_prompt(f'{prompt}. Avoid: {negative}')
+            # Alice AI ART не поддерживает negative prompt — переносим ограничения в текст запроса.
+            prompt = append_avoid_clauses(prompt, negative)
 
             request = AliceAIArtRequest(
                 prompt=prompt,

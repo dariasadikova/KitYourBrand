@@ -53,7 +53,6 @@ import {
   ASSET_TYPES,
   type AssetType,
   assetCountLabel,
-  capitalizePaletteLabel,
   clampAssetCount,
   DEFAULT_ASSET_COUNTS,
   DEFAULT_PALETTE,
@@ -939,7 +938,6 @@ export function ProjectEditorPage({
   const [styleId, setStyleId] = useState('')
   const [paletteSlots, setPaletteSlots] = useState<Record<PaletteKey, string>>(DEFAULT_PALETTE)
   const [activePaletteKeys, setActivePaletteKeys] = useState<PaletteKey[]>(['primary', 'secondary', 'accent'])
-  const [paletteSeedRole, setPaletteSeedRole] = useState<PaletteKey>('primary')
   const [paletteSeedColor, setPaletteSeedColor] = useState(DEFAULT_PALETTE.primary)
   const [paletteSuggestions, setPaletteSuggestions] = useState<Record<PaletteVariantName, PaletteVariant> | null>(null)
   const [activePaletteVariant, setActivePaletteVariant] = useState<PaletteVariantName>('balanced')
@@ -1016,7 +1014,6 @@ export function ProjectEditorPage({
       const nextPaletteSlots = getPaletteSlots(nextTokens)
       setPaletteSlots(nextPaletteSlots)
       setActivePaletteKeys(getActivePaletteKeys(nextTokens))
-      setPaletteSeedRole('primary')
       setPaletteSeedColor(normalizeHexColor(nextPaletteSlots.primary) || DEFAULT_PALETTE.primary)
       setPaletteSuggestions(null)
       setPaletteAssistantOpen(false)
@@ -1052,21 +1049,24 @@ export function ProjectEditorPage({
     const nextColor = value.toUpperCase()
     setPaletteSlots((current) => ({ ...current, [key]: nextColor }))
     const normalized = normalizeHexColor(nextColor)
-    if (normalized) {
-      setPaletteSeedRole(key)
+    if (normalized && key === 'primary') {
       setPaletteSeedColor(normalized)
       setPaletteSuggestions(null)
     }
   }
 
-  async function fetchPaletteSuggestions(seedRole = paletteSeedRole, seedColor = paletteSeedColor) {
-    const normalized = normalizeHexColor(seedColor)
+  function primarySeedColor() {
+    return normalizeHexColor(paletteSlots.primary) || normalizeHexColor(paletteSeedColor) || DEFAULT_PALETTE.primary
+  }
+
+  async function fetchPaletteSuggestions() {
+    const seedRole: PaletteKey = 'primary'
+    const normalized = primarySeedColor()
     if (!normalized) return
     setIsPaletteLoading(true)
     try {
       const payload = await suggestProjectPalette(projectSlug, normalized, seedRole)
       setPaletteSuggestions(payload.variants)
-      setPaletteSeedRole(payload.seed_role)
       setPaletteSeedColor(payload.seed_color)
       setActivePaletteVariant(payload.variants.balanced ? 'balanced' : 'soft')
     } catch (err) {
@@ -1079,12 +1079,11 @@ export function ProjectEditorPage({
   async function applySuggestedPalette(variantName: PaletteVariantName) {
     let suggestions = paletteSuggestions
     if (!suggestions) {
-      const normalized = normalizeHexColor(paletteSeedColor)
+      const normalized = primarySeedColor()
       if (!normalized) return
-      const payload = await suggestProjectPalette(projectSlug, normalized, paletteSeedRole)
+      const payload = await suggestProjectPalette(projectSlug, normalized, 'primary')
       suggestions = payload.variants
       setPaletteSuggestions(payload.variants)
-      setPaletteSeedRole(payload.seed_role)
       setPaletteSeedColor(payload.seed_color)
     }
 
@@ -1095,7 +1094,10 @@ export function ProjectEditorPage({
       acc[key] = normalizeHexColor(variant[key]) || DEFAULT_PALETTE[key]
       return acc
     }, { ...DEFAULT_PALETTE }))
-    setActivePaletteKeys((current) => current.includes(paletteSeedRole) ? current : [...current, paletteSeedRole].slice(0, 6))
+    setActivePaletteKeys((current) => {
+      const seedKey: PaletteKey = 'primary'
+      return current.includes(seedKey) ? current : [...current, seedKey].slice(0, 6)
+    })
   }
 
   function togglePaletteKey(key: PaletteKey, checked: boolean) {
@@ -1372,7 +1374,6 @@ export function ProjectEditorPage({
       const nextPaletteSlots = getPaletteSlots(payload.tokens)
       setPaletteSlots(nextPaletteSlots)
       setActivePaletteKeys(getActivePaletteKeys(payload.tokens))
-      setPaletteSeedRole('primary')
       setPaletteSeedColor(normalizeHexColor(nextPaletteSlots.primary) || DEFAULT_PALETTE.primary)
       setPaletteSuggestions(null)
       setPaletteAssistantOpen(false)
@@ -1534,8 +1535,8 @@ export function ProjectEditorPage({
                   onClick={() => {
                     const next = !paletteAssistantOpen
                     setPaletteAssistantOpen(next)
-                    if (next && normalizeHexColor(paletteSeedColor)) {
-                      void fetchPaletteSuggestions(paletteSeedRole, paletteSeedColor)
+                    if (next && primarySeedColor()) {
+                      void fetchPaletteSuggestions()
                     }
                   }}
                 >
@@ -1549,7 +1550,7 @@ export function ProjectEditorPage({
                     <div>
                       <h3>Подбор палитры</h3>
                       <p>
-                        Сейчас за опору взят цвет {capitalizePaletteLabel(paletteSeedRole)}.
+                        Сейчас за опору взят цвет {PALETTE_LABELS.primary}.
                       </p>
                       <p>
                         Нажмите вариант Soft / Balanced / Contrast, чтобы подставить предложенные 6 цветов. Пока не нажали — в генерации используются только ваши значения в сетке.
@@ -1558,8 +1559,8 @@ export function ProjectEditorPage({
                     <button
                       type="button"
                       className="btn btn-inline palette-autofill__refresh"
-                      disabled={isPaletteLoading || !normalizeHexColor(paletteSeedColor)}
-                      onClick={() => void fetchPaletteSuggestions(paletteSeedRole, paletteSeedColor)}
+                      disabled={isPaletteLoading || !primarySeedColor()}
+                      onClick={() => void fetchPaletteSuggestions()}
                     >
                       {isPaletteLoading ? 'Обновляем...' : 'Обновить варианты'}
                     </button>

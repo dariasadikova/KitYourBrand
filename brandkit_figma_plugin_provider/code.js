@@ -1,8 +1,8 @@
 // BrandKit Importer (Provider-aware)
-// - Provider mode: recraft | seedream | flux | nano_banana | gpt5_image | both (All)
+// - Provider mode: recraft | seedream | flux | nano_banana | gpt5_image | alice_ai_art | both (All)
 // - Fetches manifest from KYBBY and imports images into grouped frames
 
-const PROVIDER_SLUGS = ['recraft', 'seedream', 'flux', 'nano_banana', 'gpt5_image'];
+const PROVIDER_SLUGS = ['recraft', 'seedream', 'flux', 'nano_banana', 'gpt5_image', 'alice_ai_art'];
 
 const PROVIDER_LABELS = {
   recraft: 'Recraft',
@@ -10,15 +10,40 @@ const PROVIDER_LABELS = {
   flux: 'Flux',
   nano_banana: 'Nano Banana',
   gpt5_image: 'GPT-5 Image',
+  alice_ai_art: 'Alice AI ART',
+};
+
+// KYBBY design tokens (aligned with frontend/src/styles/foundation.css + mockups-figma.css)
+function hexToRgb(hex) {
+  const h = String(hex || '').replace('#', '');
+  return {
+    r: parseInt(h.slice(0, 2), 16) / 255,
+    g: parseInt(h.slice(2, 4), 16) / 255,
+    b: parseInt(h.slice(4, 6), 16) / 255,
+  };
+}
+
+const COLORS = {
+  pageBg: hexToRgb('#010101'),
+  surface: hexToRgb('#22292b'),
+  surfaceRaised: hexToRgb('#2a3234'),
+  border: hexToRgb('#797979'),
+  text: hexToRgb('#ffffff'),
+  textSoft: hexToRgb('#f4f2fb'),
+  textMuted: hexToRgb('#99a1af'),
+  accent: hexToRgb('#00aeff'),
+  error: hexToRgb('#fca5a5'),
+  cellBg: hexToRgb('#f4f2fb'),
 };
 
 // ui.html is linked in manifest.json — Figma injects it as __html__
 var uiHtml = typeof __html__ !== 'undefined' ? __html__ : '';
 if (!uiHtml || !String(uiHtml).trim()) {
   uiHtml = [
-    '<body style="margin:0;font:12px/1.4 Inter,sans-serif;background:#111;color:#eaeaea;padding:12px">',
-    '<p><strong>KYBBY:</strong> не найден ui.html рядом с manifest.json.</p>',
-    '<p>Переимпортируйте плагин: распакуйте архив заново и выберите manifest.json из папки,',
+    '<body style="margin:0;font:12px/1.5 Roboto,system-ui,sans-serif;background:#010101;color:#fff;padding:12px">',
+    '<p style="color:#00aeff;font-weight:600;letter-spacing:.08em;text-transform:uppercase;font-size:11px">KYBBY</p>',
+    '<p><strong>Импорт бренд-комплекта:</strong> не найден ui.html рядом с manifest.json.</p>',
+    '<p style="color:#99a1af">Переимпортируйте плагин: распакуйте архив заново и выберите manifest.json из папки,',
     ' где лежат <code>code.js</code> и <code>ui.html</code>.</p>',
     '</body>'
   ].join('');
@@ -42,7 +67,7 @@ function safeUpper(s) {
 }
 
 function providerLabel(p) {
-  if (p === 'both') return 'All';
+  if (p === 'both') return 'Все';
   return PROVIDER_LABELS[p] || safeUpper(String(p).replace(/_/g, ' '));
 }
 
@@ -71,21 +96,21 @@ async function fetchJSON(url) {
   const res = await fetch(url);
   if (!res.ok) {
     const txt = await res.text().catch(() => '');
-    throw new Error(`HTTP ${res.status} while fetching ${url}${txt ? `\n${txt}` : ''}`);
+    throw new Error(`HTTP ${res.status} при загрузке ${url}${txt ? `\n${txt}` : ''}`);
   }
   return res.json();
 }
 
 async function fetchBytes(url) {
   const res = await fetch(url);
-  if (!res.ok) throw new Error(`HTTP ${res.status} while downloading ${url}`);
+  if (!res.ok) throw new Error(`HTTP ${res.status} при скачивании ${url}`);
   const buf = await res.arrayBuffer();
   return new Uint8Array(buf);
 }
 
 async function fetchText(url) {
   const res = await fetch(url);
-  if (!res.ok) throw new Error(`HTTP ${res.status} while downloading ${url}`);
+  if (!res.ok) throw new Error(`HTTP ${res.status} при скачивании ${url}`);
   return res.text();
 }
 
@@ -119,30 +144,40 @@ async function ensureInterFonts() {
 function createSection(title) {
   const frame = figma.createFrame();
   frame.name = title;
-  frame.fills = [];
-  frame.strokes = [{ type: 'SOLID', color: { r: 0.82, g: 0.82, b: 0.82 } }];
+  frame.fills = [{ type: 'SOLID', color: COLORS.surface }];
+  frame.strokes = [{ type: 'SOLID', color: COLORS.border }];
   frame.strokeWeight = 1;
   frame.cornerRadius = 12;
   frame.clipsContent = false;
   return frame;
 }
 
-function createTextNode(text, fontSize = 16, isTitle = false) {
+function createTextNode(text, fontSize = 16, isTitle = false, tone = 'text') {
+  const toneMap = {
+    text: COLORS.text,
+    soft: COLORS.textSoft,
+    muted: COLORS.textMuted,
+    accent: COLORS.accent,
+    error: COLORS.error,
+  };
   const t = figma.createText();
   t.characters = text;
   t.fontSize = fontSize;
   if (isTitle) {
-    // Try Medium, fallback Regular
     t.fontName = { family: 'Inter', style: 'Medium' };
   } else {
     t.fontName = { family: 'Inter', style: 'Regular' };
   }
-  t.fills = [{ type: 'SOLID', color: { r: 0.11, g: 0.11, b: 0.11 } }];
+  t.fills = [{ type: 'SOLID', color: toneMap[tone] || COLORS.text }];
   return t;
 }
 
 function maxRootY(page) {
-  const roots = page.children.filter(n => n.type === 'FRAME' && String(n.name || '').startsWith('BrandKit / '));
+  const roots = page.children.filter(n => {
+    if (n.type !== 'FRAME') return false;
+    const name = String(n.name || '');
+    return name.startsWith('Бренд-кит / ') || name.startsWith('BrandKit / ');
+  });
   let maxY = 0;
   for (const n of roots) {
     maxY = Math.max(maxY, n.y + n.height);
@@ -188,12 +223,12 @@ async function placeAssetsGrid(parentFrame, items, opts) {
     const it = items[i];
 
     // Progress ping
-    figma.ui.postMessage({ type: 'progress', text: `${title}: downloading ${it.name || it.url}` });
+    figma.ui.postMessage({ type: 'progress', text: `${title}: загрузка ${it.name || it.url}` });
 
     // Build a cell container to avoid overlaps and keep consistent layout
     const cell = figma.createFrame();
     cell.name = it.name || `asset-${i + 1}`;
-    cell.fills = [];
+    cell.fills = [{ type: 'SOLID', color: COLORS.cellBg }];
     cell.strokes = [];
     cell.strokeWeight = 0;
     cell.cornerRadius = 8;
@@ -211,7 +246,7 @@ async function placeAssetsGrid(parentFrame, items, opts) {
         node = figma.createNodeFromSvg(svgText);
       } catch (e) {
         console.warn('[BrandKit] SVG import failed:', it.url, e);
-        const warn = createTextNode('SVG error', 12, false);
+        const warn = createTextNode('Ошибка SVG', 12, false, 'error');
         warn.x = 8;
         warn.y = 8;
         cell.appendChild(warn);
@@ -269,7 +304,7 @@ async function placeAssetsGrid(parentFrame, items, opts) {
         }
 
         if (!handledAsSvg) {
-          const warn = createTextNode('Image error', 12, false);
+          const warn = createTextNode('Ошибка изображения', 12, false, 'error');
           warn.x = 8;
           warn.y = 8;
           cell.appendChild(warn);
@@ -320,13 +355,13 @@ async function importBrandKit({ brandId, provider, baseUrl }) {
   provider = (provider || 'both').toLowerCase();
   baseUrl = stripTrailingSlash(baseUrl || DEFAULT_SETTINGS.baseUrl);
 
-  if (!brandId) throw new Error('Brand ID is empty');
+  if (!brandId) throw new Error('ID бренда не указан');
 
   const manifestFile = providerManifestFile(provider);
 
   const manifestUrl = `${baseUrl}/assets/${encodeURIComponent(brandId)}/${manifestFile}`;
 
-  figma.ui.postMessage({ type: 'progress', text: `Fetching manifest: ${manifestFile}` });
+  figma.ui.postMessage({ type: 'progress', text: `Загрузка манифеста: ${manifestFile}` });
 
   let manifest;
   try {
@@ -335,7 +370,7 @@ async function importBrandKit({ brandId, provider, baseUrl }) {
     // Fallback: if provider-specific manifest is missing, fallback to combined
     if (provider !== 'both') {
       const fallbackUrl = `${baseUrl}/assets/${encodeURIComponent(brandId)}/figma_plugin_manifest.json`;
-      figma.ui.postMessage({ type: 'progress', text: `Fallback to combined manifest` });
+      figma.ui.postMessage({ type: 'progress', text: 'Переход на общий манифест' });
       manifest = await fetchJSON(fallbackUrl);
     } else {
       throw e;
@@ -344,16 +379,15 @@ async function importBrandKit({ brandId, provider, baseUrl }) {
 
   await ensureInterFonts();
 
-  // Page strategy: use existing "BrandKit" page if present, else create one.
-  let page = figma.root.children.find(p => p.type === 'PAGE' && p.name === 'BrandKit');
+  // Page strategy: use existing "Бренд-кит" page if present, else create one.
+  let page = figma.root.children.find(p => p.type === 'PAGE' && (p.name === 'Бренд-кит' || p.name === 'BrandKit'));
   if (!page) {
     try {
       page = figma.createPage();
-      page.name = 'BrandKit';
+      page.name = 'Бренд-кит';
     } catch (e) {
-      // As a last resort, use current page
       page = figma.currentPage;
-      figma.ui.postMessage({ type: 'progress', text: 'Could not create a new BrandKit page; using current page.' });
+      figma.ui.postMessage({ type: 'progress', text: 'Не удалось создать страницу «Бренд-кит»; использую текущую.' });
     }
   }
 
@@ -363,9 +397,9 @@ async function importBrandKit({ brandId, provider, baseUrl }) {
   const root = figma.createFrame();
   const now = new Date();
   const ts = `${now.getFullYear()}-${String(now.getMonth() + 1).padStart(2, '0')}-${String(now.getDate()).padStart(2, '0')} ${String(now.getHours()).padStart(2, '0')}:${String(now.getMinutes()).padStart(2, '0')}`;
-  root.name = `BrandKit / ${brandId} (${providerLabel(provider)})`;
-  root.fills = [];
-  root.strokes = [{ type: 'SOLID', color: { r: 0.75, g: 0.75, b: 0.75 } }];
+  root.name = `Бренд-кит / ${brandId} (${providerLabel(provider)})`;
+  root.fills = [{ type: 'SOLID', color: COLORS.pageBg }];
+  root.strokes = [{ type: 'SOLID', color: COLORS.border }];
   root.strokeWeight = 1;
   root.cornerRadius = 16;
   root.clipsContent = false;
@@ -381,7 +415,7 @@ async function importBrandKit({ brandId, provider, baseUrl }) {
   let cursorY = pad;
 
   // Title
-  const title = createTextNode(`BrandKit: ${brandId}`, 24, true);
+  const title = createTextNode(`Бренд-кит: ${brandId}`, 24, true);
   title.x = pad;
   title.y = cursorY;
   root.appendChild(title);
@@ -389,24 +423,25 @@ async function importBrandKit({ brandId, provider, baseUrl }) {
   cursorY += 42;
 
   // Docs section
-  const docs = createSection('Docs');
+  const docs = createSection('Сведения');
   docs.x = pad;
   docs.y = cursorY;
   docs.resize(1352, 140);
   root.appendChild(docs);
 
-  const docsTitle = createTextNode('Docs', 16, true);
+  const docsTitle = createTextNode('Сведения', 16, true);
   docsTitle.x = 16;
   docsTitle.y = 12;
   docs.appendChild(docsTitle);
 
   const metaText = createTextNode(
-    `Provider: ${providerLabel(provider)}\n` +
-    `Manifest: ${manifestFile}\n` +
-    `Base URL: ${baseUrl}\n` +
-    `Imported: ${ts}`,
+    `Провайдер: ${providerLabel(provider)}\n` +
+    `Манифест: ${manifestFile}\n` +
+    `Адрес сервера: ${baseUrl}\n` +
+    `Импорт: ${ts}`,
     12,
-    false
+    false,
+    'muted'
   );
   metaText.x = 16;
   metaText.y = 44;
@@ -416,10 +451,10 @@ async function importBrandKit({ brandId, provider, baseUrl }) {
 
   // Sections (order matches brand kit: logos → icons → patterns → illustrations)
   const sections = [
-    { key: 'logos', title: 'Logos', cellW: 240, cellH: 240, perRow: 4, gap: 24 },
-    { key: 'icons', title: 'Icons', cellW: 120, cellH: 120, perRow: 8, gap: 16 },
-    { key: 'patterns', title: 'Patterns', cellW: 320, cellH: 320, perRow: 3, gap: 24 },
-    { key: 'illustrations', title: 'Illustrations', cellW: 520, cellH: 340, perRow: 2, gap: 24 }
+    { key: 'logos', title: 'Логотипы', cellW: 240, cellH: 240, perRow: 4, gap: 24 },
+    { key: 'icons', title: 'Иконки', cellW: 120, cellH: 120, perRow: 8, gap: 16 },
+    { key: 'patterns', title: 'Паттерны', cellW: 320, cellH: 320, perRow: 3, gap: 24 },
+    { key: 'illustrations', title: 'Иллюстрации', cellW: 520, cellH: 340, perRow: 2, gap: 24 }
   ];
 
   for (const sec of sections) {
@@ -451,8 +486,8 @@ async function importBrandKit({ brandId, provider, baseUrl }) {
       const groupItems = (groups[p] || []).filter(it => !!it && !!it.url);
       const groupFrame = figma.createFrame();
       groupFrame.name = providerLabel(p);
-      groupFrame.fills = [];
-      groupFrame.strokes = [{ type: 'SOLID', color: { r: 0.88, g: 0.88, b: 0.88 } }];
+      groupFrame.fills = [{ type: 'SOLID', color: COLORS.surfaceRaised }];
+      groupFrame.strokes = [{ type: 'SOLID', color: COLORS.border }];
       groupFrame.strokeWeight = 1;
       groupFrame.cornerRadius = 12;
       groupFrame.clipsContent = false;
@@ -488,13 +523,13 @@ async function importBrandKit({ brandId, provider, baseUrl }) {
   // Persist settings
   await figma.clientStorage.setAsync(STORAGE_KEY, { brandId, provider, baseUrl });
 
-  figma.ui.postMessage({ type: 'done', text: `Imported ${brandId} (${providerLabel(provider)})` });
+  figma.ui.postMessage({ type: 'done', text: `Импортировано: ${brandId} (${providerLabel(provider)})` });
 }
 
 figma.ui.onmessage = async (msg) => {
   try {
     if (msg.type === 'import') {
-      figma.ui.postMessage({ type: 'progress', text: 'Starting import…' });
+      figma.ui.postMessage({ type: 'progress', text: 'Запуск импорта…' });
       // UI may send payload fields at the root level
       await importBrandKit(msg.payload || msg);
     } else if (msg.type === 'close') {
@@ -507,6 +542,6 @@ figma.ui.onmessage = async (msg) => {
 
 initUI().catch((err) => {
   const text = err && err.message ? err.message : String(err);
-  figma.ui.postMessage({ type: 'error', text: `Init failed: ${text}` });
-  figma.notify(`KYBBY plugin init failed: ${text}`);
+  figma.ui.postMessage({ type: 'error', text: `Ошибка инициализации: ${text}` });
+  figma.notify(`Ошибка инициализации плагина KYBBY: ${text}`);
 });

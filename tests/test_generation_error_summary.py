@@ -43,3 +43,24 @@ def test_provider_generation_error_recovers_from_stderr() -> None:
     primary, hint = summarize_generation_failure(exc, provider='alice_ai_art')
     assert 'места на диске' in primary
     assert hint is not None
+
+
+def test_summarize_yandex_api_key_missing_from_cli_stderr() -> None:
+    stderr = 'ERROR: set YANDEX_CLOUD_API_KEY env var\n'
+    exc = subprocess.CalledProcessError(2, ['python', 'main.py'], output='', stderr=stderr)
+    primary, hint = summarize_generation_failure(exc, provider='alice_ai_art')
+    assert 'Yandex Cloud API Key' in primary
+    assert hint is not None
+    assert 'профил' in hint.lower()
+
+
+def test_user_log_line_yandex_api_key_missing() -> None:
+    line = user_log_line_for_provider_error(
+        'alice_ai_art',
+        'ERROR: set YANDEX_CLOUD_API_KEY env var',
+        None,
+    )
+    assert 'не удалось сгенерировать ассеты' not in line.lower()
+    assert 'Yandex Cloud API Key' in line
+    assert 'Alice AI ART' in line
+    assert 'профил' in line.lower()

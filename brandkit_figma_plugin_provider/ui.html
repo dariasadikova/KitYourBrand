@@ -1,25 +1,32 @@
 <!doctype html>
-<html>
+<html lang="ru">
 
 <head>
   <meta charset="utf-8" />
   <meta name="viewport" content="width=device-width,initial-scale=1" />
-  <title>BrandKit Importer</title>
+  <title>KYBBY — импорт бренд-кита</title>
   <style>
     :root {
-      --bg: #111;
-      --panel: #1b1b1b;
-      --txt: #eaeaea;
-      --mut: #b7b7b7;
-      --br: #2c2c2c;
-      --acc: #6b6bff;
+      --bg: #010101;
+      --panel: #22292b;
+      --txt: #ffffff;
+      --txt-soft: #f4f2fb;
+      --mut: #99a1af;
+      --br: rgba(121, 121, 121, 0.8);
+      --primary: #00aeff;
+      --primary-pressed: #0097dd;
+    }
+
+    * {
+      box-sizing: border-box;
     }
 
     body {
       margin: 0;
-      font: 12px/1.4 Inter, system-ui, -apple-system, Segoe UI, Roboto, sans-serif;
+      font: 12px/1.5 Roboto, system-ui, -apple-system, Segoe UI, sans-serif;
       color: var(--txt);
       background: var(--bg);
+      -webkit-font-smoothing: antialiased;
     }
 
     .wrap {
@@ -29,90 +36,221 @@
     .card {
       background: var(--panel);
       border: 1px solid var(--br);
-      border-radius: 10px;
-      padding: 12px;
+      border-radius: 0;
+      padding: 16px 14px 14px;
+    }
+
+    .eyebrow {
+      margin: 0 0 6px;
+      font-size: 10px;
+      font-weight: 600;
+      letter-spacing: 0.08em;
+      text-transform: uppercase;
+      color: var(--primary);
     }
 
     h1 {
-      font-size: 14px;
-      margin: 0 0 8px 0;
+      font-size: 15px;
+      font-weight: 600;
+      margin: 0 0 12px;
+      color: var(--txt);
+      letter-spacing: -0.01em;
     }
 
     .row {
       display: flex;
       gap: 8px;
+      margin-top: 2px;
     }
 
     .col {
       flex: 1;
+      min-width: 0;
     }
 
     label {
       display: block;
       color: var(--mut);
-      margin: 8px 0 4px;
+      margin: 10px 0 4px;
+      font-size: 11px;
+    }
+
+    .card > label:first-of-type {
+      margin-top: 0;
     }
 
     input,
-    select {
+    .custom-select__trigger {
       width: 100%;
       box-sizing: border-box;
-      border-radius: 8px;
+      min-height: 36px;
+      border-radius: 0;
       border: 1px solid var(--br);
-      background: #0f0f0f;
-      color: var(--txt);
-      padding: 8px;
+      background: rgba(0, 0, 0, 0.25);
+      color: var(--txt-soft);
+      padding: 0 10px;
       outline: none;
+      font: inherit;
+      line-height: 1.5;
+    }
+
+    .custom-select {
+      position: relative;
+    }
+
+    .custom-select__trigger {
+      display: flex;
+      align-items: center;
+      justify-content: space-between;
+      gap: 8px;
+      text-align: left;
+      cursor: pointer;
+      margin: 0;
+      appearance: none;
+      -webkit-appearance: none;
+    }
+
+    .custom-select__trigger:focus,
+    .custom-select.is-open .custom-select__trigger {
+      border-color: var(--primary);
+      box-shadow: 0 0 0 1px var(--primary);
+    }
+
+    .custom-select__label {
+      flex: 1;
+      line-height: 1.5;
+    }
+
+    .custom-select__chevron {
+      color: var(--mut);
+      font-size: 10px;
+      line-height: 1;
+    }
+
+    .custom-select__menu {
+      position: absolute;
+      z-index: 20;
+      left: 0;
+      right: 0;
+      top: calc(100% + 2px);
+      margin: 0;
+      padding: 0;
+      list-style: none;
+      border: 1px solid var(--br);
+      background: #22292b;
+      max-height: 220px;
+      overflow: auto;
+      box-shadow: 0 8px 24px rgba(0, 0, 0, 0.45);
+    }
+
+    .custom-select__menu[hidden] {
+      display: none;
+    }
+
+    .custom-select__option {
+      padding: 9px 10px;
+      color: var(--txt-soft);
+      cursor: pointer;
+    }
+
+    .custom-select__option:hover,
+    .custom-select__option.is-active {
+      background: rgba(0, 174, 255, 0.18);
+      color: var(--txt);
+    }
+
+    .custom-select__option.is-selected {
+      color: var(--primary);
+    }
+
+    input::placeholder {
+      color: color-mix(in srgb, var(--mut) 85%, transparent);
     }
 
     input:focus,
-    select:focus {
-      border-color: var(--acc);
+    .custom-select__trigger:focus {
+      border-color: var(--primary);
+      box-shadow: 0 0 0 1px var(--primary);
     }
 
     .btns {
       display: flex;
       gap: 8px;
-      margin-top: 12px;
+      margin-top: 14px;
     }
 
-    button {
+    .btns button {
       flex: 1;
-      border-radius: 10px;
-      border: 1px solid var(--br);
-      background: #0f0f0f;
-      color: var(--txt);
-      padding: 10px;
+      border-radius: 0;
+      border: 1px solid rgba(255, 255, 255, 0.6);
+      background: transparent;
+      color: var(--txt-soft);
+      padding: 10px 12px;
       cursor: pointer;
+      font: inherit;
+      font-size: 12px;
+      transition: background 0.15s ease, border-color 0.15s ease;
     }
 
-    button.primary {
-      background: var(--acc);
-      border-color: var(--acc);
-      color: white;
+    .btns button:hover:not(:disabled) {
+      border-color: #fff;
+    }
+
+    .btns button.primary {
+      background: var(--primary);
+      border-color: var(--primary);
+      color: #0b0f13;
       font-weight: 600;
     }
 
-    button:disabled {
-      opacity: .5;
+    .btns button.primary:hover:not(:disabled) {
+      background: var(--primary-pressed);
+      border-color: var(--primary-pressed);
+    }
+
+    .btns button:disabled {
+      opacity: 0.5;
       cursor: not-allowed;
     }
 
     .hint {
       color: var(--mut);
-      margin-top: 10px;
+      margin-top: 12px;
+      line-height: 1.55;
+    }
+
+    .hint b,
+    .hint strong {
+      color: var(--txt);
+      font-weight: 600;
+    }
+
+    .hint code,
+    .tiny code {
+      padding: 2px 6px;
+      border-radius: 0;
+      border: 1px solid var(--br);
+      background: rgba(0, 0, 0, 0.25);
+      color: var(--txt);
+      font-size: 0.92em;
     }
 
     .log {
+      display: none;
       margin-top: 10px;
       padding: 10px;
-      border-radius: 10px;
+      border-radius: 0;
       border: 1px solid var(--br);
-      background: #0f0f0f;
+      background: rgba(0, 0, 0, 0.25);
       color: var(--mut);
       white-space: pre-wrap;
       max-height: 180px;
       overflow: auto;
+      line-height: 1.45;
+    }
+
+    .log.is-visible {
+      display: block;
     }
 
     .ok {
@@ -126,7 +264,8 @@
     .tiny {
       font-size: 11px;
       color: var(--mut);
-      margin-top: 6px;
+      margin-top: 8px;
+      line-height: 1.5;
     }
   </style>
 </head>
@@ -134,66 +273,118 @@
 <body>
   <div class="wrap">
     <div class="card">
-      <h1>KYBBY → Figma</h1>
+      <p class="eyebrow">KYBBY</p>
+      <h1>Импорт бренд-комплекта</h1>
 
-      <label for="brandId">Brand ID</label>
-      <input id="brandId" placeholder="Например: Brand123" />
+      <label for="brandId">ID бренда</label>
+      <input id="brandId" type="text" autocomplete="off" />
 
       <div class="row">
         <div class="col">
-          <label for="provider">Provider</label>
-          <select id="provider">
-            <option value="both" selected>All</option>
-            <option value="recraft">Recraft</option>
-            <option value="seedream">Seedream</option>
-            <option value="flux">Flux</option>
-            <option value="nano_banana">Nano Banana</option>
-            <option value="gpt5_image">GPT-5 Image</option>
-          </select>
+          <label id="providerLabelText" for="providerTrigger">Провайдер</label>
+          <div class="custom-select" id="providerSelect">
+            <button type="button" class="custom-select__trigger" id="providerTrigger" aria-haspopup="listbox"
+              aria-expanded="false" aria-labelledby="providerLabelText">
+              <span class="custom-select__label" id="providerDisplay"></span>
+              <span class="custom-select__chevron" aria-hidden="true">▾</span>
+            </button>
+            <ul class="custom-select__menu" id="providerMenu" role="listbox" hidden></ul>
+            <input type="hidden" id="provider" value="" />
+          </div>
         </div>
         <div class="col">
-          <label for="baseUrl">Base URL</label>
-          <input id="baseUrl" placeholder="https://kybby-app.amvera.io" />
+          <label for="baseUrl">Адрес KYBBY</label>
+          <input id="baseUrl" type="text" autocomplete="off" />
         </div>
       </div>
 
       <div class="btns">
-        <button class="primary" id="importBtn">Import</button>
-        <button id="cancelBtn">Close</button>
+        <button class="primary" id="importBtn">Импорт</button>
+        <button id="cancelBtn">Закрыть</button>
       </div>
 
-      <div class="hint">Импорт из веб-приложения KYBBY: укажите <b>Brand ID</b> со страницы результатов и <b>Base
-          URL</b> сервера (без <code>/app</code>).</div>
+      <div id="log" class="log" aria-live="polite"></div>
+
+      <div class="hint">Импорт из веб-приложения KYBBY: укажите <b>ID бренда</b> со страницы «Результаты» и <b>адрес
+          сервера</b> KYBBY (без <code>/app</code>).</div>
       <div class="tiny">По умолчанию — <code>https://kybby-app.amvera.io</code>. Сначала в вебе нажмите «Экспорт
         бренд-комплекта». Для локальной разработки: <code>http://localhost:8000</code>.</div>
-
-      <div id="log" class="log">Готово. Введите Brand ID и нажмите Import.</div>
     </div>
   </div>
 
   <script>
     const brandIdEl = document.getElementById('brandId');
     const providerEl = document.getElementById('provider');
+    const providerSelectEl = document.getElementById('providerSelect');
+    const providerTriggerEl = document.getElementById('providerTrigger');
+    const providerDisplayEl = document.getElementById('providerDisplay');
+    const providerMenuEl = document.getElementById('providerMenu');
     const baseUrlEl = document.getElementById('baseUrl');
     const importBtn = document.getElementById('importBtn');
     const cancelBtn = document.getElementById('cancelBtn');
     const logEl = document.getElementById('log');
 
+    const PROVIDER_OPTIONS = [
+      { value: 'both', label: 'Все' },
+      { value: 'recraft', label: 'Recraft' },
+      { value: 'seedream', label: 'Seedream' },
+      { value: 'flux', label: 'Flux' },
+      { value: 'nano_banana', label: 'Nano Banana' },
+      { value: 'gpt5_image', label: 'GPT-5 Image' },
+      { value: 'alice_ai_art', label: 'Alice AI ART' },
+    ];
+
+    function renderProviderMenu() {
+      providerMenuEl.innerHTML = '';
+      PROVIDER_OPTIONS.forEach((opt) => {
+        const li = document.createElement('li');
+        li.className = 'custom-select__option';
+        li.setAttribute('role', 'option');
+        li.dataset.value = opt.value;
+        li.textContent = opt.label;
+        if (opt.value === providerEl.value) {
+          li.classList.add('is-selected');
+        }
+        li.addEventListener('click', () => selectProvider(opt.value, opt.label));
+        providerMenuEl.appendChild(li);
+      });
+    }
+
+    function setProviderOpen(open) {
+      providerSelectEl.classList.toggle('is-open', open);
+      providerTriggerEl.setAttribute('aria-expanded', open ? 'true' : 'false');
+      providerMenuEl.hidden = !open;
+    }
+
+    function selectProvider(value, label) {
+      providerEl.value = value;
+      providerDisplayEl.textContent = label || '';
+      renderProviderMenu();
+      setProviderOpen(false);
+    }
+
+    providerTriggerEl.addEventListener('click', () => {
+      setProviderOpen(providerMenuEl.hidden);
+    });
+
+    document.addEventListener('click', (event) => {
+      if (!providerSelectEl.contains(event.target)) {
+        setProviderOpen(false);
+      }
+    });
+
+    renderProviderMenu();
+
     function setLog(text, cls = '') {
-      logEl.className = 'log ' + cls;
+      logEl.className = 'log is-visible' + (cls ? ' ' + cls : '');
       logEl.textContent = text;
     }
 
-    // Receive init/progress from plugin code
     window.onmessage = (event) => {
       const msg = event.data && event.data.pluginMessage;
       if (!msg) return;
 
       if (msg.type === 'init') {
-        if (msg.lastBrandId) brandIdEl.value = msg.lastBrandId;
-        if (msg.lastProvider) providerEl.value = msg.lastProvider;
-        if (msg.lastBaseUrl) baseUrlEl.value = msg.lastBaseUrl;
-        if (!baseUrlEl.value) baseUrlEl.value = 'https://kybby-app.amvera.io';
         return;
       }
 
@@ -217,16 +408,20 @@
 
     function sendImport() {
       const brandId = (brandIdEl.value || '').trim();
-      const provider = providerEl.value;
-      const baseUrl = (baseUrlEl.value || '').trim() || 'https://kybby-app.amvera.io';
+      const provider = (providerEl.value || '').trim() || 'both';
+      const baseUrl = (baseUrlEl.value || '').trim();
 
       if (!brandId) {
-        setLog('Brand ID пустой. Введите Brand ID.', 'err');
+        setLog('ID бренда не указан. Введите значение со страницы «Результаты».', 'err');
         return;
       }
+      if (!baseUrl) {
+        setLog('Адрес KYBBY не указан. Введите URL сервера (без /app).', 'err');
+        return;
+      }
+      setLog('Запускаю импорт...', '');
 
       importBtn.disabled = true;
-      setLog('Запускаю импорт...', '');
 
       parent.postMessage({
         pluginMessage: {
@@ -241,10 +436,8 @@
     importBtn.onclick = sendImport;
     cancelBtn.onclick = () => parent.postMessage({ pluginMessage: { type: 'close' } }, '*');
 
-    // Enter to import
     brandIdEl.addEventListener('keydown', (e) => { if (e.key === 'Enter') sendImport(); });
 
-    // Ask for init data
     parent.postMessage({ pluginMessage: { type: 'ui-ready' } }, '*');
   </script>
 </body>
